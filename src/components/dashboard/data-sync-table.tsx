@@ -23,11 +23,15 @@ import type { DataSourceHealth } from "@/types";
 
 const STATUS_LABEL: Record<
   DataSourceHealth["status"],
-  { label: string; textClassName: string; dotClassName: string }
+  { label: string; pillClassName: string; dotClassName: string }
 > = {
-  healthy: { label: "Healthy", textClassName: "text-success", dotClassName: "bg-success" },
-  error: { label: "Gagal sinkronisasi", textClassName: "text-critical", dotClassName: "bg-critical" },
-  pending: { label: "Belum terhubung", textClassName: "text-muted-foreground", dotClassName: "bg-muted-foreground" },
+  healthy: { label: "Healthy", pillClassName: "bg-success/10 text-success", dotClassName: "bg-success" },
+  error: { label: "Gagal sinkronisasi", pillClassName: "bg-critical/10 text-critical", dotClassName: "bg-critical" },
+  pending: {
+    label: "Belum terhubung",
+    pillClassName: "bg-muted text-muted-foreground",
+    dotClassName: "bg-muted-foreground",
+  },
 };
 
 export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
@@ -53,7 +57,12 @@ export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
       <div className="flex flex-wrap items-center gap-2">
         <Select value={moduleFilter} onValueChange={(value) => setModuleFilter(value ?? "all")}>
           <SelectTrigger size="sm" className="w-[190px]">
-            <SelectValue placeholder="Module" />
+            {/* Explicit children — SelectValue's own item-label lookup only
+                resolves once the popup has mounted at least once, so the
+                trigger would otherwise show the raw value on first paint. */}
+            <SelectValue placeholder="Module">
+              {moduleFilter === "all" ? "Semua Module" : moduleFilter}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Semua Module</SelectItem>
@@ -69,7 +78,9 @@ export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
           onValueChange={(value) => setStatusFilter((value ?? "all") as typeof statusFilter)}
         >
           <SelectTrigger size="sm" className="w-[160px]">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="Status">
+              {statusFilter === "all" ? "Semua Status" : STATUS_LABEL[statusFilter].label}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Semua Status</SelectItem>
@@ -94,7 +105,7 @@ export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
             <TableHead>Sheet</TableHead>
             <TableHead>Provider</TableHead>
             <TableHead>Last Sync</TableHead>
-            <TableHead>Rows</TableHead>
+            <TableHead className="text-right">Rows</TableHead>
             <TableHead className="text-right">Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -115,9 +126,16 @@ export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
                   <TableCell>{row.sheet ?? "–"}</TableCell>
                   <TableCell className="text-muted-foreground">{row.provider ?? "–"}</TableCell>
                   <TableCell>{row.lastSync ?? "–"}</TableCell>
-                  <TableCell>{row.rows !== null ? row.rows.toLocaleString("id-ID") : "–"}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.rows !== null ? row.rows.toLocaleString("id-ID") : "–"}
+                  </TableCell>
                   <TableCell className="text-right">
-                    <span className={cn("inline-flex items-center gap-1.5 text-sm font-medium", status.textClassName)}>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                        status.pillClassName,
+                      )}
+                    >
                       <span className={cn("size-1.5 rounded-full", status.dotClassName)} />
                       {status.label}
                     </span>

@@ -45,7 +45,11 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-critical: var(--critical);
   --color-critical-foreground: var(--critical-foreground);
-  --radius-sm: calc(var(--radius) * 0.6);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --radius-sm: calc(var(--radius) * 0.55);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
@@ -54,45 +58,71 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Brand palette — deliberately restrained per the design brief: navy is the
+ * structural foundation, blue is informational, orange/amber/yellow are
+ * accents used sparingly (hero, active nav, top KPI, CTA), never as a
+ * page-wide wash. See AGENTS.md-adjacent design notes in component comments
+ * for where each is meant to appear.
+ */
 :root {
-  --background: oklch(0.99 0.002 260);
-  --foreground: oklch(0.22 0.03 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.03 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.03 260);
-  --primary: oklch(0.4 0.16 264);
-  --primary-foreground: oklch(0.98 0.005 260);
-  --secondary: oklch(0.95 0.02 250);
-  --secondary-foreground: oklch(0.35 0.1 264);
-  --muted: oklch(0.96 0.006 260);
-  --muted-foreground: oklch(0.5 0.02 260);
-  --accent: oklch(0.94 0.03 235);
-  --accent-foreground: oklch(0.35 0.1 264);
-  --destructive: oklch(0.577 0.21 25);
-  --border: oklch(0.915 0.008 260);
-  --input: oklch(0.915 0.008 260);
-  --ring: oklch(0.62 0.1 264);
-  --success: oklch(0.6 0.13 150);
-  --success-foreground: oklch(0.98 0.005 150);
-  --warning: oklch(0.78 0.15 80);
-  --warning-foreground: oklch(0.28 0.08 80);
-  --critical: oklch(0.577 0.21 25);
-  --critical-foreground: oklch(0.98 0.005 25);
-  --chart-1: oklch(0.4 0.16 264);
-  --chart-2: oklch(0.62 0.13 220);
-  --chart-3: oklch(0.6 0.13 150);
-  --chart-4: oklch(0.78 0.15 80);
-  --chart-5: oklch(0.577 0.21 25);
-  --radius: 0.625rem;
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.22 0.03 260);
-  --sidebar-primary: oklch(0.4 0.16 264);
-  --sidebar-primary-foreground: oklch(0.98 0.005 260);
-  --sidebar-accent: oklch(0.95 0.03 250);
-  --sidebar-accent-foreground: oklch(0.35 0.1 264);
-  --sidebar-border: oklch(0.93 0.008 260);
-  --sidebar-ring: oklch(0.62 0.1 264);
+  --background: #f6f8fc;
+  --foreground: #172033;
+  --card: #ffffff;
+  --card-foreground: #172033;
+  --popover: #ffffff;
+  --popover-foreground: #172033;
+  --primary: #183b8f;
+  --primary-foreground: #ffffff;
+  --secondary: #e9eef9;
+  --secondary-foreground: #183b8f;
+  --muted: #eef1f6;
+  --muted-foreground: #64748b;
+  --accent: #fff1e6;
+  --accent-foreground: #c2410c;
+  --destructive: #ef4444;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #183b8f;
+  --success: #15803d;
+  --success-foreground: #ffffff;
+  --warning: #f59e0b;
+  --warning-foreground: #78350f;
+  --critical: #ef4444;
+  --critical-foreground: #ffffff;
+  --info: #3b82f6;
+  --info-foreground: #ffffff;
+  --brand: #f97316;
+  --brand-foreground: #ffffff;
+  --chart-1: #183b8f;
+  --chart-2: #2457a6;
+  --chart-3: #15803d;
+  --chart-4: #f59e0b;
+  --chart-5: #f97316;
+  --radius: 0.75rem;
+
+  /* Sidebar is always deep navy — a fixed structural element, not part of
+   * the light/dark toggle (same values repeated in .dark below). */
+  --sidebar: #111a5e;
+  --sidebar-foreground: #dce3f7;
+  --sidebar-primary: #f97316;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffffff14;
+  --sidebar-accent-foreground: #fdba12;
+  --sidebar-border: #ffffff1a;
+  --sidebar-ring: #f97316;
+
+  /* Controlled gradients — used only on the hero header, sidebar backdrop,
+   * and a couple of highlighted accents, never on every card. */
+  --gradient-primary: linear-gradient(135deg, #111a5e 0%, #183b8f 100%);
+  --gradient-accent: linear-gradient(135deg, #f97316 0%, #f59e0b 55%, #fdba12 100%);
+  --gradient-hero: linear-gradient(
+    120deg,
+    rgba(17, 26, 94, 0.08) 0%,
+    rgba(36, 87, 166, 0.05) 30%,
+    rgba(249, 115, 22, 0.06) 65%,
+    rgba(253, 186, 18, 0.12) 100%
+  );
 }
 
 .dark {
@@ -102,8 +132,8 @@
   --card-foreground: oklch(0.96 0.005 260);
   --popover: oklch(0.23 0.025 260);
   --popover-foreground: oklch(0.96 0.005 260);
-  --primary: oklch(0.72 0.12 264);
-  --primary-foreground: oklch(0.18 0.03 264);
+  --primary: oklch(0.72 0.12 258);
+  --primary-foreground: oklch(0.18 0.03 258);
   --secondary: oklch(0.29 0.025 260);
   --secondary-foreground: oklch(0.9 0.01 260);
   --muted: oklch(0.27 0.02 260);
@@ -120,19 +150,32 @@
   --warning-foreground: oklch(0.22 0.06 80);
   --critical: oklch(0.7 0.19 25);
   --critical-foreground: oklch(0.16 0.03 25);
-  --chart-1: oklch(0.72 0.12 264);
+  --info: oklch(0.68 0.15 250);
+  --info-foreground: oklch(0.16 0.03 250);
+  --chart-1: oklch(0.72 0.12 258);
   --chart-2: oklch(0.68 0.11 220);
   --chart-3: oklch(0.68 0.14 150);
   --chart-4: oklch(0.78 0.15 80);
   --chart-5: oklch(0.7 0.19 25);
-  --sidebar: oklch(0.21 0.025 260);
-  --sidebar-foreground: oklch(0.96 0.005 260);
-  --sidebar-primary: oklch(0.72 0.12 264);
-  --sidebar-primary-foreground: oklch(0.18 0.03 264);
-  --sidebar-accent: oklch(0.29 0.03 250);
-  --sidebar-accent-foreground: oklch(0.9 0.01 260);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.6 0.1 264);
+  --brand: oklch(0.7 0.19 42);
+  --brand-foreground: oklch(0.18 0.04 42);
+  --sidebar: #111a5e;
+  --sidebar-foreground: #dce3f7;
+  --sidebar-primary: #f97316;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffffff14;
+  --sidebar-accent-foreground: #fdba12;
+  --sidebar-border: #ffffff1a;
+  --sidebar-ring: #f97316;
+  --gradient-primary: linear-gradient(135deg, #111a5e 0%, #183b8f 100%);
+  --gradient-accent: linear-gradient(135deg, #f97316 0%, #f59e0b 55%, #fdba12 100%);
+  --gradient-hero: linear-gradient(
+    120deg,
+    rgba(17, 26, 94, 0.5) 0%,
+    rgba(36, 87, 166, 0.32) 30%,
+    rgba(249, 115, 22, 0.18) 65%,
+    rgba(253, 186, 18, 0.14) 100%
+  );
 }
 
 @layer base {

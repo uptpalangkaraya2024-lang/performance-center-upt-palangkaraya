@@ -4,6 +4,7 @@ import {
   Bar,
   CartesianGrid,
   BarChart as RechartsBarChart,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -35,7 +36,9 @@ export function DisturbanceBayChart({ data }: { data: DisturbanceBayCount[] }) {
             fontSize: 12,
           }}
         />
-        <Bar dataKey="count" name="Jumlah Gangguan" fill="var(--primary)" radius={[0, 4, 4, 0]} barSize={16} />
+        <Bar dataKey="count" name="Jumlah Gangguan" fill="var(--primary)" radius={[0, 4, 4, 0]} barSize={16}>
+          <LabelList dataKey="count" position="right" style={{ fontSize: 11, fill: "var(--foreground)" }} />
+        </Bar>
       </RechartsBarChart>
     </ResponsiveContainer>
   );

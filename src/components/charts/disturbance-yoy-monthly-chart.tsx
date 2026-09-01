@@ -71,7 +71,13 @@ export function DisturbanceYoyMonthlyChart({
       <div className="flex flex-wrap items-center gap-2">
         <Select value={selectedCause} onValueChange={(value) => setSelectedCause(value ?? ALL_CAUSES_VALUE)}>
           <SelectTrigger size="sm" className="w-[180px]">
-            <SelectValue placeholder="Penyebab" />
+            {/* Rendered explicitly instead of relying on SelectValue's
+                own item-label lookup — that only resolves once the popup
+                has actually mounted at least once, so the trigger shows
+                the raw value ("__all__") on first paint otherwise. */}
+            <SelectValue placeholder="Penyebab">
+              {selectedCause === ALL_CAUSES_VALUE ? "Semua Penyebab" : selectedCause}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL_CAUSES_VALUE}>Semua Penyebab</SelectItem>
@@ -159,6 +165,7 @@ export function DisturbanceYoyMonthlyChart({
                 stroke={colorFor(year)}
                 strokeWidth={2.5}
                 dot={{ r: 3 }}
+                label={{ position: "top", fontSize: 10, fill: colorFor(year) }}
               />
             ))}
         </LineChart>

@@ -58,6 +58,7 @@ export function PerformanceTrendChart({ data }: { data: TrendPoint[] }) {
           strokeWidth={2.5}
           dot={{ r: 3, fill: "var(--primary)" }}
           activeDot={{ r: 5 }}
+          label={{ position: "top", fontSize: 11, fill: "var(--primary)", formatter: (value) => `${value}%` }}
         />
       </LineChart>
     </ResponsiveContainer>

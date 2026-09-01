@@ -88,6 +88,76 @@ export interface AiInsight {
   text: string;
 }
 
+export type UptKpiDirection = "HIGHER_IS_BETTER" | "LOWER_IS_BETTER";
+
+export type UptKpiCategory =
+  | "availability"
+  | "disturbance"
+  | "protection"
+  | "finance"
+  | "asset-legal"
+  | "asset-maturity";
+
+/** One of the 19 configured KPIs, resolved against its matched row (if any)
+ *  in the "DRAFT BARU" sheet for the current period — see src/services/upt-performance.ts. */
+export interface UptKpi {
+  key: string;
+  displayName: string;
+  abbreviation?: string;
+  category: UptKpiCategory;
+  /** From the sheet's own POLARITAS column (Positif/Negatif) for the matched
+   *  row — null when the row is missing or its polarity is neither
+   *  ("Range", e.g. Anggaran Investasi — see Business Logic Requires Confirmation). */
+  direction: UptKpiDirection | null;
+  /** True when config.expectedDirection disagrees with the sheet's own
+   *  resolved `direction` — surfaced rather than silently overridden. */
+  directionConflict: boolean;
+  unit: string | null;
+  /** Raw text as it appears in the sheet (e.g. "95-100") — always shown even when unparseable. */
+  targetLabel: string | null;
+  targetValue: number | null;
+  actualLabel: string | null;
+  actualValue: number | null;
+  /** The sheet's own "Pencapaian" column — not recomputed locally (see
+   *  Business Logic Requires Confirmation: PLN's own contract-scoring
+   *  formula includes capping/bobot-hilang rules this app doesn't reimplement). */
+  achievement: number | null;
+  status: StatusLevel; // good=ACHIEVED, warning=WARNING, critical=CRITICAL, none=NO_DATA
+}
+
+export interface UptOverallPerformance {
+  total: number;
+  achieved: number;
+  warning: number;
+  critical: number;
+  noData: number;
+}
+
+export interface UptPeriodOption {
+  /** "2026-08" */
+  value: string;
+  /** "Agustus 2026" */
+  label: string;
+  hasData: boolean;
+}
+
+export interface UptPerformanceSnapshot {
+  /** The one period the sheet's "Target s/d" / "Realisasi s/d" columns actually reflect, e.g. "2026-08". */
+  period: string;
+  periodLabel: string;
+  kpis: UptKpi[];
+  overall: UptOverallPerformance;
+  periodOptions: UptPeriodOption[];
+  lastUpdate: string | null;
+  /** Non-fatal anomalies worth surfacing (e.g. a KPI alias matching more than one row) — see AGENTS.md section 33. */
+  warnings: string[];
+}
+
+export interface UptPerformanceResult {
+  data: UptPerformanceSnapshot | null;
+  error: string | null;
+}
+
 export interface DataSourceHealth {
   key: string;
   module: string;

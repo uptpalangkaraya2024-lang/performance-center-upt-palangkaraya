@@ -42,6 +42,26 @@ export interface DataSourceConfig {
 }
 
 export const dataSources = {
+  uptPerformance: {
+    id: "upt-performance",
+    label: "Kinerja UPT",
+    sources: [
+      {
+        file: "LPTK UPT PALANGKARAYA & ULTG 2026",
+        sheets: [
+          {
+            name: "DRAFT BARU",
+            purpose: "UPT Palangkaraya KPI contract — 19 indicators, target/realisasi s.d. current period",
+            // Rows 1-13 are the contract cover page + a group-header row for
+            // the monthly-columns block (TARGET BULANAN / TARGET KOMULATIF /
+            // ...) — the real column header (NO, INDIKATOR KINERJA KUNCI,
+            // POLARITAS, SATUAN, ..., Jan, Feb, ...) lives on row 14.
+            headerRow: 14,
+          },
+        ],
+      },
+    ],
+  },
   ultgPerformance: {
     id: "ultg-performance",
     label: "Kinerja ULTG",

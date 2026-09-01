@@ -1,12 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
+import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
 import { DisturbanceBayChart } from "@/components/charts/disturbance-bay-chart";
 import { getDisturbances } from "@/services/disturbances";
+import { listSyncStatus } from "@/lib/sync-status";
 import type { DisturbanceCategoryResult } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+function formatTime(date: Date | null): string | null {
+  if (!date) return null;
+  return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB";
+}
 
 function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
   return (
@@ -94,15 +101,24 @@ function CategorySection({ title, data }: { title: string; data: DisturbanceCate
 
 export default async function DisturbancesPage() {
   const result = await getDisturbances();
+  const syncEntry = listSyncStatus().find((entry) => entry.module === "Gangguan");
+  const lastUpdate = formatTime(syncEntry?.lastSync ?? null);
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Gangguan Transmisi &amp; Trafo</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Rekap gangguan UPT Palangkaraya yang masuk kinerja — Pareto penyebab, tren tahunan per bulan, dan sebaran per bay.
-        </p>
-      </div>
+      <PageHero
+        title="Gangguan Transmisi & Trafo"
+        description="Rekap gangguan UPT Palangkaraya yang masuk kinerja — Pareto penyebab, tren tahunan per bulan, dan sebaran per bay."
+        status={
+          !result.error ? (
+            <>
+              <span className="size-1.5 rounded-full bg-success" />
+              Data synchronized
+              {lastUpdate ? ` · Last update: ${lastUpdate}` : null}
+            </>
+          ) : null
+        }
+      />
 
       {result.error ? (
         <Card>

@@ -63,11 +63,10 @@ export const aiInsights: AiInsight[] = [
 ];
 
 // Still-mock modules — spreadsheets for these haven't been wired up yet
-// (Kinerja ULTG and Gangguan have — see src/services/). Status "pending"
-// reflects that honestly instead of pretending they're live. file/sheet
-// show the *planned* names so an admin can see what's coming.
+// (Kinerja ULTG, Gangguan, and Kinerja UPT have — see src/services/). Status
+// "pending" reflects that honestly instead of pretending they're live.
+// file/sheet show the *planned* names so an admin can see what's coming.
 export const dataSourceHealth: DataSourceHealth[] = [
-  { key: "kinerja-upt", module: "Kinerja UPT", file: "Kinerja UPT", sheet: "Kinerja UPT", provider: null, lastSync: null, rows: null, status: "pending" },
   { key: "open-case", module: "Open Case", file: "Open Case", sheet: "Open Case", provider: null, lastSync: null, rows: null, status: "pending" },
   { key: "aset", module: "Data Aset", file: "Data Aset", sheet: "Trafo, PMT", provider: null, lastSync: null, rows: null, status: "pending" },
 ];
