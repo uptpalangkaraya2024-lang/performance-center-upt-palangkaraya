@@ -3,7 +3,7 @@ import "server-only";
 import type { SheetRef } from "@/config/data-sources";
 import { DataSourceError } from "@/lib/errors";
 import type { DriveFileRef, SpreadsheetDataProvider } from "@/lib/data-provider";
-import { readSheetFromDriveFile } from "@/lib/sheet-readers";
+import { readRawRowsFromDriveFile, readSheetFromDriveFile } from "@/lib/sheet-readers";
 import { findFileInDriveFolder, type DriveFile } from "@/services/google-drive";
 
 // Wraps the Phase 2.1 Drive API + service account implementation behind the
@@ -29,6 +29,10 @@ async function readSheet(file: DriveFileRef, sheet: SheetRef): Promise<Record<st
   return readSheetFromDriveFile(file.raw as DriveFile, sheet);
 }
 
+async function readSheetRaw(file: DriveFileRef, sheet: SheetRef): Promise<unknown[][]> {
+  return readRawRowsFromDriveFile(file.raw as DriveFile, sheet);
+}
+
 async function health(): Promise<{ healthy: boolean; message?: string }> {
   try {
     // Any lookup exercises folder resolution + auth + listing — whether the
@@ -44,5 +48,6 @@ export const googleApiProvider: SpreadsheetDataProvider = {
   name: "google-api",
   findFile,
   readSheet,
+  readSheetRaw,
   health,
 };

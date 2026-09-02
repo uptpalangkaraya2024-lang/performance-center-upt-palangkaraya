@@ -86,6 +86,58 @@ async function readXlsxSheet(file: DriveFile, sheet: SheetRef): Promise<Record<s
   return rowsToRecords(rows, sheet.headerRow ?? 1);
 }
 
+// See SpreadsheetDataProvider.readSheetRaw — for report-layout sheets where
+// no single header row can uniquely name every column (a repeated label
+// across side-by-side blocks), returning the untouched grid instead of a
+// header-keyed Record avoids silently dropping data. Added for AHI UPT
+// Palangkaraya (Phase 3B) — see src/services/ahi-performance.ts.
+async function readNativeSheetRaw(file: DriveFile, sheet: SheetRef): Promise<unknown[][]> {
+  const { sheets } = getGoogleClients();
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId: file.id,
+    fields: "sheets.properties.title",
+  });
+  const titles = (meta.data.sheets ?? [])
+    .map((s) => s.properties?.title)
+    .filter((title): title is string => Boolean(title));
+  if (!titles.includes(sheet.name)) {
+    throw new DataSourceError(
+      "SHEET_NOT_FOUND",
+      file.name,
+      sheet.name,
+      `Sheet "${sheet.name}" tidak ditemukan di file "${file.name}"`,
+    );
+  }
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: file.id,
+    range: sheet.name,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+  return (response.data.values ?? []) as unknown[][];
+}
+
+async function readXlsxSheetRaw(file: DriveFile, sheet: SheetRef): Promise<unknown[][]> {
+  const { drive } = getGoogleClients();
+  const response = await drive.files.get(
+    { fileId: file.id, alt: "media" },
+    { responseType: "arraybuffer" },
+  );
+  const workbook = XLSX.read(Buffer.from(response.data as ArrayBuffer), { type: "buffer" });
+
+  if (!workbook.SheetNames.includes(sheet.name)) {
+    throw new DataSourceError(
+      "SHEET_NOT_FOUND",
+      file.name,
+      sheet.name,
+      `Sheet "${sheet.name}" tidak ditemukan di file "${file.name}"`,
+    );
+  }
+
+  const worksheet = workbook.Sheets[sheet.name];
+  return XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, blankrows: false });
+}
+
 /**
  * Reads one sheet/tab out of one Drive file, dispatching to the native
  * Sheets API or the xlsx parser by mimeType — the one place that distinction
@@ -98,6 +150,18 @@ export async function readSheetFromDriveFile(
 ): Promise<Record<string, string>[]> {
   if (file.mimeType === NATIVE_SHEET_MIME) return readNativeSheet(file, sheet);
   if (XLSX_MIME_TYPES.has(file.mimeType)) return readXlsxSheet(file, sheet);
+  throw new DataSourceError(
+    "UNSUPPORTED_FORMAT",
+    file.name,
+    sheet.name,
+    `Format file "${file.mimeType}" tidak didukung untuk "${file.name}"`,
+  );
+}
+
+/** Raw-grid counterpart of readSheetFromDriveFile() — see SpreadsheetDataProvider.readSheetRaw. */
+export async function readRawRowsFromDriveFile(file: DriveFile, sheet: SheetRef): Promise<unknown[][]> {
+  if (file.mimeType === NATIVE_SHEET_MIME) return readNativeSheetRaw(file, sheet);
+  if (XLSX_MIME_TYPES.has(file.mimeType)) return readXlsxSheetRaw(file, sheet);
   throw new DataSourceError(
     "UNSUPPORTED_FORMAT",
     file.name,

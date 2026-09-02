@@ -112,13 +112,102 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
   return results;
 }
 
+export interface RawSheetReadResult {
+  file: string;
+  sheet: string;
+  purpose?: string;
+  rows: unknown[][];
+}
+
+interface RawCacheEntry {
+  rows: unknown[][];
+  fetchedAt: number;
+}
+// Separate from rawCache above — same (provider, file, sheet) key space would
+// otherwise let a raw-grid read and a header-keyed read silently overwrite
+// each other's cache entry despite returning differently-shaped data.
+const rawRowsCache = new Map<string, RawCacheEntry>();
+
+/**
+ * Raw-grid counterpart of readConfiguredSource() — for a report-layout sheet
+ * where a single header row can't uniquely name every column (see
+ * SpreadsheetDataProvider.readSheetRaw), so the header-keyed path would
+ * silently drop data. Same file discovery / cache / sync-status behavior,
+ * just returning the untouched grid instead of Record<string,string>[].
+ */
+export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise<RawSheetReadResult[]> {
+  const provider = getDataProvider();
+  const results: RawSheetReadResult[] = [];
+
+  for (const fileSource of source.sources) {
+    if (fileSource.enabled === false) continue;
+
+    let file;
+    try {
+      file = await provider.findFile(fileSource.file);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      for (const sheetRef of fileSource.sheets) {
+        recordSyncError({
+          module: source.label,
+          file: fileSource.file,
+          sheet: sheetRef.name,
+          provider: provider.name,
+          error: message,
+        });
+      }
+      continue;
+    }
+
+    for (const sheetRef of fileSource.sheets) {
+      const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+      const cached = rawRowsCache.get(key);
+      if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
+        results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows });
+        continue;
+      }
+
+      try {
+        const rows = await provider.readSheetRaw(file, sheetRef);
+        rawRowsCache.set(key, { rows, fetchedAt: Date.now() });
+        recordSyncSuccess({
+          module: source.label,
+          file: fileSource.file,
+          sheet: sheetRef.name,
+          provider: provider.name,
+          rows: rows.length,
+        });
+        results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows });
+      } catch (error) {
+        const message =
+          error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
+        recordSyncError({
+          module: source.label,
+          file: fileSource.file,
+          sheet: sheetRef.name,
+          provider: provider.name,
+          error: message,
+        });
+        if (cached) {
+          results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows });
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
 /**
  * True only if every *required* sheet (required !== false) across every
  * *enabled* file in the source actually came back in `results`. A service
  * can use this to decide "unavailable" vs. "render with what we have" — the
  * connector itself stays neutral on that policy (see AGENTS.md section 15).
  */
-export function hasAllRequiredSheets(source: DataSourceConfig, results: SheetReadResult[]): boolean {
+export function hasAllRequiredSheets(
+  source: DataSourceConfig,
+  results: { file: string; sheet: string }[],
+): boolean {
   return source.sources
     .filter((fileSource) => fileSource.enabled !== false)
     .every((fileSource) =>

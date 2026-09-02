@@ -72,6 +72,22 @@ export const dataSources = {
       },
     ],
   },
+  ahiPerformance: {
+    id: "ahi-performance",
+    label: "AHI UPT",
+    sources: [
+      {
+        file: "AHI UPT Palangkaraya 2026 fixed",
+        sheets: [
+          {
+            name: "HI UPT",
+            purpose:
+              "Asset Healthy Index report — A:W category/parameter blocks + AM:BA poor/critical anomaly recap. Read via readSheetRaw (see src/services/ahi-performance.ts) — a single header row can't uniquely name every column here.",
+          },
+        ],
+      },
+    ],
+  },
   disturbances: {
     id: "disturbances",
     label: "Gangguan",

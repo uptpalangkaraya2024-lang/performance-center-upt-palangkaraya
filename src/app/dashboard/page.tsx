@@ -1,96 +1,136 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
-import { DataUnavailable } from "@/components/dashboard/data-unavailable";
-import { KpiCard } from "@/components/dashboard/kpi-card";
-import { PerformanceTrendChart } from "@/components/charts/performance-trend-chart";
-import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
-import { UltgPerformanceList } from "@/components/dashboard/ultg-performance-list";
-import { OpenCaseSummaryGrid } from "@/components/dashboard/open-case-summary";
-import { AiInsightList } from "@/components/dashboard/ai-insight-list";
-import { getUltgPerformance } from "@/services/ultg-performance";
-import {
-  aiInsights,
-  disturbanceCauses,
-  kpiSummaries,
-  lastUpdated,
-  openCaseSummary,
-  performanceTrend,
-} from "@/lib/mock-data";
+import { AlertTriangle } from "lucide-react";
 
-// Prerendering this page statically would freeze the ULTG section at
-// whatever the Sheets API returned at build time — force per-request
-// rendering so the service's own 5-minute TTL cache (see
-// src/services/ultg-performance.ts) is what actually controls freshness.
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AiInsightList } from "@/components/dashboard/ai-insight-list";
+import { DataUnavailable } from "@/components/dashboard/data-unavailable";
+import { PageHero } from "@/components/dashboard/page-hero";
+import { UptPerformanceStatus } from "@/components/dashboard/upt-performance-status";
+import { UptGapToTarget } from "@/components/dashboard/upt-gap-to-target";
+import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
+import { getUptPerformance } from "@/services/upt-performance";
+import { getDisturbances } from "@/services/disturbances";
+import { getAhiPerformance } from "@/services/ahi-performance";
+import { buildManagementAttention, buildTopIssues } from "@/lib/executive-insights";
+import { listSyncStatus } from "@/lib/sync-status";
+import type { StatusLevel } from "@/types";
+
 export const dynamic = "force-dynamic";
 
+function formatTime(date: Date | null): string | null {
+  if (!date) return null;
+  return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB";
+}
+
 export default async function OverviewPage() {
-  const ultg = await getUltgPerformance();
+  const [upt, disturbances, ahi] = await Promise.all([
+    getUptPerformance(),
+    getDisturbances(),
+    getAhiPerformance(),
+  ]);
+
+  const uptStatus: StatusLevel = !upt.data
+    ? "none"
+    : upt.data.overall.critical > 0
+      ? "critical"
+      : upt.data.overall.warning > 0
+        ? "warning"
+        : "good";
+
+  const managementAttention = buildManagementAttention({
+    upt: upt.data,
+    transmisi: disturbances.error ? null : disturbances.transmisi,
+    ahi: ahi.data,
+  });
+  const topIssues = buildTopIssues({
+    upt: upt.data,
+    transmisi: disturbances.error ? null : disturbances.transmisi,
+    ahi: ahi.data,
+  });
+
+  const lastSyncOverall = listSyncStatus().reduce<Date | null>(
+    (latest, entry) => (entry.lastSync && (!latest || entry.lastSync > latest) ? entry.lastSync : latest),
+    null,
+  );
 
   return (
     <div className="flex flex-col gap-6">
-      <DashboardFilters lastUpdated={lastUpdated} />
+      <PageHero
+        title="Monitoring Kinerja UPT Palangkaraya"
+        description="Executive overview kondisi operasional, kinerja, gangguan, dan asset health UPT Palangkaraya."
+        status={
+          <>
+            <span className="size-1.5 rounded-full bg-success" />
+            Data synchronized
+            {lastSyncOverall ? ` · Last update: ${formatTime(lastSyncOverall)}` : null}
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {kpiSummaries.map((kpi) => (
-          <KpiCard key={kpi.id} kpi={kpi} />
-        ))}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {upt.data ? (
+          <UptPerformanceStatus overall={upt.data.overall} periodLabel={upt.data.periodLabel} status={uptStatus} />
+        ) : (
+          <Card className="xl:col-span-1">
+            <CardContent className="py-8">
+              <DataUnavailable message="Kinerja UPT belum tersedia. Lihat halaman Data & Sync." />
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Management Attention</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AiInsightList
+              data={managementAttention}
+              title="Management Attention"
+              icon={AlertTriangle}
+              emptyMessage="Tidak ada catatan khusus untuk periode ini."
+            />
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Tren Performance</CardTitle>
+            <CardTitle className="text-base">Gap to Target — Kinerja UPT</CardTitle>
           </CardHeader>
           <CardContent>
-            <PerformanceTrendChart data={performanceTrend} />
+            {upt.data ? (
+              <UptGapToTarget kpis={upt.data.kpis} />
+            ) : (
+              <DataUnavailable message="Kinerja UPT belum tersedia." />
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">AI Insight</CardTitle>
+            <CardTitle className="text-base">Top Issue</CardTitle>
           </CardHeader>
           <CardContent>
-            <AiInsightList data={aiInsights} />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Pareto Gangguan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DisturbanceParetoChart data={disturbanceCauses} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Open Case</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <OpenCaseSummaryGrid data={openCaseSummary} />
+            <AiInsightList
+              data={topIssues.map((issue, index) => ({ id: String(index), tone: issue.tone, text: issue.text }))}
+              title="Top Issue"
+              emptyMessage="Tidak ada isu prioritas saat ini."
+            />
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Ranking Kinerja ULTG</CardTitle>
-          {ultg.data.length > 0 ? (
-            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className={`size-1.5 rounded-full ${ultg.error ? "bg-warning" : "bg-success"}`} />
-              {ultg.error ? "Data terakhir tersimpan" : "Live dari Spreadsheet"}
-            </span>
-          ) : null}
+        <CardHeader>
+          <CardTitle className="text-base">Pareto Gangguan Transmisi</CardTitle>
         </CardHeader>
         <CardContent>
-          {ultg.data.length > 0 ? (
-            <UltgPerformanceList data={ultg.data} />
+          {disturbances.error ? (
+            <DataUnavailable message="Sinkronisasi Gangguan belum berhasil. Lihat halaman Data & Sync." />
+          ) : disturbances.transmisi.causePareto.length > 0 ? (
+            <DisturbanceParetoChart data={disturbances.transmisi.causePareto} />
           ) : (
-            <DataUnavailable message="Sinkronisasi Kinerja ULTG belum berhasil. Lihat halaman Data & Sync untuk detail." />
+            <p className="py-8 text-center text-sm text-muted-foreground">Belum ada gangguan yang masuk kinerja.</p>
           )}
         </CardContent>
       </Card>

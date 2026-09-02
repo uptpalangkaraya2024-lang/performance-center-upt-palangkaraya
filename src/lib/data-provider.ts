@@ -19,6 +19,16 @@ export interface SpreadsheetDataProvider {
   findFile(fileName: string): Promise<DriveFileRef>;
   /** Reads one sheet/tab from a file already resolved by findFile(). Throws DataSourceError("SHEET_NOT_FOUND" | "UNSUPPORTED_FORMAT", ...) on failure. */
   readSheet(file: DriveFileRef, sheet: SheetRef): Promise<Record<string, string>[]>;
+  /**
+   * Same read, without the header-keyed Record<string,string> conversion —
+   * for report-layout sheets where a single header row can't uniquely name
+   * every column (e.g. a value repeated across side-by-side blocks), so
+   * readSheet() would silently drop data no matter which row is chosen as
+   * headerRow. Added for AHI UPT Palangkaraya (Phase 3B) — see
+   * src/services/ahi-performance.ts. Row 0 is the sheet's literal first row
+   * (no header offset applied); callers index into it themselves.
+   */
+  readSheetRaw(file: DriveFileRef, sheet: SheetRef): Promise<unknown[][]>;
   /** Cheap reachability check for the Data & Sync page — never throws. */
   health(): Promise<{ healthy: boolean; message?: string }>;
 }

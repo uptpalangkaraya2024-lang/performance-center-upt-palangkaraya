@@ -1,10 +1,90 @@
-import { PlaceholderPage } from "@/components/dashboard/placeholder-page";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataUnavailable } from "@/components/dashboard/data-unavailable";
+import { PageHero } from "@/components/dashboard/page-hero";
+import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
+import { AhiAnomalyTable } from "@/components/ahi/ahi-anomaly-table";
+import { AhiCategoryDetail } from "@/components/ahi/ahi-category-detail";
+import { AhiDataDetail } from "@/components/ahi/ahi-data-detail";
+import { getAhiPerformance } from "@/services/ahi-performance";
 
-export default function Page() {
+export const dynamic = "force-dynamic";
+
+export default async function AhiPage() {
+  const result = await getAhiPerformance();
+
+  if (result.error || !result.data) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHero
+          title="AHI UPT Palangkaraya"
+          description="Healthy Index Monitoring 2026 — Unit Induk UIP3B Kalimantan / UPT Palangkaraya"
+        />
+        <Card>
+          <CardContent className="py-8">
+            <DataUnavailable message="Data source temporarily unavailable. Lihat halaman Data & Sync untuk detail." />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const { sections, anomalies, lastUpdate } = result.data;
+
   return (
-    <PlaceholderPage
-      title="Asset Health Index"
-      description="Distribusi kondisi aset (Healthy, Watch, Alert, Critical) dengan drill-down ke equipment."
-    />
+    <div className="flex flex-col gap-6">
+      <PageHero
+        title="AHI UPT Palangkaraya"
+        description="Healthy Index Monitoring 2026 — Unit Induk UIP3B Kalimantan / UPT Palangkaraya"
+        status={
+          <>
+            <span className="size-1.5 rounded-full bg-success" />
+            Data synchronized
+            {lastUpdate ? ` · Last update: ${lastUpdate}` : null}
+          </>
+        }
+      />
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {sections.map((section) => (
+          <AhiKpiCard key={section.key} section={section} />
+        ))}
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Rekap Kondisi Perlu Perhatian</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Rekap anomali Poor &amp; Critical MTU &amp; Trafo — hasil rekapan langsung dari sumber data (AM:BA).
+          </p>
+        </CardHeader>
+        <CardContent>
+          <AhiAnomalyTable records={anomalies} />
+        </CardContent>
+      </Card>
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">Detail AHI</h2>
+          <p className="text-xs text-muted-foreground">
+            Rincian tiap kategori AHI per kelompok — skor, distribusi hasil pengujian, dan parameter pemeriksaan.
+          </p>
+        </div>
+        <AhiCategoryDetail sections={sections} />
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Data Detail</CardTitle>
+          <p className="text-xs text-muted-foreground">Audit seluruh parameter pemeriksaan dari sumber A:W.</p>
+        </CardHeader>
+        <CardContent>
+          <AhiDataDetail sections={sections} />
+        </CardContent>
+      </Card>
+
+      <p className="text-[11px] text-muted-foreground">
+        Source: AHI UPT Palangkaraya 2026 fixed · Sheet: HI UPT · Range: A:W + AM:BA · Provider: Apps Script
+      </p>
+    </div>
   );
 }

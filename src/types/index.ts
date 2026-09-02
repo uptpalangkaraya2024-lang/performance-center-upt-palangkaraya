@@ -1,22 +1,5 @@
 export type StatusLevel = "good" | "warning" | "critical" | "none";
 
-export interface KpiSummary {
-  id: string;
-  label: string;
-  value: number;
-  unit: string;
-  target: number;
-  previous: number;
-  status: StatusLevel;
-  format: "percent" | "number" | "score";
-}
-
-export interface TrendPoint {
-  period: string;
-  value: number;
-  target?: number;
-}
-
 export interface UltgPerformance {
   id: string;
   name: string;
@@ -73,13 +56,6 @@ export interface DisturbanceCategoryResult {
   monthlyByYearByCause: DisturbanceCauseMonthlyYear[];
   years: string[];
   topBay: DisturbanceBayCount[];
-}
-
-export interface OpenCaseSummary {
-  total: number;
-  overdue: number;
-  dueSoon: number;
-  inProgress: number;
 }
 
 export interface AiInsight {
@@ -155,6 +131,91 @@ export interface UptPerformanceSnapshot {
 
 export interface UptPerformanceResult {
   data: UptPerformanceSnapshot | null;
+  error: string | null;
+}
+
+export type AhiSectionKey = "mtu" | "catu-daya" | "trafo" | "reaktor";
+
+export interface AhiParameterResult {
+  name: string;
+  kosong: number | null;
+  best: number | null;
+  good: number | null;
+  fair: number | null;
+  poor: number | null;
+  critical: number | null;
+}
+
+export interface AhiDistribution {
+  best: number | null;
+  good: number | null;
+  fair: number | null;
+  poor: number | null;
+  critical: number | null;
+}
+
+/** One AHI category (e.g. "AHI PMS") — one block in the "HI UPT" sheet's A:W report layout. */
+export interface AhiCategory {
+  key: string;
+  displayName: string;
+  section: AhiSectionKey;
+  jumlahDataTercatat: number | null;
+  /** 0-1 fraction, as stored in the sheet. */
+  kualitasData: number | null;
+  /** 0-1 fraction — the sheet's own "Score AHI" value, not recomputed. */
+  score: number | null;
+  distribution: AhiDistribution;
+  parameters: AhiParameterResult[];
+  /** Derived from `distribution` (any critical -> critical, any poor -> warning,
+   *  else good) — not a score threshold, since none is sourced. See
+   *  src/services/ahi-performance.ts for the reasoning. */
+  status: StatusLevel;
+}
+
+/** One of the 4 main KPIs — AHI MTU / CATU DAYA / TRAFO / REAKTOR. */
+export interface AhiSectionSummary {
+  key: AhiSectionKey;
+  displayName: string;
+  /** 0-1 fraction. For MTU/CATU DAYA: mean of member categories' scores (only
+   *  when the sheet has no section-level aggregate itself — see report).
+   *  For TRAFO/REAKTOR: the single category's own score, unchanged. */
+  score: number | null;
+  status: StatusLevel;
+  categories: AhiCategory[];
+}
+
+/** One row from the AM:BA "REKAP ANOMALI POOR & CRITICAL" recap — field
+ *  names mirror the sheet's own header text (AM:BA row 2). */
+export interface AhiAnomalyRecord {
+  no: number;
+  ultg: string;
+  gi: string;
+  bay: string;
+  jenisAset: string;
+  fasa: string;
+  merk: string;
+  keterangan: string;
+  /** The sheet's own numeric AHI level for this finding (4 = Poor, 5 = Critical). */
+  kategoriAhi: number;
+  parameterPemicuAhi: string;
+  parameterAhi2: string;
+  kategoriAhiVsSkdir: string;
+  subSistem: string;
+  rencanaTindakLanjut: string;
+  targetWaktu: string;
+}
+
+export interface AhiSnapshot {
+  /** Always 4 entries, in order: mtu, catu-daya, trafo, reaktor. */
+  sections: AhiSectionSummary[];
+  anomalies: AhiAnomalyRecord[];
+  lastUpdate: string | null;
+  /** Non-fatal parsing notices (e.g. a category label not found in the sheet this period). */
+  warnings: string[];
+}
+
+export interface AhiResult {
+  data: AhiSnapshot | null;
   error: string | null;
 }
 

@@ -1,10 +1,14 @@
+import { TrendingUp } from "lucide-react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
 import { DisturbanceBayChart } from "@/components/charts/disturbance-bay-chart";
 import { getDisturbances } from "@/services/disturbances";
+import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { DisturbanceCategoryResult } from "@/types";
 
@@ -53,6 +57,12 @@ function CategorySection({ title, data }: { title: string; data: DisturbanceCate
         <StatTile value={data.summary.arSukses.toLocaleString("id-ID")} label="AR Sukses" className="text-primary" />
         <StatTile value={data.summary.tidakTrip.toLocaleString("id-ID")} label="Tidak Trip" className="text-muted-foreground" />
       </div>
+
+      <Card>
+        <CardContent className="py-4">
+          <AiInsightList data={buildDisturbanceInsights(data, title)} title="Insight Gangguan" icon={TrendingUp} />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>

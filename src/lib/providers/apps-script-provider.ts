@@ -127,6 +127,18 @@ async function readSheet(file: DriveFileRef, sheet: SheetRef): Promise<Record<st
   return rowsToRecords(data.headers ?? [], data.rows ?? []);
 }
 
+async function readSheetRaw(file: DriveFileRef, sheet: SheetRef): Promise<unknown[][]> {
+  // The gateway's own contract splits the response into "headers" (the row
+  // at headerRow) and "rows" (everything after it) — requesting headerRow:1
+  // and re-prepending `headers` reconstructs the untouched grid from the
+  // sheet's literal first row, with no header-keyed conversion applied.
+  const data = await callGateway<{ headers: string[]; rows: unknown[][] }>(
+    { action: "readSheet", fileName: file.name, sheetName: sheet.name, headerRow: 1 },
+    { file: file.name, sheet: sheet.name },
+  );
+  return [data.headers ?? [], ...(data.rows ?? [])];
+}
+
 async function health(): Promise<{ healthy: boolean; message?: string }> {
   try {
     await callGateway<{ status: string }>({ action: "health" }, { file: "health" });
@@ -140,5 +152,6 @@ export const appsScriptProvider: SpreadsheetDataProvider = {
   name: "apps-script",
   findFile,
   readSheet,
+  readSheetRaw,
   health,
 };
