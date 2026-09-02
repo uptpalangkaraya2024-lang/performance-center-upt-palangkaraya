@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { PageHero } from "@/components/dashboard/page-hero";
+import { AhiExecutiveSummary } from "@/components/ahi/ahi-executive-summary";
 import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
 import { AhiAnomalyTable } from "@/components/ahi/ahi-anomaly-table";
 import { AhiCategoryDetail } from "@/components/ahi/ahi-category-detail";
@@ -44,15 +45,25 @@ export default async function AhiPage() {
         }
       />
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {sections.map((section) => (
-          <AhiKpiCard key={section.key} section={section} />
-        ))}
+      <AhiExecutiveSummary sections={sections} totalAnomalies={anomalies.length} />
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">Asset Health Breakdown</h2>
+          <p className="text-xs text-muted-foreground">
+            Healthy Index per KPI utama — MTU, Catu Daya, Trafo, dan Reaktor.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {sections.map((section) => (
+            <AhiKpiCard key={section.key} section={section} />
+          ))}
+        </div>
       </section>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Rekap Kondisi Perlu Perhatian</CardTitle>
+          <CardTitle className="text-base">Anomaly Perlu Perhatian</CardTitle>
           <p className="text-xs text-muted-foreground">
             Rekap anomali Poor &amp; Critical MTU &amp; Trafo — hasil rekapan langsung dari sumber data (AM:BA).
           </p>
@@ -64,7 +75,7 @@ export default async function AhiPage() {
 
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-base font-semibold tracking-tight">Detail AHI</h2>
+          <h2 className="text-base font-semibold tracking-tight">Detail per Kategori</h2>
           <p className="text-xs text-muted-foreground">
             Rincian tiap kategori AHI per kelompok — skor, distribusi hasil pengujian, dan parameter pemeriksaan.
           </p>

@@ -52,6 +52,18 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
     [records],
   );
 
+  // Severity tally over the full unfiltered record set — a straight count of
+  // each record's existing kategoriAhi (the sheet's own Poor/Critical
+  // classification), not a new rule. Doubles as a one-click filter into the
+  // table below, giving the 146 records a Critical → Attention hierarchy
+  // instead of dropping the reader straight into a flat table.
+  const severityTally = useMemo(() => {
+    const critical = records.filter((r) => r.kategoriAhi === 5).length;
+    const poor = records.filter((r) => r.kategoriAhi === 4).length;
+    const other = records.length - critical - poor;
+    return { critical, poor, other };
+  }, [records]);
+
   const filtered = useMemo(() => {
     let rows = records;
     if (ultgFilter !== ALL_VALUE) rows = rows.filter((r) => r.ultg === ultgFilter);
@@ -79,6 +91,37 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setKategoriFilter(kategoriFilter === "5" ? ALL_VALUE : "5")}
+          className={cn(
+            "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            kategoriFilter === "5" ? "border-critical bg-critical/10 text-critical" : "border-border text-muted-foreground hover:bg-muted",
+          )}
+        >
+          <span className="size-1.5 rounded-full bg-critical" />
+          Critical <b className="tabular-nums">{severityTally.critical}</b>
+        </button>
+        <button
+          type="button"
+          onClick={() => setKategoriFilter(kategoriFilter === "4" ? ALL_VALUE : "4")}
+          className={cn(
+            "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            kategoriFilter === "4" ? "border-warning bg-warning/15 text-warning-foreground" : "border-border text-muted-foreground hover:bg-muted",
+          )}
+        >
+          <span className="size-1.5 rounded-full bg-warning" />
+          Poor <b className="tabular-nums">{severityTally.poor}</b>
+        </button>
+        {severityTally.other > 0 ? (
+          <span className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-muted-foreground" />
+            Lainnya <b className="tabular-nums">{severityTally.other}</b>
+          </span>
+        ) : null}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={search}
@@ -142,6 +185,11 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
         Menampilkan {filtered.length} dari {records.length} kondisi.
       </p>
 
+      {filtered.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          Tidak ada kondisi yang sesuai dengan filter.
+        </p>
+      ) : (
       <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
@@ -188,6 +236,7 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
           </TableBody>
         </Table>
       </div>
+      )}
     </div>
   );
 }

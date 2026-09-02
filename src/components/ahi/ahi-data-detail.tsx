@@ -80,6 +80,11 @@ export function AhiDataDetail({ sections }: { sections: AhiSectionSummary[] }) {
         <p className="text-xs text-muted-foreground">{filtered.length} baris parameter (dari sumber A:W)</p>
       </div>
 
+      {filtered.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          Tidak ada parameter yang sesuai dengan pencarian.
+        </p>
+      ) : (
       <div className="max-h-[480px] overflow-auto rounded-lg border">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-card">
@@ -114,7 +119,9 @@ export function AhiDataDetail({ sections }: { sections: AhiSectionSummary[] }) {
           </TableBody>
         </Table>
       </div>
+      )}
 
+      {filtered.length > 0 ? (
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
           Halaman {currentPage + 1} dari {pageCount}
@@ -133,6 +140,7 @@ export function AhiDataDetail({ sections }: { sections: AhiSectionSummary[] }) {
           </Button>
         </div>
       </div>
+      ) : null}
     </div>
   );
 }
