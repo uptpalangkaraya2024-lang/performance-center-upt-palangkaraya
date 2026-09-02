@@ -2,13 +2,14 @@ import "server-only";
 
 import { dataSources } from "@/config/data-sources";
 import { UPT_KPI_CONFIG } from "@/config/upt-kpi";
-import { hasAllRequiredSheets, readConfiguredSource } from "@/lib/data-connector";
+import { hasAllRequiredSheets, readConfiguredSource, readConfiguredSourceRaw } from "@/lib/data-connector";
 import { calculateStatus } from "@/lib/kpi-engine";
 import { parseNumber, requireText } from "@/lib/parse";
 import { listSyncStatus } from "@/lib/sync-status";
 import type {
   UptKpi,
   UptKpiDirection,
+  UptKpiMonthlyPoint,
   UptOverallPerformance,
   UptPeriodOption,
   UptPerformanceResult,
@@ -24,6 +25,7 @@ const MONTH_NAMES_ID = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
+const MONTH_SHORT_ID = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
 // The sheet's own header text has an unexplained trailing space on "Target
 // s/d " (verified live via the Apps Script gateway) — matching case- and
@@ -101,7 +103,94 @@ function buildPeriodOptions(year: number | null, currentPeriod: string | null): 
   });
 }
 
-function normalizeKpi(records: Record<string, string>[], warnings: string[]): UptKpi[] {
+/**
+ * Locates the sheet's real column-header row (NO / INDIKATOR KINERJA KUNCI /
+ * ... / Jan..Dec x6) inside the untouched raw grid — same row the
+ * `headerRow: 14` config points `readSheet()` at, found dynamically here
+ * since `readSheetRaw` always returns the grid from row 1.
+ */
+function findHeaderRowIndex(raw: unknown[][]): number {
+  for (let i = 0; i < raw.length; i++) {
+    const row = raw[i];
+    if (String(row?.[0] ?? "").trim() === "NO" && String(row?.[1] ?? "").trim().toUpperCase().includes("INDIKATOR")) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// The header row repeats "Jan".."Dec" across 6 monthly blocks in this fixed
+// left-to-right order: Target Bulanan, Target Komulatif, Realisasi Bulanan,
+// Realisasi Komulatif, Percentage, Nilai — so the 4th "Jan" occurrence marks
+// where the Realisasi Komulatif (cumulative realization) block starts. This
+// is the same block "Realisasi s/d" (used everywhere else in this file)
+// reads its current-month value from, just for every month instead of one.
+function findRealisasiKomulatifStartCol(headerRow: unknown[]): number {
+  const janIndices: number[] = [];
+  headerRow.forEach((cell, idx) => {
+    if (String(cell ?? "").trim() === "Jan") janIndices.push(idx);
+  });
+  return janIndices[3] ?? -1;
+}
+
+/**
+ * Real monthly historical trend per KPI, read straight from the sheet's own
+ * Realisasi Komulatif columns — never estimated/interpolated. Only months up
+ * to the currently-synced reporting month are included: a later column can
+ * hold a carried-forward value from a spreadsheet formula, which is not real
+ * data for a month that hasn't been reported yet, so it's excluded rather
+ * than shown as though it were.
+ */
+function extractMonthlyTrends(
+  raw: unknown[][],
+  currentMonthIndex: number,
+  warnings: string[],
+): Map<string, UptKpiMonthlyPoint[]> {
+  const result = new Map<string, UptKpiMonthlyPoint[]>();
+  if (currentMonthIndex < 0) return result;
+
+  const headerRowIdx = findHeaderRowIndex(raw);
+  if (headerRowIdx < 0) {
+    warnings.push("HISTORICAL_TREND_UNAVAILABLE: baris header blok bulanan tidak ditemukan.");
+    return result;
+  }
+  const startCol = findRealisasiKomulatifStartCol(raw[headerRowIdx] as unknown[]);
+  if (startCol < 0) {
+    warnings.push("HISTORICAL_TREND_UNAVAILABLE: kolom REALISASI KOMULATIF tidak ditemukan.");
+    return result;
+  }
+
+  const matchedKeys = new Set<string>();
+  for (let i = headerRowIdx + 1; i < raw.length; i++) {
+    const row = raw[i] as unknown[];
+    const indikatorRaw = requireText(row[1] != null ? String(row[1]) : undefined);
+    if (!indikatorRaw) continue;
+    const candidates = [normalizeLabel(indikatorRaw), normalizeLabel(stripLetterPrefix(indikatorRaw))];
+    for (const config of UPT_KPI_CONFIG) {
+      if (matchedKeys.has(config.key)) continue;
+      if (!candidates.includes(normalizeLabel(config.sourceLabel))) continue;
+      matchedKeys.add(config.key);
+
+      const points: UptKpiMonthlyPoint[] = [];
+      for (let m = 0; m <= currentMonthIndex; m++) {
+        const cell = row[startCol + m];
+        const value = typeof cell === "number" ? cell : parseNumber(cell != null ? String(cell) : undefined);
+        points.push({ month: MONTH_SHORT_ID[m], value });
+      }
+      if (points.some((p) => p.value !== null)) {
+        result.set(config.key, points);
+      }
+    }
+  }
+
+  return result;
+}
+
+function normalizeKpi(
+  records: Record<string, string>[],
+  warnings: string[],
+  trends: Map<string, UptKpiMonthlyPoint[]>,
+): UptKpi[] {
   const byLabel = new Map<string, Record<string, string>>();
   const matchedKeys = new Set<string>();
 
@@ -138,6 +227,7 @@ function normalizeKpi(records: Record<string, string>[], warnings: string[]): Up
         actualValue: null,
         achievement: null,
         status: "none",
+        monthlyTrend: null,
       };
     }
 
@@ -162,6 +252,7 @@ function normalizeKpi(records: Record<string, string>[], warnings: string[]): Up
       // The sheet's Pencapaian already IS the achievement percentage — calculateStatus's
       // >=100/>=90 thresholds apply directly, no target/actual division needed here.
       status: achievement === null ? "none" : calculateStatus(achievement),
+      monthlyTrend: trends.get(config.key) ?? null,
     };
   });
 }
@@ -180,7 +271,15 @@ function summarize(kpis: UptKpi[]): UptOverallPerformance {
 }
 
 export async function getUptPerformance(): Promise<UptPerformanceResult> {
-  const results = await readConfiguredSource(SOURCE);
+  // Raw grid is fetched alongside the header-keyed read purely to source the
+  // Historical Trend chart's real Realisasi Komulatif data — see
+  // extractMonthlyTrends(). A failure here degrades to no trend data, it
+  // never blocks the KPI cards themselves (hasAllRequiredSheets only checks
+  // the header-keyed `results`, unchanged from before this was added).
+  const [results, rawResults] = await Promise.all([
+    readConfiguredSource(SOURCE),
+    readConfiguredSourceRaw(SOURCE),
+  ]);
 
   if (!hasAllRequiredSheets(SOURCE, results)) {
     return {
@@ -198,13 +297,19 @@ export async function getUptPerformance(): Promise<UptPerformanceResult> {
   }
 
   const warnings: string[] = [];
-  const kpis = normalizeKpi(sheetResult.records, warnings);
 
   const year = detectYear(sheetResult.records);
   const currentMonthAbbrev = detectCurrentMonthAbbrev(sheetResult.records);
   const currentMonthIndex = currentMonthAbbrev
     ? MONTH_ABBREVIATIONS.findIndex((m) => m.toLowerCase() === currentMonthAbbrev.toLowerCase())
     : -1;
+
+  const rawSheetResult = rawResults.find((r) => r.file === EXPECTED_FILE && r.sheet === EXPECTED_SHEET);
+  const trends = rawSheetResult
+    ? extractMonthlyTrends(rawSheetResult.rows, currentMonthIndex, warnings)
+    : new Map<string, UptKpiMonthlyPoint[]>();
+
+  const kpis = normalizeKpi(sheetResult.records, warnings, trends);
 
   const period = year !== null && currentMonthIndex >= 0
     ? `${year}-${String(currentMonthIndex + 1).padStart(2, "0")}`

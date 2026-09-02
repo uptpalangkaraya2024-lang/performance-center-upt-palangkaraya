@@ -99,6 +99,20 @@ export interface UptKpi {
    *  formula includes capping/bobot-hilang rules this app doesn't reimplement). */
   achievement: number | null;
   status: StatusLevel; // good=ACHIEVED, warning=WARNING, critical=CRITICAL, none=NO_DATA
+  /** Real monthly "Realisasi Komulatif" (cumulative realization) trend read
+   *  straight from the sheet's own monthly-columns block — null when the
+   *  KPI's row wasn't found there, or the block itself isn't readable. Only
+   *  months up to the currently-synced reporting month are ever included —
+   *  see src/services/upt-performance.ts extractMonthlyTrends(). */
+  monthlyTrend: UptKpiMonthlyPoint[] | null;
+}
+
+export interface UptKpiMonthlyPoint {
+  /** Short Indonesian month label, e.g. "Jan". */
+  month: string;
+  /** null when the sheet's own cell for this month is blank/unparseable — a
+   *  gap, never fabricated as 0. */
+  value: number | null;
 }
 
 export interface UptOverallPerformance {

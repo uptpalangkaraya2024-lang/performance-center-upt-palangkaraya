@@ -1,7 +1,6 @@
-import { AlertTriangle } from "lucide-react";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
+import { ManagementAttentionList } from "@/components/dashboard/management-attention-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { UptPerformanceStatus } from "@/components/dashboard/upt-performance-status";
@@ -82,12 +81,7 @@ export default async function OverviewPage() {
             <CardTitle className="text-base">Management Attention</CardTitle>
           </CardHeader>
           <CardContent>
-            <AiInsightList
-              data={managementAttention}
-              title="Management Attention"
-              icon={AlertTriangle}
-              emptyMessage="Tidak ada catatan khusus untuk periode ini."
-            />
+            <ManagementAttentionList data={managementAttention} />
           </CardContent>
         </Card>
       </div>

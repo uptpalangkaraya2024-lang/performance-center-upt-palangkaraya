@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { LineChart } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -16,6 +15,7 @@ import { PageHero } from "@/components/dashboard/page-hero";
 import type { UptKpiCategory, UptPerformanceSnapshot } from "@/types";
 import { UptCategorySection } from "./upt-category-section";
 import { UptOverallPerformanceSummary } from "./upt-overall-performance";
+import { UptTrendChart } from "./upt-trend-chart";
 
 const CATEGORY_ORDER: UptKpiCategory[] = [
   "availability",
@@ -90,16 +90,10 @@ export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnaps
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Tren Kinerja</CardTitle>
+              <CardTitle className="text-base">Kinerja UPT — Historical Trend</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
-                <LineChart className="size-8" />
-                <p className="text-sm">Trend data belum tersedia.</p>
-                <p className="max-w-sm text-xs">
-                  Sheet sumber hanya menyimpan snapshot kumulatif untuk periode berjalan ({snapshot.periodLabel}), belum ada riwayat bulanan yang dapat dibaca melalui provider saat ini.
-                </p>
-              </div>
+              <UptTrendChart kpis={snapshot.kpis} />
             </CardContent>
           </Card>
         </>
