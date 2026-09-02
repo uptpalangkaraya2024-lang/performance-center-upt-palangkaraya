@@ -1,10 +1,14 @@
-import { PlaceholderPage } from "@/components/dashboard/placeholder-page";
+import { Sparkles } from "lucide-react";
+
+import { ComingSoon } from "@/components/dashboard/coming-soon";
 
 export default function Page() {
   return (
-    <PlaceholderPage
+    <ComingSoon
       title="AI Assistant"
-      description="Tanya jawab operasional berbasis data sistem, dengan sumber dan periode data yang jelas."
+      heroDescription="Tanya jawab operasional berbasis data sistem, dengan sumber dan periode data yang jelas."
+      message="Fitur ini sedang dipersiapkan untuk integrasi data operasional."
+      icon={Sparkles}
     />
   );
 }

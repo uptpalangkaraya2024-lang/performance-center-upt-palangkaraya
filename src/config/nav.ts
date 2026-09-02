@@ -17,7 +17,10 @@ export interface NavItem {
   title: string;
   href: string;
   icon: LucideIcon;
-  children?: { title: string; href: string }[];
+  /** True for a module with no live data source yet — rendered slightly
+   *  dimmer in the sidebar so ACTIVE modules read as the primary paths. */
+  comingSoon?: boolean;
+  children?: { title: string; href: string; comingSoon?: boolean }[];
 }
 
 export interface NavGroup {
@@ -34,9 +37,9 @@ export const navGroups: NavGroup[] = [
     label: "Monitoring",
     items: [
       { title: "Kinerja UPT", href: "/dashboard/performance/upt", icon: Building2 },
-      { title: "Kinerja ULTG", href: "/dashboard/performance/ultg", icon: Network },
+      { title: "Kinerja ULTG", href: "/dashboard/performance/ultg", icon: Network, comingSoon: true },
       { title: "Gangguan", href: "/dashboard/disturbances", icon: Zap },
-      { title: "Open Case", href: "/dashboard/open-cases", icon: ListChecks },
+      { title: "Open Case", href: "/dashboard/open-cases", icon: ListChecks, comingSoon: true },
     ],
   },
   {
@@ -47,9 +50,9 @@ export const navGroups: NavGroup[] = [
         href: "/dashboard/kpi/abo",
         icon: Gauge,
         children: [
-          { title: "ABO", href: "/dashboard/kpi/abo" },
-          { title: "4DX", href: "/dashboard/kpi/4dx" },
-          { title: "CE", href: "/dashboard/kpi/ce" },
+          { title: "ABO", href: "/dashboard/kpi/abo", comingSoon: true },
+          { title: "4DX", href: "/dashboard/kpi/4dx", comingSoon: true },
+          { title: "CE", href: "/dashboard/kpi/ce", comingSoon: true },
           { title: "AHI", href: "/dashboard/kpi/ahi" },
         ],
       },
@@ -57,17 +60,17 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Asset",
-    items: [{ title: "Data Aset", href: "/dashboard/assets", icon: BatteryCharging }],
+    items: [{ title: "Data Aset", href: "/dashboard/assets", icon: BatteryCharging, comingSoon: true }],
   },
   {
     label: "Planning",
-    items: [{ title: "RENUS", href: "/dashboard/renus", icon: ClipboardList }],
+    items: [{ title: "RENUS", href: "/dashboard/renus", icon: ClipboardList, comingSoon: true }],
   },
   {
     label: "Data",
     items: [
       { title: "Data & Sync", href: "/dashboard/data-sync", icon: DatabaseZap },
-      { title: "AI Assistant", href: "/dashboard/ai", icon: Sparkles },
+      { title: "AI Assistant", href: "/dashboard/ai", icon: Sparkles, comingSoon: true },
     ],
   },
   {

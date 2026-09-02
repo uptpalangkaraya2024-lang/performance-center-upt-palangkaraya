@@ -1,10 +1,14 @@
-import { PlaceholderPage } from "@/components/dashboard/placeholder-page";
+import { ShieldCheck } from "lucide-react";
+
+import { ComingSoon } from "@/components/dashboard/coming-soon";
 
 export default function Page() {
   return (
-    <PlaceholderPage
+    <ComingSoon
       title="ABO Performance"
-      description="Target, actual, achievement, tren bulanan, dan YTD performance ABO."
+      heroDescription="Target, actual, achievement, tren bulanan, dan YTD performance ABO."
+      message="Performance ABO akan tersedia setelah sumber data ABO terintegrasi."
+      icon={ShieldCheck}
     />
   );
 }

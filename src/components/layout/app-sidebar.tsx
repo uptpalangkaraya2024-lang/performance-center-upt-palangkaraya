@@ -86,9 +86,10 @@ export function AppSidebar() {
                       <SidebarMenuItem key={item.href}>
                         <SidebarMenuButton
                           isActive={isActive}
-                          tooltip={item.title}
+                          tooltip={item.comingSoon ? `${item.title} (Coming Soon)` : item.title}
                           className={cn(
-                            "text-sidebar-foreground/80 rounded-md border-l-2 border-transparent transition-colors",
+                            "rounded-md border-l-2 border-transparent transition-colors",
+                            item.comingSoon ? "text-sidebar-foreground/50" : "text-sidebar-foreground/80",
                             "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                             isActive &&
                               "border-brand bg-sidebar-accent text-sidebar-accent-foreground font-semibold",
@@ -109,7 +110,7 @@ export function AppSidebar() {
                                   <SidebarMenuSubButton
                                     isActive={childActive}
                                     className={cn(
-                                      "text-sidebar-foreground/70",
+                                      child.comingSoon ? "text-sidebar-foreground/45" : "text-sidebar-foreground/70",
                                       "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                                       childActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
                                     )}

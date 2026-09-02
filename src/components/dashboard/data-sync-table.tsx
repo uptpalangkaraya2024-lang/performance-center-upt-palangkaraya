@@ -21,17 +21,16 @@ import {
 import { cn } from "@/lib/utils";
 import type { DataSourceHealth } from "@/types";
 
+// "pending" means the module's source was never expected to exist yet — a
+// Coming Soon module, not a broken integration — so it gets the same
+// neutral/blue treatment as the ComingSoon component, never red.
 const STATUS_LABEL: Record<
   DataSourceHealth["status"],
   { label: string; pillClassName: string; dotClassName: string }
 > = {
-  healthy: { label: "Healthy", pillClassName: "bg-success/10 text-success", dotClassName: "bg-success" },
+  healthy: { label: "Active", pillClassName: "bg-success/10 text-success", dotClassName: "bg-success" },
   error: { label: "Gagal sinkronisasi", pillClassName: "bg-critical/10 text-critical", dotClassName: "bg-critical" },
-  pending: {
-    label: "Belum terhubung",
-    pillClassName: "bg-muted text-muted-foreground",
-    dotClassName: "bg-muted-foreground",
-  },
+  pending: { label: "Coming Soon", pillClassName: "bg-info/10 text-info", dotClassName: "bg-info" },
 };
 
 export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
@@ -84,9 +83,9 @@ export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Semua Status</SelectItem>
-            <SelectItem value="healthy">Healthy</SelectItem>
+            <SelectItem value="healthy">Active</SelectItem>
             <SelectItem value="error">Gagal sinkronisasi</SelectItem>
-            <SelectItem value="pending">Belum terhubung</SelectItem>
+            <SelectItem value="pending">Coming Soon</SelectItem>
           </SelectContent>
         </Select>
         <Input

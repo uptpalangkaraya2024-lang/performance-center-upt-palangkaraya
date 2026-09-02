@@ -1,10 +1,14 @@
-import { PlaceholderPage } from "@/components/dashboard/placeholder-page";
+import { BatteryCharging } from "lucide-react";
+
+import { ComingSoon } from "@/components/dashboard/coming-soon";
 
 export default function Page() {
   return (
-    <PlaceholderPage
+    <ComingSoon
       title="Asset Intelligence"
-      description="Data aset yang dapat dicari, difilter, dan didetailkan lengkap dengan riwayat inspeksi."
+      heroDescription="Data aset yang dapat dicari, difilter, dan didetailkan lengkap dengan riwayat inspeksi."
+      message="Pencarian dan riwayat inspeksi aset akan tersedia setelah sumber data aset terintegrasi."
+      icon={BatteryCharging}
     />
   );
 }

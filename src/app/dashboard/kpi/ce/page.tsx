@@ -1,10 +1,14 @@
-import { PlaceholderPage } from "@/components/dashboard/placeholder-page";
+import { Gauge } from "lucide-react";
+
+import { ComingSoon } from "@/components/dashboard/coming-soon";
 
 export default function Page() {
   return (
-    <PlaceholderPage
+    <ComingSoon
       title="CE Performance"
-      description="Target, actual, achievement, tren bulanan, YTD, dan gap CE."
+      heroDescription="Target, actual, achievement, tren bulanan, YTD, dan gap CE."
+      message="Performance CE akan tersedia setelah sumber data CE terintegrasi."
+      icon={Gauge}
     />
   );
 }

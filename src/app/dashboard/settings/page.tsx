@@ -1,10 +1,14 @@
-import { PlaceholderPage } from "@/components/dashboard/placeholder-page";
+import { Settings as SettingsIcon } from "lucide-react";
+
+import { ComingSoon } from "@/components/dashboard/coming-soon";
 
 export default function Page() {
   return (
-    <PlaceholderPage
+    <ComingSoon
       title="Settings"
-      description="Pengelolaan sumber data, konfigurasi KPI, user, threshold, dan sistem."
+      heroDescription="Pengelolaan sumber data, konfigurasi KPI, user, threshold, dan sistem."
+      message="Pengaturan sistem akan tersedia pada tahap pengembangan berikutnya."
+      icon={SettingsIcon}
     />
   );
 }
