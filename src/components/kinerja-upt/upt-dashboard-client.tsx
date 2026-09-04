@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -29,6 +30,26 @@ const CATEGORY_ORDER: UptKpiCategory[] = [
 
 export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnapshot }) {
   const [selectedPeriod, setSelectedPeriod] = useState(snapshot.period);
+  const searchParams = useSearchParams();
+
+  // A Management Attention / Top Issue / Gap to Target link on the Overview
+  // dashboard can point here with ?highlight=KEY1,KEY2 — rings the matching
+  // KPI card(s) instead of leaving the reader to scan all 19 for the one
+  // that was actually flagged. The #kpi-<key> anchor in the same link
+  // handles the scroll itself (native hash navigation).
+  const highlightKeys = useMemo(() => {
+    const raw = searchParams.get("highlight");
+    return raw ? new Set(raw.split(",").filter(Boolean)) : undefined;
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!highlightKeys || highlightKeys.size === 0) return;
+    const timer = setTimeout(() => {
+      const first = document.getElementById(`kpi-${[...highlightKeys][0]}`);
+      first?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [highlightKeys]);
 
   const selectedOption = snapshot.periodOptions.find((option) => option.value === selectedPeriod);
   const selectedLabel = selectedOption?.label ?? snapshot.periodLabel;
@@ -105,7 +126,12 @@ export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnaps
           </section>
 
           {CATEGORY_ORDER.map((category) => (
-            <UptCategorySection key={category} category={category} kpis={kpisByCategory.get(category) ?? []} />
+            <UptCategorySection
+              key={category}
+              category={category}
+              kpis={kpisByCategory.get(category) ?? []}
+              highlightKeys={highlightKeys}
+            />
           ))}
 
           <Card>

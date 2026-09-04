@@ -66,6 +66,10 @@ export interface AiInsight {
   id: string;
   tone: StatusLevel;
   text: string;
+  /** Deep link to where this insight's underlying data lives — e.g. the
+   *  specific KPI card on Kinerja UPT, or the AHI section it's about.
+   *  Absent when the insight has no single destination worth linking to. */
+  href?: string;
 }
 
 export type UptKpiDirection = "HIGHER_IS_BETTER" | "LOWER_IS_BETTER";

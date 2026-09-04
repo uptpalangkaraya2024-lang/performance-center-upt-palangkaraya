@@ -14,10 +14,10 @@ const ACCENT_BY_STATUS: Record<UptKpi["status"], string> = {
   none: "bg-border",
 };
 
-export function UptKpiCard({ kpi }: { kpi: UptKpi }) {
+export function UptKpiCard({ kpi, highlighted = false }: { kpi: UptKpi; highlighted?: boolean }) {
   if (kpi.status === "none") {
     return (
-      <Card className="gap-3 overflow-hidden py-0">
+      <Card id={`kpi-${kpi.key}`} className="gap-3 overflow-hidden py-0">
         <div className="h-1 w-full bg-border" />
         <CardHeader className="px-4 pt-4">
           <div className="flex items-center justify-between">
@@ -39,7 +39,13 @@ export function UptKpiCard({ kpi }: { kpi: UptKpi }) {
   const DirectionIcon = kpi.direction === "LOWER_IS_BETTER" ? ArrowDown : ArrowUp;
 
   return (
-    <Card className="gap-3 overflow-hidden py-0 transition-shadow hover:shadow-md">
+    <Card
+      id={`kpi-${kpi.key}`}
+      className={cn(
+        "gap-3 overflow-hidden py-0 scroll-mt-20 transition-shadow hover:shadow-md",
+        highlighted && "ring-2 ring-brand ring-offset-2 ring-offset-background",
+      )}
+    >
       <div className={cn("h-1 w-full", ACCENT_BY_STATUS[kpi.status])} />
       <CardHeader className="px-4 pt-4">
         <div className="flex items-start justify-between gap-2">

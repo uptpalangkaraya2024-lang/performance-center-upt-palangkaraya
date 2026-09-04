@@ -1,5 +1,6 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { ListChecks } from "lucide-react";
+import { ChevronRight, ListChecks } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { AiInsight } from "@/types";
@@ -36,12 +37,27 @@ export function AiInsightList({
         <p className="text-sm text-muted-foreground">{emptyMessage}</p>
       ) : (
         <ul className="flex flex-col gap-2.5">
-          {data.map((insight) => (
-            <li key={insight.id} className="flex items-start gap-2 text-sm">
-              <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", DOT_CLASS[insight.tone])} />
-              <span>{insight.text}</span>
-            </li>
-          ))}
+          {data.map((insight) =>
+            insight.href ? (
+              <li key={insight.id}>
+                <Link
+                  href={insight.href}
+                  className="group flex items-start gap-2 rounded-md text-sm hover:text-foreground"
+                >
+                  <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", DOT_CLASS[insight.tone])} />
+                  <span className="underline decoration-transparent underline-offset-2 group-hover:decoration-current">
+                    {insight.text}
+                  </span>
+                  <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </Link>
+              </li>
+            ) : (
+              <li key={insight.id} className="flex items-start gap-2 text-sm">
+                <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", DOT_CLASS[insight.tone])} />
+                <span>{insight.text}</span>
+              </li>
+            ),
+          )}
         </ul>
       )}
     </div>

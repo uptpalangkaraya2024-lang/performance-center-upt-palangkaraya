@@ -117,7 +117,12 @@ export default async function OverviewPage() {
           </CardHeader>
           <CardContent>
             <AiInsightList
-              data={topIssues.map((issue, index) => ({ id: String(index), tone: issue.tone, text: issue.text }))}
+              data={topIssues.map((issue, index) => ({
+                id: String(index),
+                tone: issue.tone,
+                text: issue.text,
+                href: issue.href,
+              }))}
               title="Top Issue"
               emptyMessage="Tidak ada isu prioritas saat ini."
             />

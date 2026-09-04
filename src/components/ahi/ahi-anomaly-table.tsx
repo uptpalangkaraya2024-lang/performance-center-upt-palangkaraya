@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -39,14 +40,21 @@ function categoryBadge(kategoriAhi: number) {
 }
 
 export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
+  const searchParams = useSearchParams();
+  // A GI Correlation table link (Overview dashboard) can point here with
+  // ?gi=<GI> to pre-filter straight to that GI's anomaly rows.
+  const initialGi = searchParams.get("gi");
+
   const [search, setSearch] = useState("");
   const [ultgFilter, setUltgFilter] = useState(ALL_VALUE);
   const [jenisAsetFilter, setJenisAsetFilter] = useState(ALL_VALUE);
   const [kategoriFilter, setKategoriFilter] = useState(ALL_VALUE);
+  const [giFilter, setGiFilter] = useState(initialGi && records.some((r) => r.gi === initialGi) ? initialGi : ALL_VALUE);
   const [sortDesc, setSortDesc] = useState(true);
 
   const ultgOptions = useMemo(() => [...new Set(records.map((r) => r.ultg))].sort(), [records]);
   const jenisAsetOptions = useMemo(() => [...new Set(records.map((r) => r.jenisAset))].sort(), [records]);
+  const giOptions = useMemo(() => [...new Set(records.map((r) => r.gi))].filter(Boolean).sort(), [records]);
   const kategoriOptions = useMemo(
     () => [...new Set(records.map((r) => r.kategoriAhi))].sort((a, b) => b - a),
     [records],
@@ -68,6 +76,7 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
     let rows = records;
     if (ultgFilter !== ALL_VALUE) rows = rows.filter((r) => r.ultg === ultgFilter);
     if (jenisAsetFilter !== ALL_VALUE) rows = rows.filter((r) => r.jenisAset === jenisAsetFilter);
+    if (giFilter !== ALL_VALUE) rows = rows.filter((r) => r.gi === giFilter);
     if (kategoriFilter !== ALL_VALUE) rows = rows.filter((r) => String(r.kategoriAhi) === kategoriFilter);
     if (search.trim()) {
       const needle = search.trim().toLowerCase();
@@ -79,7 +88,7 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
       );
     }
     return [...rows].sort((a, b) => (sortDesc ? b.kategoriAhi - a.kategoriAhi : a.kategoriAhi - b.kategoriAhi));
-  }, [records, ultgFilter, jenisAsetFilter, kategoriFilter, search, sortDesc]);
+  }, [records, ultgFilter, jenisAsetFilter, giFilter, kategoriFilter, search, sortDesc]);
 
   if (records.length === 0) {
     return (
@@ -153,6 +162,19 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
             {jenisAsetOptions.map((j) => (
               <SelectItem key={j} value={j}>
                 {j}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={giFilter} onValueChange={(value) => setGiFilter(value ?? ALL_VALUE)}>
+          <SelectTrigger size="sm" className="w-[150px]">
+            <SelectValue placeholder="GI">{giFilter === ALL_VALUE ? "Semua GI" : giFilter}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>Semua GI</SelectItem>
+            {giOptions.map((g) => (
+              <SelectItem key={g} value={g}>
+                {g}
               </SelectItem>
             ))}
           </SelectContent>

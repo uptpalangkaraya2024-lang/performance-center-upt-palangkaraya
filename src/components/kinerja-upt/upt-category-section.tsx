@@ -28,7 +28,15 @@ export const CATEGORY_META: Record<UptKpiCategory, { title: string; description:
   },
 };
 
-export function UptCategorySection({ category, kpis }: { category: UptKpiCategory; kpis: UptKpi[] }) {
+export function UptCategorySection({
+  category,
+  kpis,
+  highlightKeys,
+}: {
+  category: UptKpiCategory;
+  kpis: UptKpi[];
+  highlightKeys?: Set<string>;
+}) {
   const meta = CATEGORY_META[category];
   return (
     <section className="flex flex-col gap-3">
@@ -38,7 +46,7 @@ export function UptCategorySection({ category, kpis }: { category: UptKpiCategor
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((kpi) => (
-          <UptKpiCard key={kpi.key} kpi={kpi} />
+          <UptKpiCard key={kpi.key} kpi={kpi} highlighted={highlightKeys?.has(kpi.key)} />
         ))}
       </div>
     </section>

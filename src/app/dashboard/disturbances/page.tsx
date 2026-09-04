@@ -29,10 +29,10 @@ function StatTile({ value, label, className }: { value: string; label: string; c
   );
 }
 
-function CategorySection({ title, data }: { title: string; data: DisturbanceCategoryResult }) {
+function CategorySection({ title, data, anchorId }: { title: string; data: DisturbanceCategoryResult; anchorId: string }) {
   if (data.summary.total === 0) {
     return (
-      <section className="flex flex-col gap-4">
+      <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
         <Card>
           <CardContent className="py-8">
@@ -44,7 +44,7 @@ function CategorySection({ title, data }: { title: string; data: DisturbanceCate
   }
 
   return (
-    <section className="flex flex-col gap-4">
+    <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
       <div className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
         {data.summary.latestDisturbance ? (
@@ -164,8 +164,8 @@ export default async function DisturbancesPage() {
         </Card>
       ) : (
         <>
-          <CategorySection title="Transmisi" data={result.transmisi} />
-          <CategorySection title="Trafo" data={result.trafo} />
+          <CategorySection title="Transmisi" data={result.transmisi} anchorId="transmisi" />
+          <CategorySection title="Trafo" data={result.trafo} anchorId="trafo" />
         </>
       )}
     </div>

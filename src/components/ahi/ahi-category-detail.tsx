@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -114,8 +115,15 @@ function CategoryCard({ category }: { category: AhiCategory }) {
 }
 
 export function AhiCategoryDetail({ sections }: { sections: AhiSectionSummary[] }) {
+  const searchParams = useSearchParams();
+  // A Management Attention / Top Issue / GI correlation link can point here
+  // with ?section=trafo (an AhiSectionKey) to open straight to that tab
+  // instead of defaulting to the first one.
+  const requestedSection = searchParams.get("section");
+  const defaultValue = sections.some((s) => s.key === requestedSection) ? requestedSection! : sections[0]?.key;
+
   return (
-    <Tabs defaultValue={sections[0]?.key}>
+    <Tabs defaultValue={defaultValue}>
       <TabsList>
         {sections.map((section) => (
           <TabsTrigger key={section.key} value={section.key}>

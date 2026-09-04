@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, CheckCircle2, ChevronRight, Info, XCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { AiInsight } from "@/types";
@@ -55,15 +56,30 @@ export function ManagementAttentionList({
               <span className="font-medium text-muted-foreground">({group.items.length})</span>
             </div>
             <ul className="flex flex-col gap-1.5">
-              {group.items.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex gap-2.5 rounded-md border-l-2 bg-muted/30 py-1.5 pr-2 pl-3"
-                  style={{ borderColor: TONE_BORDER_VAR[group.tone] }}
-                >
-                  <span className="text-sm text-foreground">{item.text}</span>
-                </li>
-              ))}
+              {group.items.map((item) =>
+                item.href ? (
+                  <li key={item.id}>
+                    <Link
+                      href={item.href}
+                      className="group flex items-center gap-2.5 rounded-md border-l-2 bg-muted/30 py-1.5 pr-2 pl-3 transition-colors hover:bg-muted/60"
+                      style={{ borderColor: TONE_BORDER_VAR[group.tone] }}
+                    >
+                      <span className="flex-1 text-sm text-foreground underline decoration-transparent underline-offset-2 group-hover:decoration-current">
+                        {item.text}
+                      </span>
+                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </Link>
+                  </li>
+                ) : (
+                  <li
+                    key={item.id}
+                    className="flex gap-2.5 rounded-md border-l-2 bg-muted/30 py-1.5 pr-2 pl-3"
+                    style={{ borderColor: TONE_BORDER_VAR[group.tone] }}
+                  >
+                    <span className="text-sm text-foreground">{item.text}</span>
+                  </li>
+                ),
+              )}
             </ul>
           </div>
         );

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import {
   Table,
   TableBody,
@@ -41,7 +43,18 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
           <TableBody>
             {withSignal.map((row) => (
               <TableRow key={row.gi}>
-                <TableCell className="font-medium whitespace-nowrap">{row.gi}</TableCell>
+                <TableCell className="font-medium whitespace-nowrap">
+                  {row.ahiTotal > 0 ? (
+                    <Link
+                      href={`/dashboard/kpi/ahi?gi=${encodeURIComponent(row.gi)}#ahi-anomaly`}
+                      className="text-primary underline decoration-transparent underline-offset-2 hover:decoration-current"
+                    >
+                      {row.gi}
+                    </Link>
+                  ) : (
+                    row.gi
+                  )}
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{row.gangguanTrafo || "-"}</TableCell>
                 <TableCell className="text-right tabular-nums">{row.gangguanTransmisi || "-"}</TableCell>
                 <TableCell className={cn("text-right tabular-nums", row.ahiPoor > 0 && "text-warning-foreground font-medium")}>

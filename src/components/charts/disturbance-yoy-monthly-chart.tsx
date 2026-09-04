@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   CartesianGrid,
   Legend,
@@ -49,7 +50,16 @@ export function DisturbanceYoyMonthlyChart({
   // Default to the two most recent years — "dibandingkan antara 2 tahun" —
   // while every year stays available to toggle on/off.
   const [selectedYears, setSelectedYears] = useState<string[]>(years.slice(-2));
-  const [selectedCause, setSelectedCause] = useState(ALL_CAUSES_VALUE);
+  const searchParams = useSearchParams();
+  // A Management Attention / Top Issue link on the Overview dashboard can
+  // point here with ?cause=<cause> to preselect that cause's line instead of
+  // "Semua Penyebab" — both the Transmisi and Trafo chart instances read the
+  // same param, so a cause that only exists in one category simply leaves
+  // the other showing no match (its own Select still falls back cleanly).
+  const initialCause = searchParams.get("cause");
+  const [selectedCause, setSelectedCause] = useState(
+    initialCause && monthlyByYearByCause.some((c) => c.cause === initialCause) ? initialCause : ALL_CAUSES_VALUE,
+  );
   const [cumulative, setCumulative] = useState(false);
 
   function toggleYear(year: string) {
