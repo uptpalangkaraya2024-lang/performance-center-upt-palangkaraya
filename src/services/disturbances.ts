@@ -81,7 +81,7 @@ function formatDateLabel(raw: string): string | null {
   return `${Number(day)} ${monthName.slice(0, 3)} ${year}`;
 }
 
-type DisturbanceCategory = "transmisi" | "trafo";
+type DisturbanceCategory = "transmisi" | "trafo-hv" | "trafo-lv";
 
 interface DisturbanceRow {
   year: string;
@@ -98,11 +98,17 @@ interface DisturbanceRow {
 }
 
 // "KODE BAY" values confirmed against live data: "T/L Bay" (Transmisi/Line),
-// "T/R Bay" and "T/R Bay (LOW VOLTAGE)" (Trafo). Anything else (REAKTOR,
-// COUPLE, ...) is neither and falls out of both category charts.
+// "T/R Bay" (Trafo HV side) and "T/R Bay (LOW VOLTAGE)" (Trafo LV/incoming
+// 20kV side). These are kept as two separate categories rather than one
+// combined "Trafo": a HV-side trip and an LV-side-only trip mean different
+// things operationally (only the LV/incoming side dropped vs. the whole
+// transformer), so folding them together would blur which side actually
+// tripped. Anything else (REAKTOR, COUPLE, ...) is neither and falls out of
+// every category chart.
 function categorizeBay(kodeBay: string): DisturbanceCategory | null {
   if (kodeBay.startsWith("T/L")) return "transmisi";
-  if (kodeBay.startsWith("T/R")) return "trafo";
+  if (kodeBay === "T/R Bay (LOW VOLTAGE)") return "trafo-lv";
+  if (kodeBay.startsWith("T/R")) return "trafo-hv";
   return null;
 }
 
@@ -365,7 +371,12 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
 
 export interface DisturbancesResult {
   transmisi: DisturbanceCategoryResult;
-  trafo: DisturbanceCategoryResult;
+  /** Trafo HV side ("T/R Bay") — the whole transformer, both sides, tripped. */
+  trafoHv: DisturbanceCategoryResult;
+  /** Trafo LV/incoming 20kV side only ("T/R Bay (LOW VOLTAGE)") — the HV
+   *  side stayed energized. Kept separate from trafoHv rather than combined,
+   *  since which side tripped changes what actually happened operationally. */
+  trafoLv: DisturbanceCategoryResult;
   error: string | null;
 }
 
@@ -376,7 +387,8 @@ export async function getDisturbances(): Promise<DisturbancesResult> {
   if (!sheetResult) {
     return {
       transmisi: emptyCategory(),
-      trafo: emptyCategory(),
+      trafoHv: emptyCategory(),
+      trafoLv: emptyCategory(),
       error: `Gagal membaca sheet "${EXPECTED_SHEET}" dari file "${EXPECTED_FILE}" — lihat halaman Data & Sync.`,
     };
   }
@@ -385,7 +397,8 @@ export async function getDisturbances(): Promise<DisturbancesResult> {
 
   return {
     transmisi: buildCategoryAggregates(rows.filter((r) => r.category === "transmisi")),
-    trafo: buildCategoryAggregates(rows.filter((r) => r.category === "trafo")),
+    trafoHv: buildCategoryAggregates(rows.filter((r) => r.category === "trafo-hv")),
+    trafoLv: buildCategoryAggregates(rows.filter((r) => r.category === "trafo-lv")),
     error: null,
   };
 }

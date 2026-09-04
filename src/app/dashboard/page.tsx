@@ -56,7 +56,11 @@ export default async function OverviewPage() {
   const giCorrelation =
     !disturbances.error && ahi.data
       ? buildGiCorrelation({
-          trafoGi: disturbances.trafo.giBreakdown,
+          // AHI doesn't distinguish HV vs LV side either, so both trafo
+          // sub-categories are combined here for correlation purposes only
+          // — buildGiCorrelation sums counts per GI across the array, so
+          // concatenating (rather than merging) is enough.
+          trafoGi: [...disturbances.trafoHv.giBreakdown, ...disturbances.trafoLv.giBreakdown],
           transmisiGi: disturbances.transmisi.giBreakdown,
           anomalies: ahi.data.anomalies,
         })

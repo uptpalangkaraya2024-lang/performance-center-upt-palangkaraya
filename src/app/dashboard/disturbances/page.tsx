@@ -48,11 +48,24 @@ function StatTile({ value, label, className }: { value: string; label: string; c
   );
 }
 
-function CategorySection({ title, data, anchorId }: { title: string; data: DisturbanceCategoryResult; anchorId: string }) {
+function CategorySection({
+  title,
+  subtitle,
+  data,
+  anchorId,
+}: {
+  title: string;
+  subtitle?: string;
+  data: DisturbanceCategoryResult;
+  anchorId: string;
+}) {
   if (data.summary.total === 0) {
     return (
       <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
-        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+          {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+        </div>
         <Card>
           <CardContent className="py-8">
             <DataUnavailable message="Belum ada gangguan yang masuk kinerja untuk kategori ini." />
@@ -65,8 +78,9 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
   // Trafo protection is direct-trip (differential/REF) with no auto-reclose
   // scheme — "AR Sukses" is a Transmisi-only concept that happens to live in
   // the same KODE GGN column, so showing it (even as 0) under Trafo implies
-  // a protection scheme that doesn't exist there. Hidden for Trafo only.
-  const isTrafo = title === "Trafo";
+  // a protection scheme that doesn't exist there. Hidden for both Trafo
+  // sub-categories (HV and LV).
+  const isTrafo = title.startsWith("Trafo");
   const kindBreakdownForChart = isTrafo
     ? data.kindBreakdown.filter((k) => k.cause !== "AR Sukses")
     : data.kindBreakdown;
@@ -74,7 +88,10 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
   return (
     <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+          {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+        </div>
         {data.summary.latestDisturbance ? (
           <span className="text-xs text-muted-foreground">Gangguan terakhir: {data.summary.latestDisturbance}</span>
         ) : null}
@@ -244,7 +261,7 @@ export default async function DisturbancesPage() {
     <div className="flex flex-col gap-6">
       <PageHero
         title="Gangguan Transmisi & Trafo"
-        description="Rekap gangguan UPT Palangkaraya yang masuk kinerja — Pareto penyebab, tren tahunan per bulan, dan sebaran per bay."
+        description="Rekap gangguan UPT Palangkaraya yang masuk kinerja — Pareto penyebab, tren tahunan per bulan, dan sebaran per bay. Trafo dipisah sisi HV dan sisi Low Voltage karena bermakna operasional berbeda."
         status={
           !result.error ? (
             <>
@@ -268,12 +285,20 @@ export default async function DisturbancesPage() {
                   rows: result.transmisi.allBayCounts.map((b) => ({ Bay: b.bay, Jumlah: b.count })),
                 },
                 {
-                  name: "Trafo - Penyebab",
-                  rows: result.trafo.causePareto.map((c) => ({ Penyebab: c.cause, Jumlah: c.count })),
+                  name: "Trafo HV - Penyebab",
+                  rows: result.trafoHv.causePareto.map((c) => ({ Penyebab: c.cause, Jumlah: c.count })),
                 },
                 {
-                  name: "Trafo - Bay",
-                  rows: result.trafo.allBayCounts.map((b) => ({ Bay: b.bay, Jumlah: b.count })),
+                  name: "Trafo HV - Bay",
+                  rows: result.trafoHv.allBayCounts.map((b) => ({ Bay: b.bay, Jumlah: b.count })),
+                },
+                {
+                  name: "Trafo LV - Penyebab",
+                  rows: result.trafoLv.causePareto.map((c) => ({ Penyebab: c.cause, Jumlah: c.count })),
+                },
+                {
+                  name: "Trafo LV - Bay",
+                  rows: result.trafoLv.allBayCounts.map((b) => ({ Bay: b.bay, Jumlah: b.count })),
                 },
                 {
                   name: "Durasi Terlama",
@@ -285,8 +310,15 @@ export default async function DisturbancesPage() {
                       GI: d.gi,
                       "Durasi (menit)": d.durationMinutes,
                     })),
-                    ...result.trafo.longestDisturbances.map((d) => ({
-                      Kategori: "Trafo",
+                    ...result.trafoHv.longestDisturbances.map((d) => ({
+                      Kategori: "Trafo HV",
+                      Tanggal: d.tgl,
+                      Bay: d.bay,
+                      GI: d.gi,
+                      "Durasi (menit)": d.durationMinutes,
+                    })),
+                    ...result.trafoLv.longestDisturbances.map((d) => ({
+                      Kategori: "Trafo LV",
                       Tanggal: d.tgl,
                       Bay: d.bay,
                       GI: d.gi,
@@ -309,8 +341,20 @@ export default async function DisturbancesPage() {
                       "TL Belum Diketahui": u.followUp.unknown,
                       "Penyebab Terbesar": u.causePareto[0]?.cause ?? "",
                     })),
-                    ...result.trafo.ultgBreakdown.map((u) => ({
-                      Kategori: "Trafo",
+                    ...result.trafoHv.ultgBreakdown.map((u) => ({
+                      Kategori: "Trafo HV",
+                      ULTG: u.ultg,
+                      Total: u.total,
+                      Trip: u.trip,
+                      "AR Sukses": u.arSukses,
+                      "Tidak Trip": u.tidakTrip,
+                      "TL Selesai": u.followUp.closed,
+                      "TL Open": u.followUp.open,
+                      "TL Belum Diketahui": u.followUp.unknown,
+                      "Penyebab Terbesar": u.causePareto[0]?.cause ?? "",
+                    })),
+                    ...result.trafoLv.ultgBreakdown.map((u) => ({
+                      Kategori: "Trafo LV",
                       ULTG: u.ultg,
                       Total: u.total,
                       Trip: u.trip,
@@ -337,8 +381,19 @@ export default async function DisturbancesPage() {
                       "Tidak Trip": b.tidakTrip,
                       "Penyebab Terbesar": b.causePareto[0]?.cause ?? "",
                     })),
-                    ...result.trafo.bayBreakdown.map((b) => ({
-                      Kategori: "Trafo",
+                    ...result.trafoHv.bayBreakdown.map((b) => ({
+                      Kategori: "Trafo HV",
+                      Ruas: b.bay,
+                      ULTG: b.ultg,
+                      GI: b.gi,
+                      Total: b.total,
+                      Trip: b.trip,
+                      "AR Sukses": b.arSukses,
+                      "Tidak Trip": b.tidakTrip,
+                      "Penyebab Terbesar": b.causePareto[0]?.cause ?? "",
+                    })),
+                    ...result.trafoLv.bayBreakdown.map((b) => ({
+                      Kategori: "Trafo LV",
                       Ruas: b.bay,
                       ULTG: b.ultg,
                       GI: b.gi,
@@ -365,7 +420,18 @@ export default async function DisturbancesPage() {
       ) : (
         <>
           <CategorySection title="Transmisi" data={result.transmisi} anchorId="transmisi" />
-          <CategorySection title="Trafo" data={result.trafo} anchorId="trafo" />
+          <CategorySection
+            title="Trafo HV"
+            subtitle="T/R Bay — trafo tripped di sisi tegangan tinggi (seluruh trafo terdampak)."
+            data={result.trafoHv}
+            anchorId="trafo-hv"
+          />
+          <CategorySection
+            title="Trafo Low Voltage"
+            subtitle="T/R Bay (LOW VOLTAGE) — hanya sisi incoming/20kV yang trip, sisi HV tetap bertegangan."
+            data={result.trafoLv}
+            anchorId="trafo-lv"
+          />
         </>
       )}
     </div>
