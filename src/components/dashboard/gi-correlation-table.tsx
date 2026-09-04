@@ -25,9 +25,7 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        Gangguan Transmisi dihitung di kedua sisi GI (bukan hanya sisi yang bermasalah) karena sumber data tidak
-        menyebutkan sisi mana yang mengalami gangguan — lihat kolom &quot;Gangguan&quot; sebagai GI yang{" "}
-        <b>terlibat</b>, bukan penyebab pasti.
+        GI diambil langsung dari kolom &quot;Gardu Induk&quot; pada data Gangguan — bukan tebakan dari nama bay.
       </p>
       <div className="overflow-x-auto rounded-lg border">
         <Table>

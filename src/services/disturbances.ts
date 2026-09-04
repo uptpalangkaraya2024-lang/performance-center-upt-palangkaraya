@@ -2,13 +2,16 @@ import "server-only";
 
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSource } from "@/lib/data-connector";
-import { requireText } from "@/lib/parse";
+import { parseDurationMinutes, requireText } from "@/lib/parse";
 import type {
   DisturbanceBayCount,
   DisturbanceCategoryResult,
   DisturbanceCategorySummary,
   DisturbanceCause,
   DisturbanceCauseMonthlyYear,
+  DisturbanceDurationRecord,
+  DisturbanceFollowUpSummary,
+  DisturbanceGiCount,
   DisturbanceMonthlyYearPoint,
 } from "@/types";
 
@@ -51,6 +54,23 @@ function titleCase(value: string): string {
   return value.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+// The sheet's own GARDU INDUK column reads e.g. "GI 150 KV KUALA KURUN" /
+// "GIS 150 KV MINTIN" — stripping the "GI(S) <voltage> KV" prefix gives the
+// bare GI name, matching how AHI's own GI column names the same substations.
+function normalizeGiName(raw: string): string {
+  return raw.replace(/^GIS?\s*\d+\s*KV\s*/i, "").trim();
+}
+
+// STATUS TINDAK LANJUT GGN holds "OPEN"/"CLOSED", but a handful of rows are
+// blank or carry a sheet formula error ("#DIV/0!") — genuinely unknown, not
+// silently folded into either real status.
+function normalizeFollowUpStatus(raw: string | null): "OPEN" | "CLOSED" | "UNKNOWN" {
+  const upper = raw?.trim().toUpperCase();
+  if (upper === "OPEN") return "OPEN";
+  if (upper === "CLOSED") return "CLOSED";
+  return "UNKNOWN";
+}
+
 function formatDateLabel(raw: string): string | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
   if (!match) return null;
@@ -69,6 +89,9 @@ interface DisturbanceRow {
   category: DisturbanceCategory;
   kind: string; // raw KODE GGN
   cause: string; // raw PENYEBAB
+  gi: string | null; // normalized GARDU INDUK
+  durationMinutes: number | null; // DURASI GGN (MENIT)
+  followUp: "OPEN" | "CLOSED" | "UNKNOWN";
 }
 
 // "KODE BAY" values confirmed against live data: "T/L Bay" (Transmisi/Line),
@@ -100,7 +123,12 @@ function normalizeRow(row: Record<string, string>): DisturbanceRow | null {
   const category = categorizeBay(kodeBay);
   if (!category) return null;
 
-  return { year, month, tgl, namaBay, category, kind, cause };
+  const gardu = requireText(row["GARDU INDUK"]);
+  const gi = gardu ? normalizeGiName(gardu) : null;
+  const durationMinutes = parseDurationMinutes(row["DURASI GGN (MENIT)"]);
+  const followUp = normalizeFollowUpStatus(requireText(row["STATUS TINDAK LANJUT GGN"]));
+
+  return { year, month, tgl, namaBay, category, kind, cause, gi, durationMinutes, followUp };
 }
 
 function emptyCategory(): DisturbanceCategoryResult {
@@ -113,6 +141,10 @@ function emptyCategory(): DisturbanceCategoryResult {
     years: [],
     topBay: [],
     allBayCounts: [],
+    giBreakdown: [],
+    followUp: { open: 0, closed: 0, unknown: 0 },
+    avgDurationMinutes: null,
+    longestDisturbances: [],
   };
 }
 
@@ -176,6 +208,37 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     .map(([bay, count]) => ({ bay, count }));
   const topBay = allBayCounts.slice(0, 8);
 
+  const giCounts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.gi) continue;
+    giCounts.set(row.gi, (giCounts.get(row.gi) ?? 0) + 1);
+  }
+  const giBreakdown: DisturbanceGiCount[] = [...giCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([gi, count]) => ({ gi, count }));
+
+  const followUp: DisturbanceFollowUpSummary = { open: 0, closed: 0, unknown: 0 };
+  for (const row of rows) {
+    if (row.followUp === "OPEN") followUp.open += 1;
+    else if (row.followUp === "CLOSED") followUp.closed += 1;
+    else followUp.unknown += 1;
+  }
+
+  const withDuration = rows.filter((r): r is DisturbanceRow & { durationMinutes: number } => r.durationMinutes !== null);
+  const avgDurationMinutes =
+    withDuration.length > 0
+      ? withDuration.reduce((sum, r) => sum + r.durationMinutes, 0) / withDuration.length
+      : null;
+  const longestDisturbances: DisturbanceDurationRecord[] = [...withDuration]
+    .sort((a, b) => b.durationMinutes - a.durationMinutes)
+    .slice(0, 10)
+    .map((r) => ({
+      bay: r.namaBay,
+      gi: r.gi ?? "-",
+      tgl: formatDateLabel(r.tgl) ?? r.tgl,
+      durationMinutes: r.durationMinutes,
+    }));
+
   const summary: DisturbanceCategorySummary = {
     total: rows.length,
     trip: kindCounts.get("TRIP") ?? 0,
@@ -193,6 +256,10 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     years: sortedYears,
     topBay,
     allBayCounts,
+    giBreakdown,
+    followUp,
+    avgDurationMinutes,
+    longestDisturbances,
   };
 }
 

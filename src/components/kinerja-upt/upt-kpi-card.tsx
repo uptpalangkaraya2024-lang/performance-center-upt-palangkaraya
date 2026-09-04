@@ -87,6 +87,28 @@ export function UptKpiCard({ kpi, highlighted = false }: { kpi: UptKpi; highligh
 
         <Progress value={progressPct} className="mt-3" />
 
+        {kpi.weightInfo ? (
+          <div className="mt-2.5 flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-[11px]">
+            <span className="text-muted-foreground">
+              Bobot {kpi.weightInfo.sharedWith ? "grup" : ""}: <b className="text-foreground">{kpi.weightInfo.weight}</b>
+            </span>
+            <span className="text-muted-foreground">
+              Kontribusi:{" "}
+              <b className="text-foreground tabular-nums">
+                {kpi.weightInfo.weightedScore !== null
+                  ? kpi.weightInfo.weightedScore.toLocaleString("id-ID", { maximumFractionDigits: 2 })
+                  : "-"}
+              </b>
+            </span>
+          </div>
+        ) : null}
+        {kpi.weightInfo?.sharedWith ? (
+          <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
+            Bobot digabung dengan sub-indikator lain di &quot;{kpi.weightInfo.sharedWith}&quot; — tidak ada rincian
+            per-indikator pada sumber data.
+          </p>
+        ) : null}
+
         {kpi.directionConflict ? (
           <p className="mt-2 text-[10px] leading-tight text-warning-foreground">
             ⚠ Arah target berbeda dari dokumentasi — lihat catatan Data &amp; Sync.

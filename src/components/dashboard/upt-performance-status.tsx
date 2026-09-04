@@ -19,10 +19,16 @@ export function UptPerformanceStatus({
   overall,
   periodLabel,
   status,
+  overallWeightedScore,
 }: {
   overall: UptOverallPerformance;
   periodLabel: string;
   status: StatusLevel;
+  /** The sheet's own official weighted contract score ("TOTAL BOBOT
+   *  PROPORSIONAL" row) — shown alongside, not instead of, the simple
+   *  achieved-count score above so neither number silently replaces the
+   *  other. */
+  overallWeightedScore?: number | null;
 }) {
   const scored = overall.achieved + overall.warning + overall.critical;
   const score = scored > 0 ? Math.round((overall.achieved / scored) * 100) : null;
@@ -52,6 +58,15 @@ export function UptPerformanceStatus({
         </div>
 
         {score !== null ? <Progress value={score} /> : null}
+
+        {overallWeightedScore !== undefined && overallWeightedScore !== null ? (
+          <p className="text-xs text-muted-foreground">
+            Skor Kontrak (Bobot Resmi):{" "}
+            <span className="font-semibold text-foreground tabular-nums">
+              {overallWeightedScore.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%
+            </span>
+          </p>
+        ) : null}
 
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           <div className="rounded-md bg-success/10 py-2">

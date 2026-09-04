@@ -14,6 +14,7 @@ import type {
   UptPeriodOption,
   UptPerformanceResult,
   UptPerformanceSnapshot,
+  UptWeightInfo,
 } from "@/types";
 
 const SOURCE = dataSources.uptPerformance;
@@ -186,10 +187,109 @@ function extractMonthlyTrends(
   return result;
 }
 
+function cellNumber(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  return parseNumber(v != null ? String(v) : undefined);
+}
+
+function findColByHeader(headerRow: unknown[], name: string): number {
+  return headerRow.findIndex((cell) => String(cell ?? "").trim() === name);
+}
+
+/**
+ * Reads the sheet's own official weighting/scoring columns (BOBOT, Capping
+ * 110%, Bobot Hilang) — never recomputed locally. Most KPI rows carry their
+ * own weight directly, but several categories (Availability, Protection,
+ * Finance, Asset Maturity — confirmed against the live sheet, not assumed)
+ * instead put ONE combined weight on the category header row, with its
+ * lettered sub-items (e.g. TRAF/CCAF/MTTR-TR/MTTR-TL under "Faktor
+ * Ketersediaan Transmisi (TRAF dan CCAF)") sharing it rather than each
+ * owning a slice — there is no per-KPI split anywhere in the source, so one
+ * isn't invented here either; those KPIs get the group's own numbers
+ * verbatim, flagged via `sharedWith` so the UI can say so explicitly.
+ * The official grand total is read directly from the sheet's own "TOTAL
+ * BOBOT PROPORSIONAL" row rather than summed here, for the same reason.
+ */
+function extractWeightInfo(
+  raw: unknown[][],
+  warnings: string[],
+): { perKpi: Map<string, UptWeightInfo>; overallWeightedScore: number | null } {
+  const perKpi = new Map<string, UptWeightInfo>();
+
+  const headerRowIdx = findHeaderRowIndex(raw);
+  if (headerRowIdx < 0) {
+    warnings.push("WEIGHT_INFO_UNAVAILABLE: baris header tidak ditemukan.");
+    return { perKpi, overallWeightedScore: null };
+  }
+  const headerRow = raw[headerRowIdx] as unknown[];
+  const bobotCol = findColByHeader(headerRow, "BOBOT");
+  const cappingCol = findColByHeader(headerRow, "Capping 110%");
+  const bobotHilangCol = findColByHeader(headerRow, "Bobot Hilang");
+  if (bobotCol < 0 || cappingCol < 0) {
+    warnings.push("WEIGHT_INFO_UNAVAILABLE: kolom BOBOT/Capping 110% tidak ditemukan.");
+    return { perKpi, overallWeightedScore: null };
+  }
+
+  let overallWeightedScore: number | null = null;
+  let currentGroup: (UptWeightInfo & { sharedWith: string }) | null = null;
+  const matchedKeys = new Set<string>();
+
+  for (let i = headerRowIdx + 1; i < raw.length; i++) {
+    const row = raw[i] as unknown[];
+    const no = row[0];
+    const indikatorRaw = requireText(row[1] != null ? String(row[1]) : undefined);
+
+    if (indikatorRaw && /^TOTAL BOBOT PROPORSIONAL$/i.test(indikatorRaw)) {
+      overallWeightedScore = cellNumber(row[cappingCol]);
+      continue;
+    }
+    if (!indikatorRaw) continue;
+
+    const candidates = [normalizeLabel(indikatorRaw), normalizeLabel(stripLetterPrefix(indikatorRaw))];
+    const matchedConfig = UPT_KPI_CONFIG.find(
+      (config) => !matchedKeys.has(config.key) && candidates.includes(normalizeLabel(config.sourceLabel)),
+    );
+
+    if (matchedConfig) {
+      matchedKeys.add(matchedConfig.key);
+      const ownWeight = cellNumber(row[bobotCol]);
+      if (ownWeight !== null) {
+        perKpi.set(matchedConfig.key, {
+          weight: ownWeight,
+          weightedScore: cellNumber(row[cappingCol]),
+          weightLost: bobotHilangCol >= 0 ? cellNumber(row[bobotHilangCol]) : null,
+        });
+      } else if (currentGroup) {
+        perKpi.set(matchedConfig.key, { ...currentGroup });
+      }
+      continue;
+    }
+
+    // Not a configured KPI itself — if it's a numbered category-header row
+    // with its own weight, remember it as the group every following
+    // unweighted lettered sub-item (until the next category header) belongs to.
+    if (typeof no === "number") {
+      const weight = cellNumber(row[bobotCol]);
+      currentGroup =
+        weight !== null
+          ? {
+              weight,
+              weightedScore: cellNumber(row[cappingCol]),
+              weightLost: bobotHilangCol >= 0 ? cellNumber(row[bobotHilangCol]) : null,
+              sharedWith: indikatorRaw,
+            }
+          : null;
+    }
+  }
+
+  return { perKpi, overallWeightedScore };
+}
+
 function normalizeKpi(
   records: Record<string, string>[],
   warnings: string[],
   trends: Map<string, UptKpiMonthlyPoint[]>,
+  weightInfo: Map<string, UptWeightInfo>,
 ): UptKpi[] {
   const byLabel = new Map<string, Record<string, string>>();
   const matchedKeys = new Set<string>();
@@ -228,6 +328,7 @@ function normalizeKpi(
         achievement: null,
         status: "none",
         monthlyTrend: null,
+        weightInfo: null,
       };
     }
 
@@ -253,6 +354,7 @@ function normalizeKpi(
       // >=100/>=90 thresholds apply directly, no target/actual division needed here.
       status: achievement === null ? "none" : calculateStatus(achievement),
       monthlyTrend: trends.get(config.key) ?? null,
+      weightInfo: weightInfo.get(config.key) ?? null,
     };
   });
 }
@@ -308,8 +410,11 @@ export async function getUptPerformance(): Promise<UptPerformanceResult> {
   const trends = rawSheetResult
     ? extractMonthlyTrends(rawSheetResult.rows, currentMonthIndex, warnings)
     : new Map<string, UptKpiMonthlyPoint[]>();
+  const weightData = rawSheetResult
+    ? extractWeightInfo(rawSheetResult.rows, warnings)
+    : { perKpi: new Map<string, UptWeightInfo>(), overallWeightedScore: null };
 
-  const kpis = normalizeKpi(sheetResult.records, warnings, trends);
+  const kpis = normalizeKpi(sheetResult.records, warnings, trends, weightData.perKpi);
 
   const period = year !== null && currentMonthIndex >= 0
     ? `${year}-${String(currentMonthIndex + 1).padStart(2, "0")}`
@@ -329,6 +434,7 @@ export async function getUptPerformance(): Promise<UptPerformanceResult> {
     overall: summarize(kpis),
     periodOptions: buildPeriodOptions(year, period),
     lastUpdate: formatTime(syncEntry?.lastSync ?? null),
+    overallWeightedScore: weightData.overallWeightedScore,
     warnings,
   };
 

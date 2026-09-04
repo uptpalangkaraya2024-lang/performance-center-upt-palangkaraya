@@ -56,8 +56,8 @@ export default async function OverviewPage() {
   const giCorrelation =
     !disturbances.error && ahi.data
       ? buildGiCorrelation({
-          trafoBays: disturbances.trafo.allBayCounts,
-          transmisiBays: disturbances.transmisi.allBayCounts,
+          trafoGi: disturbances.trafo.giBreakdown,
+          transmisiGi: disturbances.transmisi.giBreakdown,
           anomalies: ahi.data.anomalies,
         })
       : null;
@@ -78,7 +78,12 @@ export default async function OverviewPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {upt.data ? (
-          <UptPerformanceStatus overall={upt.data.overall} periodLabel={upt.data.periodLabel} status={uptStatus} />
+          <UptPerformanceStatus
+            overall={upt.data.overall}
+            periodLabel={upt.data.periodLabel}
+            status={uptStatus}
+            overallWeightedScore={upt.data.overallWeightedScore}
+          />
         ) : (
           <Card className="xl:col-span-1">
             <CardContent className="py-8">

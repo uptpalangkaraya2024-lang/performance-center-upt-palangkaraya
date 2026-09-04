@@ -104,6 +104,9 @@ export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnaps
                     "Achievement (%)": kpi.achievement ?? "",
                     Status: kpi.status,
                     Arah: kpi.direction ?? "",
+                    Bobot: kpi.weightInfo?.weight ?? "",
+                    "Kontribusi Bobot": kpi.weightInfo?.weightedScore ?? "",
+                    "Bobot Digabung Dengan": kpi.weightInfo?.sharedWith ?? "",
                   })),
                 },
               ]}

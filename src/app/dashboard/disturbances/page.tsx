@@ -1,5 +1,13 @@
-import { TrendingUp } from "lucide-react";
+import { CheckCircle2, CircleDashed, TrendingUp, XCircle } from "lucide-react";
 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
@@ -12,6 +20,16 @@ import { getDisturbances } from "@/services/disturbances";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { DisturbanceCategoryResult } from "@/types";
+
+// DURASI GGN (MENIT) is a spreadsheet TIME value, already converted to a
+// plain minute count by parseDurationMinutes() in the service — this only
+// formats it for display.
+function formatDurationMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m} menit`;
+  return `${h} jam ${m} menit`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +75,30 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
         <StatTile value={data.summary.trip.toLocaleString("id-ID")} label="Trip" className="text-critical" />
         <StatTile value={data.summary.arSukses.toLocaleString("id-ID")} label="AR Sukses" className="text-primary" />
         <StatTile value={data.summary.tidakTrip.toLocaleString("id-ID")} label="Tidak Trip" className="text-muted-foreground" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="flex items-center gap-2.5 rounded-lg border p-3">
+          <CheckCircle2 className="size-4 shrink-0 text-success" />
+          <div>
+            <div className="text-lg font-semibold tabular-nums text-foreground">{data.followUp.closed}</div>
+            <div className="text-xs text-muted-foreground">Tindak Lanjut Selesai</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5 rounded-lg border p-3">
+          <XCircle className="size-4 shrink-0 text-critical" />
+          <div>
+            <div className="text-lg font-semibold tabular-nums text-foreground">{data.followUp.open}</div>
+            <div className="text-xs text-muted-foreground">Masih Open</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5 rounded-lg border p-3">
+          <CircleDashed className="size-4 shrink-0 text-muted-foreground" />
+          <div>
+            <div className="text-lg font-semibold tabular-nums text-foreground">{data.followUp.unknown}</div>
+            <div className="text-xs text-muted-foreground">Belum Diketahui</div>
+          </div>
+        </div>
       </div>
 
       <Card>
@@ -106,6 +148,58 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
           <DisturbanceBayChart data={data.topBay} />
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Durasi Pemulihan Gangguan</CardTitle>
+          <p className="text-xs text-muted-foreground">Dari kolom DURASI GGN pada sumber data.</p>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {data.avgDurationMinutes === null ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Data durasi belum tersedia untuk kategori ini.
+            </p>
+          ) : (
+            <>
+              <div className="rounded-lg border p-3">
+                <div className="text-xl font-semibold tabular-nums text-foreground">
+                  {formatDurationMinutes(data.avgDurationMinutes)}
+                </div>
+                <div className="text-xs text-muted-foreground">Rata-rata Durasi Pemulihan</div>
+              </div>
+
+              {data.longestDisturbances.length > 0 ? (
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead>Bay</TableHead>
+                        <TableHead>GI</TableHead>
+                        <TableHead className="text-right">Durasi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.longestDisturbances.map((d, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="whitespace-nowrap">{d.tgl}</TableCell>
+                          <TableCell className="max-w-[240px] truncate" title={d.bay}>
+                            {d.bay}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{d.gi}</TableCell>
+                          <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">
+                            {formatDurationMinutes(d.durationMinutes)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : null}
+            </>
+          )}
+        </CardContent>
+      </Card>
     </section>
   );
 }
@@ -149,6 +243,25 @@ export default async function DisturbancesPage() {
                 {
                   name: "Trafo - Bay",
                   rows: result.trafo.allBayCounts.map((b) => ({ Bay: b.bay, Jumlah: b.count })),
+                },
+                {
+                  name: "Durasi Terlama",
+                  rows: [
+                    ...result.transmisi.longestDisturbances.map((d) => ({
+                      Kategori: "Transmisi",
+                      Tanggal: d.tgl,
+                      Bay: d.bay,
+                      GI: d.gi,
+                      "Durasi (menit)": d.durationMinutes,
+                    })),
+                    ...result.trafo.longestDisturbances.map((d) => ({
+                      Kategori: "Trafo",
+                      Tanggal: d.tgl,
+                      Bay: d.bay,
+                      GI: d.gi,
+                      "Durasi (menit)": d.durationMinutes,
+                    })),
+                  ],
                 },
               ]}
             />

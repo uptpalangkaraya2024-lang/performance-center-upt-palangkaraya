@@ -30,6 +30,30 @@ export interface DisturbanceBayCount {
   count: number;
 }
 
+/** Straight from the sheet's own "GARDU INDUK" column — a single, unambiguous
+ *  GI per disturbance row (even for a Transmisi/line event, unlike the bay
+ *  name which names both line endpoints). See src/services/disturbances.ts. */
+export interface DisturbanceGiCount {
+  gi: string;
+  count: number;
+}
+
+export interface DisturbanceFollowUpSummary {
+  open: number;
+  closed: number;
+  /** Blank cell or a sheet formula error (e.g. "#DIV/0!") — genuinely
+   *  unknown, never guessed as open or closed. */
+  unknown: number;
+}
+
+export interface DisturbanceDurationRecord {
+  bay: string;
+  gi: string;
+  /** Formatted "DD Mon YYYY". */
+  tgl: string;
+  durationMinutes: number;
+}
+
 export interface DisturbanceCategorySummary {
   total: number;
   trip: number;
@@ -56,10 +80,20 @@ export interface DisturbanceCategoryResult {
   monthlyByYearByCause: DisturbanceCauseMonthlyYear[];
   years: string[];
   topBay: DisturbanceBayCount[];
-  /** Every bay's count, not just the top 8 in `topBay` — needed to build an
-   *  accurate per-GI tally (see src/lib/asset-correlation.ts); topBay stays
-   *  as-is for the existing Gangguan page chart. */
+  /** Every bay's count, not just the top 8 in `topBay` — kept for anything
+   *  that still needs a bay-level (not GI-level) breakdown. */
   allBayCounts: DisturbanceBayCount[];
+  /** Every GI's count, straight from the sheet's own GARDU INDUK column —
+   *  the accurate replacement for bay-name-derived GI matching, see
+   *  src/lib/asset-correlation.ts. */
+  giBreakdown: DisturbanceGiCount[];
+  /** Tally of the sheet's own STATUS TINDAK LANJUT GGN column. */
+  followUp: DisturbanceFollowUpSummary;
+  /** Mean of every disturbance's own DURASI GGN (MENIT) in this category —
+   *  null when no row has a parseable duration. */
+  avgDurationMinutes: number | null;
+  /** Longest-duration disturbances, longest first — capped at 10. */
+  longestDisturbances: DisturbanceDurationRecord[];
 }
 
 export interface AiInsight {
@@ -113,6 +147,25 @@ export interface UptKpi {
    *  months up to the currently-synced reporting month are ever included —
    *  see src/services/upt-performance.ts extractMonthlyTrends(). */
   monthlyTrend: UptKpiMonthlyPoint[] | null;
+  /** The sheet's own official weight/scoring columns (BOBOT, Capping 110%,
+   *  Bobot Hilang) — read directly, never recomputed. Null when this KPI's
+   *  row (or its group's) has no weight in the sheet. */
+  weightInfo: UptWeightInfo | null;
+}
+
+export interface UptWeightInfo {
+  /** BOBOT — this KPI's own weight, or its group's shared weight (see `sharedWith`). */
+  weight: number;
+  /** "Capping 110%" — the weighted, capped contribution score. */
+  weightedScore: number | null;
+  /** "Bobot Hilang" — weight lost (negative) or gained (positive) vs the base weight. */
+  weightLost: number | null;
+  /** Set when this KPI has no individually-weighted row of its own and
+   *  instead shares one combined weight with sibling KPIs under the same
+   *  category header (e.g. TRAF/CCAF/MTTR-TR/MTTR-TL all share "Faktor
+   *  Ketersediaan Transmisi (TRAF dan CCAF)"'s weight) — holds that
+   *  category's display name so the UI can say so explicitly. */
+  sharedWith?: string;
 }
 
 export interface UptKpiMonthlyPoint {
@@ -147,6 +200,10 @@ export interface UptPerformanceSnapshot {
   overall: UptOverallPerformance;
   periodOptions: UptPeriodOption[];
   lastUpdate: string | null;
+  /** The sheet's own "TOTAL BOBOT PROPORSIONAL" row (Capping 110% column) —
+   *  the official weighted contract score across all 19 KPIs, read directly
+   *  rather than summed locally. Null when that row can't be found. */
+  overallWeightedScore: number | null;
   /** Non-fatal anomalies worth surfacing (e.g. a KPI alias matching more than one row) — see AGENTS.md section 33. */
   warnings: string[];
 }
