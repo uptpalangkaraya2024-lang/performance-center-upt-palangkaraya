@@ -232,6 +232,7 @@ function buildBayBreakdown(rows: DisturbanceRow[]): DisturbanceBaySummary[] {
         trip,
         arSukses,
         tidakTrip,
+        followUp: followUpFor(bayRows),
         causePareto: causeParetoFor(bayRows),
       };
     })

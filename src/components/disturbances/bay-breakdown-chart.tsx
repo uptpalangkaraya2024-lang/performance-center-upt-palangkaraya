@@ -5,13 +5,14 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { ChevronDown } from "lucide-react";
+import { CheckCircle2, ChevronDown, CircleDashed, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,10 +25,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { CauseMiniChart } from "./cause-mini-chart";
 import type { DisturbanceBaySummary } from "@/types";
 
 const TOP_N = 15;
 const PAGE_SIZE = 10;
+const labelStyle = { fontSize: 10, fill: "var(--card)", fontWeight: 600 } as const;
 
 export function BayBreakdownChart({ rows, showAr }: { rows: DisturbanceBaySummary[]; showAr: boolean }) {
   const [selectedBay, setSelectedBay] = useState<string | null>(rows[0]?.bay ?? null);
@@ -53,7 +56,8 @@ export function BayBreakdownChart({ rows, showAr }: { rows: DisturbanceBaySummar
   // legible while the collapsed full table below still holds every ruas.
   const top = rows.slice(0, TOP_N);
   const chartData = top.map((r) => ({
-    bay: r.bay,
+    bay: `${r.bay} (${r.total})`,
+    bayKey: r.bay,
     Trip: r.trip,
     ...(showAr ? { "AR Sukses": r.arSukses } : {}),
     "Tidak Trip": r.tidakTrip,
@@ -64,8 +68,8 @@ export function BayBreakdownChart({ rows, showAr }: { rows: DisturbanceBaySummar
   // rather than passing it flat — typed loosely here since the exact shape
   // varies by recharts version/internal event type.
   const handleBarClick = (data: unknown) => {
-    const bay = (data as { payload?: { bay?: string } } | undefined)?.payload?.bay;
-    if (bay) setSelectedBay(bay);
+    const bayKey = (data as { payload?: { bayKey?: string } } | undefined)?.payload?.bayKey;
+    if (bayKey) setSelectedBay(bayKey);
   };
 
   return (
@@ -85,7 +89,7 @@ export function BayBreakdownChart({ rows, showAr }: { rows: DisturbanceBaySummar
             axisLine={false}
             fontSize={10}
             stroke="var(--muted-foreground)"
-            width={170}
+            width={190}
           />
           <Tooltip
             contentStyle={{
@@ -96,19 +100,30 @@ export function BayBreakdownChart({ rows, showAr }: { rows: DisturbanceBaySummar
             }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="Trip" stackId="kind" fill="var(--critical)" barSize={14} onClick={handleBarClick} cursor="pointer" />
+          <Bar dataKey="Trip" stackId="kind" fill="var(--critical)" barSize={16} onClick={handleBarClick} cursor="pointer">
+            <LabelList dataKey="Trip" position="center" style={labelStyle} formatter={(v: unknown) => (typeof v === "number" && v > 0 ? v : "")} />
+          </Bar>
           {showAr ? (
-            <Bar dataKey="AR Sukses" stackId="kind" fill="var(--primary)" barSize={14} onClick={handleBarClick} cursor="pointer" />
+            <Bar dataKey="AR Sukses" stackId="kind" fill="var(--primary)" barSize={16} onClick={handleBarClick} cursor="pointer">
+              <LabelList dataKey="AR Sukses" position="center" style={labelStyle} formatter={(v: unknown) => (typeof v === "number" && v > 0 ? v : "")} />
+            </Bar>
           ) : null}
           <Bar
             dataKey="Tidak Trip"
             stackId="kind"
             fill="var(--muted-foreground)"
             radius={[0, 4, 4, 0]}
-            barSize={14}
+            barSize={16}
             onClick={handleBarClick}
             cursor="pointer"
-          />
+          >
+            <LabelList
+              dataKey="Tidak Trip"
+              position="center"
+              style={labelStyle}
+              formatter={(v: unknown) => (typeof v === "number" && v > 0 ? v : "")}
+            />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
 
@@ -120,15 +135,19 @@ export function BayBreakdownChart({ rows, showAr }: { rows: DisturbanceBaySummar
               {selected.ultg} · GI {selected.gi} · {selected.total} gangguan
             </p>
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {selected.causePareto.map((c) => (
-              <span
-                key={c.cause}
-                className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground"
-              >
-                {c.cause} <b className="tabular-nums">{c.count}</b>
-              </span>
-            ))}
+          <div className="mt-1.5 flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1 text-success">
+              <CheckCircle2 className="size-3.5" /> {selected.followUp.closed} Selesai
+            </span>
+            <span className="flex items-center gap-1 text-critical">
+              <XCircle className="size-3.5" /> {selected.followUp.open} Open
+            </span>
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <CircleDashed className="size-3.5" /> {selected.followUp.unknown} Belum Diketahui
+            </span>
+          </div>
+          <div className="mt-2">
+            <CauseMiniChart data={selected.causePareto} />
           </div>
         </div>
       ) : null}
@@ -173,6 +192,7 @@ export function BayBreakdownChart({ rows, showAr }: { rows: DisturbanceBaySummar
                         <TableHead className="text-right">Trip</TableHead>
                         {showAr ? <TableHead className="text-right">AR Sukses</TableHead> : null}
                         <TableHead className="text-right">Tidak Trip</TableHead>
+                        <TableHead className="text-right">Open</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -193,6 +213,7 @@ export function BayBreakdownChart({ rows, showAr }: { rows: DisturbanceBaySummar
                             <TableCell className="text-right tabular-nums text-primary">{row.arSukses}</TableCell>
                           ) : null}
                           <TableCell className="text-right tabular-nums text-muted-foreground">{row.tidakTrip}</TableCell>
+                          <TableCell className="text-right tabular-nums text-critical">{row.followUp.open || "-"}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

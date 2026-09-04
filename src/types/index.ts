@@ -79,6 +79,7 @@ export interface DisturbanceBaySummary {
   trip: number;
   arSukses: number;
   tidakTrip: number;
+  followUp: DisturbanceFollowUpSummary;
   causePareto: DisturbanceCause[];
 }
 

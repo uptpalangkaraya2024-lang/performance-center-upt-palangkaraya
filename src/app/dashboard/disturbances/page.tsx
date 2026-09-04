@@ -15,7 +15,6 @@ import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
-import { DisturbanceBayChart } from "@/components/charts/disturbance-bay-chart";
 import { UltgBreakdownChart } from "@/components/disturbances/ultg-breakdown-chart";
 import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart";
 import { getDisturbances } from "@/services/disturbances";
@@ -150,15 +149,6 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
             monthlyByYearByCause={data.monthlyByYearByCause}
             years={data.years}
           />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Bay Gangguan Terbanyak</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DisturbanceBayChart data={data.topBay} />
         </CardContent>
       </Card>
 
