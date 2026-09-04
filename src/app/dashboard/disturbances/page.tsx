@@ -16,8 +16,8 @@ import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
 import { DisturbanceBayChart } from "@/components/charts/disturbance-bay-chart";
-import { UltgBreakdownTable } from "@/components/disturbances/ultg-breakdown-table";
-import { BayBreakdownTable } from "@/components/disturbances/bay-breakdown-table";
+import { UltgBreakdownChart } from "@/components/disturbances/ultg-breakdown-chart";
+import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart";
 import { getDisturbances } from "@/services/disturbances";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { listSyncStatus } from "@/lib/sync-status";
@@ -171,7 +171,7 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
           </p>
         </CardHeader>
         <CardContent>
-          <UltgBreakdownTable rows={data.ultgBreakdown} showAr={!isTrafo} />
+          <UltgBreakdownChart rows={data.ultgBreakdown} showAr={!isTrafo} />
         </CardContent>
       </Card>
 
@@ -179,11 +179,11 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
         <CardHeader>
           <CardTitle className="text-base">Gangguan per Ruas / Bay</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Kinerja relay dan sebaran penyebab tiap ruas/bay — klik baris untuk melihat detail penyebab.
+            Kinerja relay dan sebaran penyebab tiap ruas/bay — klik bar atau baris untuk melihat detail penyebab.
           </p>
         </CardHeader>
         <CardContent>
-          <BayBreakdownTable rows={data.bayBreakdown} showAr={!isTrafo} />
+          <BayBreakdownChart rows={data.bayBreakdown} showAr={!isTrafo} />
         </CardContent>
       </Card>
 
