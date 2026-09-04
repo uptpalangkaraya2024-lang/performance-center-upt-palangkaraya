@@ -48,6 +48,38 @@ function StatTile({ value, label, className }: { value: string; label: string; c
   );
 }
 
+// One accent color per category so the sticky banner below is instantly
+// tellable apart at a glance while scrolling, not just by reading the text.
+const CATEGORY_ACCENT: Record<string, string> = {
+  Transmisi: "var(--chart-1)",
+  "Trafo HV": "var(--brand)",
+  "Trafo Low Voltage": "var(--chart-4)",
+};
+
+function CategoryBanner({ title, subtitle, latest }: { title: string; subtitle?: string; latest: string | null }) {
+  const accent = CATEGORY_ACCENT[title] ?? "var(--chart-2)";
+  return (
+    // Sticks right under the site header (h-14) while its own section is in
+    // view — scrolling through a long list of cards no longer loses track of
+    // which of Transmisi / Trafo HV / Trafo Low Voltage you're looking at.
+    <div
+      className="sticky top-14 z-[5] -mx-4 border-y bg-card/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/85 md:-mx-6 md:px-6"
+      style={{ borderLeft: `4px solid ${accent}` }}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">{title}</h2>
+            {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+          </div>
+        </div>
+        {latest ? <span className="text-xs text-muted-foreground">Gangguan terakhir: {latest}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 function CategorySection({
   title,
   subtitle,
@@ -62,10 +94,7 @@ function CategorySection({
   if (data.summary.total === 0) {
     return (
       <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-          {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
-        </div>
+        <CategoryBanner title={title} subtitle={subtitle} latest={null} />
         <Card>
           <CardContent className="py-8">
             <DataUnavailable message="Belum ada gangguan yang masuk kinerja untuk kategori ini." />
@@ -87,15 +116,7 @@ function CategorySection({
 
   return (
     <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-          {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
-        </div>
-        {data.summary.latestDisturbance ? (
-          <span className="text-xs text-muted-foreground">Gangguan terakhir: {data.summary.latestDisturbance}</span>
-        ) : null}
-      </div>
+      <CategoryBanner title={title} subtitle={subtitle} latest={data.summary.latestDisturbance} />
 
       <div className={`grid grid-cols-2 gap-3 ${isTrafo ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
         <StatTile value={data.summary.total.toLocaleString("id-ID")} label="Total (Masuk Kinerja)" />
