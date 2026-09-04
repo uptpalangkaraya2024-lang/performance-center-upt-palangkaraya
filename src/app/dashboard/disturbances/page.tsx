@@ -16,6 +16,8 @@ import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
 import { DisturbanceBayChart } from "@/components/charts/disturbance-bay-chart";
+import { UltgBreakdownTable } from "@/components/disturbances/ultg-breakdown-table";
+import { BayBreakdownTable } from "@/components/disturbances/bay-breakdown-table";
 import { getDisturbances } from "@/services/disturbances";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { listSyncStatus } from "@/lib/sync-status";
@@ -162,6 +164,31 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Gangguan per ULTG</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Kinerja relay (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) dan status tindak lanjut per ULTG — klik
+            baris untuk melihat sebaran penyebab.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <UltgBreakdownTable rows={data.ultgBreakdown} showAr={!isTrafo} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Gangguan per Ruas / Bay</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Kinerja relay dan sebaran penyebab tiap ruas/bay — klik baris untuk melihat detail penyebab.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <BayBreakdownTable rows={data.bayBreakdown} showAr={!isTrafo} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Durasi Pemulihan Gangguan (Trip)</CardTitle>
           <p className="text-xs text-muted-foreground">
             Dari kolom DURASI GGN pada sumber data — hanya gangguan Trip (padam nyata), tidak termasuk AR Sukses
@@ -274,6 +301,62 @@ export default async function DisturbancesPage() {
                       Bay: d.bay,
                       GI: d.gi,
                       "Durasi (menit)": d.durationMinutes,
+                    })),
+                  ],
+                },
+                {
+                  name: "Per ULTG",
+                  rows: [
+                    ...result.transmisi.ultgBreakdown.map((u) => ({
+                      Kategori: "Transmisi",
+                      ULTG: u.ultg,
+                      Total: u.total,
+                      Trip: u.trip,
+                      "AR Sukses": u.arSukses,
+                      "Tidak Trip": u.tidakTrip,
+                      "TL Selesai": u.followUp.closed,
+                      "TL Open": u.followUp.open,
+                      "TL Belum Diketahui": u.followUp.unknown,
+                      "Penyebab Terbesar": u.causePareto[0]?.cause ?? "",
+                    })),
+                    ...result.trafo.ultgBreakdown.map((u) => ({
+                      Kategori: "Trafo",
+                      ULTG: u.ultg,
+                      Total: u.total,
+                      Trip: u.trip,
+                      "AR Sukses": u.arSukses,
+                      "Tidak Trip": u.tidakTrip,
+                      "TL Selesai": u.followUp.closed,
+                      "TL Open": u.followUp.open,
+                      "TL Belum Diketahui": u.followUp.unknown,
+                      "Penyebab Terbesar": u.causePareto[0]?.cause ?? "",
+                    })),
+                  ],
+                },
+                {
+                  name: "Per Ruas Bay",
+                  rows: [
+                    ...result.transmisi.bayBreakdown.map((b) => ({
+                      Kategori: "Transmisi",
+                      Ruas: b.bay,
+                      ULTG: b.ultg,
+                      GI: b.gi,
+                      Total: b.total,
+                      Trip: b.trip,
+                      "AR Sukses": b.arSukses,
+                      "Tidak Trip": b.tidakTrip,
+                      "Penyebab Terbesar": b.causePareto[0]?.cause ?? "",
+                    })),
+                    ...result.trafo.bayBreakdown.map((b) => ({
+                      Kategori: "Trafo",
+                      Ruas: b.bay,
+                      ULTG: b.ultg,
+                      GI: b.gi,
+                      Total: b.total,
+                      Trip: b.trip,
+                      "AR Sukses": b.arSukses,
+                      "Tidak Trip": b.tidakTrip,
+                      "Penyebab Terbesar": b.causePareto[0]?.cause ?? "",
                     })),
                   ],
                 },

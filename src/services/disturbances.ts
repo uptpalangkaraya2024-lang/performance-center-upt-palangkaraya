@@ -5,6 +5,7 @@ import { readConfiguredSource } from "@/lib/data-connector";
 import { parseDurationMinutes, requireText } from "@/lib/parse";
 import type {
   DisturbanceBayCount,
+  DisturbanceBaySummary,
   DisturbanceCategoryResult,
   DisturbanceCategorySummary,
   DisturbanceCause,
@@ -13,6 +14,7 @@ import type {
   DisturbanceFollowUpSummary,
   DisturbanceGiCount,
   DisturbanceMonthlyYearPoint,
+  DisturbanceUltgSummary,
 } from "@/types";
 
 const SOURCE = dataSources.disturbances;
@@ -90,6 +92,7 @@ interface DisturbanceRow {
   kind: string; // raw KODE GGN
   cause: string; // raw PENYEBAB
   gi: string | null; // normalized GARDU INDUK
+  ultg: string | null; // ULTG — UPT Palangkaraya's own sub-unit, used as-is
   durationMinutes: number | null; // DURASI GGN (MENIT)
   followUp: "OPEN" | "CLOSED" | "UNKNOWN";
 }
@@ -125,10 +128,11 @@ function normalizeRow(row: Record<string, string>): DisturbanceRow | null {
 
   const gardu = requireText(row["GARDU INDUK"]);
   const gi = gardu ? normalizeGiName(gardu) : null;
+  const ultg = requireText(row["ULTG"]);
   const durationMinutes = parseDurationMinutes(row["DURASI GGN (MENIT)"]);
   const followUp = normalizeFollowUpStatus(requireText(row["STATUS TINDAK LANJUT GGN"]));
 
-  return { year, month, tgl, namaBay, category, kind, cause, gi, durationMinutes, followUp };
+  return { year, month, tgl, namaBay, category, kind, cause, gi, ultg, durationMinutes, followUp };
 }
 
 function emptyCategory(): DisturbanceCategoryResult {
@@ -145,7 +149,93 @@ function emptyCategory(): DisturbanceCategoryResult {
     followUp: { open: 0, closed: 0, unknown: 0 },
     avgDurationMinutes: null,
     longestDisturbances: [],
+    ultgBreakdown: [],
+    bayBreakdown: [],
   };
+}
+
+function kindSplit(rows: DisturbanceRow[]): { trip: number; arSukses: number; tidakTrip: number } {
+  let trip = 0;
+  let arSukses = 0;
+  let tidakTrip = 0;
+  for (const row of rows) {
+    if (row.kind === "TRIP") trip += 1;
+    else if (row.kind === "RECLOSE SUKSES") arSukses += 1;
+    else if (row.kind === "TIDAK TRIP") tidakTrip += 1;
+  }
+  return { trip, arSukses, tidakTrip };
+}
+
+function causeParetoFor(rows: DisturbanceRow[]): DisturbanceCause[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.cause, (counts.get(row.cause) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([cause, count]) => ({ cause: CAUSE_LABELS[cause] ?? titleCase(cause), count }));
+}
+
+function followUpFor(rows: DisturbanceRow[]): DisturbanceFollowUpSummary {
+  const summary: DisturbanceFollowUpSummary = { open: 0, closed: 0, unknown: 0 };
+  for (const row of rows) {
+    if (row.followUp === "OPEN") summary.open += 1;
+    else if (row.followUp === "CLOSED") summary.closed += 1;
+    else summary.unknown += 1;
+  }
+  return summary;
+}
+
+// Per-ULTG detail — kind split (Trip/AR/Tidak Trip) and cause distribution
+// for each of UPT Palangkaraya's own sub-units, straight from the sheet's
+// ULTG column (only 3 distinct values, all populated — no normalization
+// needed, unlike GARDU INDUK's "GI 150 KV ..." prefix).
+function buildUltgBreakdown(rows: DisturbanceRow[]): DisturbanceUltgSummary[] {
+  const byUltg = new Map<string, DisturbanceRow[]>();
+  for (const row of rows) {
+    if (!row.ultg) continue;
+    const list = byUltg.get(row.ultg) ?? [];
+    list.push(row);
+    byUltg.set(row.ultg, list);
+  }
+  return [...byUltg.entries()]
+    .map(([ultg, ultgRows]) => {
+      const { trip, arSukses, tidakTrip } = kindSplit(ultgRows);
+      return {
+        ultg,
+        total: ultgRows.length,
+        trip,
+        arSukses,
+        tidakTrip,
+        followUp: followUpFor(ultgRows),
+        causePareto: causeParetoFor(ultgRows),
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+}
+
+// Per-bay ("ruas") detail — same kind split + cause distribution, one row
+// per NAMA BAY GANGGUAN value (every bay in the category, not capped).
+function buildBayBreakdown(rows: DisturbanceRow[]): DisturbanceBaySummary[] {
+  const byBay = new Map<string, DisturbanceRow[]>();
+  for (const row of rows) {
+    const list = byBay.get(row.namaBay) ?? [];
+    list.push(row);
+    byBay.set(row.namaBay, list);
+  }
+  return [...byBay.entries()]
+    .map(([bay, bayRows]) => {
+      const { trip, arSukses, tidakTrip } = kindSplit(bayRows);
+      return {
+        bay,
+        ultg: bayRows[0].ultg ?? "-",
+        gi: bayRows[0].gi ?? "-",
+        total: bayRows.length,
+        trip,
+        arSukses,
+        tidakTrip,
+        causePareto: causeParetoFor(bayRows),
+      };
+    })
+    .sort((a, b) => b.total - a.total);
 }
 
 // Shared by the all-causes total and each single-cause slice below — same
@@ -267,6 +357,8 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     followUp,
     avgDurationMinutes,
     longestDisturbances,
+    ultgBreakdown: buildUltgBreakdown(rows),
+    bayBreakdown: buildBayBreakdown(rows),
   };
 }
 

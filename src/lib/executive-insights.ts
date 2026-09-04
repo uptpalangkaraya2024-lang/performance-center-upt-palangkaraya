@@ -140,6 +140,16 @@ export function buildDisturbanceInsights(category: DisturbanceCategoryResult, la
     push("none", `Bay dengan gangguan terbanyak: ${topBay.bay} (${topBay.count} kejadian).`);
   }
 
+  const topUltg = category.ultgBreakdown[0];
+  if (topUltg) {
+    const openPct = Math.round((topUltg.followUp.open / topUltg.total) * 100);
+    const tone = openPct >= 40 ? "warning" : "none";
+    push(
+      tone,
+      `${topUltg.ultg} — gangguan ${label} terbanyak (${topUltg.total} kejadian), ${topUltg.followUp.open} masih Open (${openPct}%).`,
+    );
+  }
+
   return insights;
 }
 

@@ -54,6 +54,34 @@ export interface DisturbanceDurationRecord {
   durationMinutes: number;
 }
 
+/** Per-ULTG breakdown — ULTG is UPT Palangkaraya's own sub-unit, read
+ *  directly from the sheet's own ULTG column (3 distinct values, no
+ *  normalization needed, unlike GARDU INDUK). */
+export interface DisturbanceUltgSummary {
+  ultg: string;
+  total: number;
+  trip: number;
+  /** Always 0 for the Trafo category — no auto-reclose scheme exists there. */
+  arSukses: number;
+  tidakTrip: number;
+  followUp: DisturbanceFollowUpSummary;
+  causePareto: DisturbanceCause[];
+}
+
+/** Per-bay ("ruas") breakdown — the same NAMA BAY GANGGUAN values as
+ *  `topBay`/`allBayCounts`, just with kind (Trip/AR/Tidak Trip) and cause
+ *  detail added per bay instead of a bare count. */
+export interface DisturbanceBaySummary {
+  bay: string;
+  ultg: string;
+  gi: string;
+  total: number;
+  trip: number;
+  arSukses: number;
+  tidakTrip: number;
+  causePareto: DisturbanceCause[];
+}
+
 export interface DisturbanceCategorySummary {
   total: number;
   trip: number;
@@ -96,6 +124,10 @@ export interface DisturbanceCategoryResult {
   avgDurationMinutes: number | null;
   /** Longest-duration TRIP disturbances, longest first — capped at 10. */
   longestDisturbances: DisturbanceDurationRecord[];
+  /** Sorted by total desc. */
+  ultgBreakdown: DisturbanceUltgSummary[];
+  /** Sorted by total desc — every bay in this category, not just `topBay`'s 8. */
+  bayBreakdown: DisturbanceBaySummary[];
 }
 
 export interface AiInsight {
