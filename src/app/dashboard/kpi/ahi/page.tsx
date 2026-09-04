@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
+import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { AhiExecutiveSummary } from "@/components/ahi/ahi-executive-summary";
 import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
@@ -42,6 +43,48 @@ export default async function AhiPage() {
             Data synchronized
             {lastUpdate ? ` · Last update: ${lastUpdate}` : null}
           </>
+        }
+        actions={
+          <ExportExcelButton
+            filename="AHI-UPT-Palangkaraya.xlsx"
+            sheets={[
+              {
+                name: "Kategori",
+                rows: sections.flatMap((section) =>
+                  section.categories.map((category) => ({
+                    Section: section.displayName,
+                    Kategori: category.displayName,
+                    "Jumlah Data": category.jumlahDataTercatat ?? "",
+                    "Kualitas Data": category.kualitasData ?? "",
+                    "Score AHI": category.score ?? "",
+                    Status: category.status,
+                    Best: category.distribution.best ?? "",
+                    Good: category.distribution.good ?? "",
+                    Fair: category.distribution.fair ?? "",
+                    Poor: category.distribution.poor ?? "",
+                    Critical: category.distribution.critical ?? "",
+                  })),
+                ),
+              },
+              {
+                name: "Anomaly",
+                rows: anomalies.map((a) => ({
+                  ULTG: a.ultg,
+                  GI: a.gi,
+                  Bay: a.bay,
+                  "Jenis Aset": a.jenisAset,
+                  Fasa: a.fasa,
+                  Merk: a.merk,
+                  "Parameter Pemicu": a.parameterPemicuAhi,
+                  "Kategori AHI": a.kategoriAhi,
+                  "vs SKDIR": a.kategoriAhiVsSkdir,
+                  "Sub Sistem": a.subSistem,
+                  "Rencana Tindak Lanjut": a.rencanaTindakLanjut,
+                  "Target Waktu": a.targetWaktu,
+                })),
+              },
+            ]}
+          />
         }
       />
 

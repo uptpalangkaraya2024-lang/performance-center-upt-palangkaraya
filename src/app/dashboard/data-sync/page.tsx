@@ -5,7 +5,7 @@ import { DataSyncTable } from "@/components/dashboard/data-sync-table";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { getDataProvider } from "@/lib/data-provider-registry";
 import { dataSourceHealth } from "@/lib/mock-data";
-import { listSyncStatus } from "@/lib/sync-status";
+import { listSyncHistory, listSyncStatus } from "@/lib/sync-status";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getDisturbances } from "@/services/disturbances";
 import { getUltgPerformance } from "@/services/ultg-performance";
@@ -56,6 +56,14 @@ export default async function DataSyncPage() {
         rows: notYetConfigured ? null : entry.rows,
         status: notYetConfigured ? "pending" : entry.status,
         error: notYetConfigured ? null : entry.error,
+        history: notYetConfigured
+          ? []
+          : listSyncHistory(entry.key).map((h) => ({
+              timestamp: formatTime(h.timestamp) ?? "-",
+              status: h.status,
+              rows: h.rows,
+              error: h.error,
+            })),
       };
     }),
     ...dataSourceHealth,

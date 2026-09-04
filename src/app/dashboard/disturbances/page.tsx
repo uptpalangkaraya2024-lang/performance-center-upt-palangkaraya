@@ -3,6 +3,7 @@ import { TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
+import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
@@ -127,6 +128,31 @@ export default async function DisturbancesPage() {
               {lastUpdate ? ` · Last update: ${lastUpdate}` : null}
             </>
           ) : null
+        }
+        actions={
+          !result.error ? (
+            <ExportExcelButton
+              filename="Gangguan-UPT-Palangkaraya.xlsx"
+              sheets={[
+                {
+                  name: "Transmisi - Penyebab",
+                  rows: result.transmisi.causePareto.map((c) => ({ Penyebab: c.cause, Jumlah: c.count })),
+                },
+                {
+                  name: "Transmisi - Bay",
+                  rows: result.transmisi.allBayCounts.map((b) => ({ Bay: b.bay, Jumlah: b.count })),
+                },
+                {
+                  name: "Trafo - Penyebab",
+                  rows: result.trafo.causePareto.map((c) => ({ Penyebab: c.cause, Jumlah: c.count })),
+                },
+                {
+                  name: "Trafo - Bay",
+                  rows: result.trafo.allBayCounts.map((b) => ({ Bay: b.bay, Jumlah: b.count })),
+                },
+              ]}
+            />
+          ) : undefined
         }
       />
 

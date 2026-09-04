@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { ManagementAttentionList } from "@/components/dashboard/management-attention-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
+import { GiCorrelationTable } from "@/components/dashboard/gi-correlation-table";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { UptPerformanceStatus } from "@/components/dashboard/upt-performance-status";
 import { UptGapToTarget } from "@/components/dashboard/upt-gap-to-target";
@@ -10,6 +11,7 @@ import { getUptPerformance } from "@/services/upt-performance";
 import { getDisturbances } from "@/services/disturbances";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { buildManagementAttention, buildTopIssues } from "@/lib/executive-insights";
+import { buildGiCorrelation } from "@/lib/asset-correlation";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { StatusLevel } from "@/types";
 
@@ -50,6 +52,15 @@ export default async function OverviewPage() {
     (latest, entry) => (entry.lastSync && (!latest || entry.lastSync > latest) ? entry.lastSync : latest),
     null,
   );
+
+  const giCorrelation =
+    !disturbances.error && ahi.data
+      ? buildGiCorrelation({
+          trafoBays: disturbances.trafo.allBayCounts,
+          transmisiBays: disturbances.transmisi.allBayCounts,
+          anomalies: ahi.data.anomalies,
+        })
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -125,6 +136,23 @@ export default async function OverviewPage() {
             <DisturbanceParetoChart data={disturbances.transmisi.causePareto} />
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">Belum ada gangguan yang masuk kinerja.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Gangguan &amp; Asset Health per GI</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Gabungan data Gangguan (per bay) dan AHI (per GI) — membantu melihat GI mana yang sekaligus sering
+            gangguan dan asset health-nya bermasalah.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {giCorrelation ? (
+            <GiCorrelationTable rows={giCorrelation} />
+          ) : (
+            <DataUnavailable message="Data Gangguan atau AHI belum tersedia untuk korelasi ini." />
           )}
         </CardContent>
       </Card>

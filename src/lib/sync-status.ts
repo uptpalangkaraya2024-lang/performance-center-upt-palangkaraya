@@ -23,6 +23,26 @@ function keyFor(module: string, file: string, sheet: string): string {
   return `${module}::${file}::${sheet}`;
 }
 
+// Bounded rolling log per (module, file, sheet) — same in-memory, resets-on-
+// restart nature as `registry` above, just keeping the last N events instead
+// of only the latest. Lets Data & Sync show "kapan gagal, kapan pulih" for
+// this server's uptime without a database.
+export interface SyncHistoryEvent {
+  timestamp: Date;
+  status: "healthy" | "error";
+  rows: number | null;
+  error: string | null;
+}
+const MAX_HISTORY_PER_KEY = 20;
+const history = new Map<string, SyncHistoryEvent[]>();
+
+function pushHistory(key: string, event: SyncHistoryEvent) {
+  const list = history.get(key) ?? [];
+  list.push(event);
+  if (list.length > MAX_HISTORY_PER_KEY) list.shift();
+  history.set(key, list);
+}
+
 export function recordSyncSuccess(params: {
   module: string;
   file: string;
@@ -31,17 +51,19 @@ export function recordSyncSuccess(params: {
   rows: number;
 }) {
   const key = keyFor(params.module, params.file, params.sheet);
+  const timestamp = new Date();
   registry.set(key, {
     key,
     module: params.module,
     file: params.file,
     sheet: params.sheet,
     provider: params.provider,
-    lastSync: new Date(),
+    lastSync: timestamp,
     rows: params.rows,
     status: "healthy",
     error: null,
   });
+  pushHistory(key, { timestamp, status: "healthy", rows: params.rows, error: null });
 }
 
 export function recordSyncError(params: {
@@ -53,6 +75,7 @@ export function recordSyncError(params: {
 }) {
   const key = keyFor(params.module, params.file, params.sheet);
   const existing = registry.get(key);
+  const timestamp = new Date();
   registry.set(key, {
     key,
     module: params.module,
@@ -64,8 +87,14 @@ export function recordSyncError(params: {
     status: "error",
     error: params.error,
   });
+  pushHistory(key, { timestamp, status: "error", rows: null, error: params.error });
 }
 
 export function listSyncStatus(): SyncStatusEntry[] {
   return [...registry.values()];
+}
+
+/** Most-recent-first history for one entry's key — see SyncStatusEntry.key. */
+export function listSyncHistory(key: string): SyncHistoryEvent[] {
+  return [...(history.get(key) ?? [])].reverse();
 }

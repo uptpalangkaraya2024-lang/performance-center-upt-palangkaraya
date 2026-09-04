@@ -56,6 +56,10 @@ export interface DisturbanceCategoryResult {
   monthlyByYearByCause: DisturbanceCauseMonthlyYear[];
   years: string[];
   topBay: DisturbanceBayCount[];
+  /** Every bay's count, not just the top 8 in `topBay` — needed to build an
+   *  accurate per-GI tally (see src/lib/asset-correlation.ts); topBay stays
+   *  as-is for the existing Gangguan page chart. */
+  allBayCounts: DisturbanceBayCount[];
 }
 
 export interface AiInsight {
@@ -244,4 +248,16 @@ export interface DataSourceHealth {
   status: "healthy" | "error" | "pending";
   /** Technical detail shown only on the admin Data Health page — see AGENTS.md section 28/32. */
   error?: string | null;
+  /** Recent sync attempts for this row, most-recent-first — see
+   *  listSyncHistory() in src/lib/sync-status.ts. Empty for a module with no
+   *  real sync activity yet (e.g. a "Coming Soon" mock-data row). */
+  history?: SyncHistoryPoint[];
+}
+
+export interface SyncHistoryPoint {
+  /** Pre-formatted "HH:mm WIB", same convention as `lastSync` above. */
+  timestamp: string;
+  status: "healthy" | "error";
+  rows: number | null;
+  error: string | null;
 }

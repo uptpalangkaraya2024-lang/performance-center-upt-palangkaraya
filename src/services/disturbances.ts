@@ -112,6 +112,7 @@ function emptyCategory(): DisturbanceCategoryResult {
     monthlyByYearByCause: [],
     years: [],
     topBay: [],
+    allBayCounts: [],
   };
 }
 
@@ -170,10 +171,10 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     data: buildMonthlyByYear(rows.filter((r) => r.cause === rawCause), sortedYears),
   }));
 
-  const topBay: DisturbanceBayCount[] = [...bayCounts.entries()]
+  const allBayCounts: DisturbanceBayCount[] = [...bayCounts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
     .map(([bay, count]) => ({ bay, count }));
+  const topBay = allBayCounts.slice(0, 8);
 
   const summary: DisturbanceCategorySummary = {
     total: rows.length,
@@ -183,7 +184,16 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     latestDisturbance: latestTgl ? formatDateLabel(latestTgl) : null,
   };
 
-  return { summary, causePareto, kindBreakdown, monthlyByYear, monthlyByYearByCause, years: sortedYears, topBay };
+  return {
+    summary,
+    causePareto,
+    kindBreakdown,
+    monthlyByYear,
+    monthlyByYearByCause,
+    years: sortedYears,
+    topBay,
+    allBayCounts,
+  };
 }
 
 export interface DisturbancesResult {

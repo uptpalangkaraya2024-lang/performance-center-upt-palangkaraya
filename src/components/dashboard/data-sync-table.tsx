@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { History } from "lucide-react";
 
 import {
   Select,
@@ -11,6 +12,12 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Table,
   TableBody,
   TableCell,
@@ -20,6 +27,51 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { DataSourceHealth } from "@/types";
+
+const HISTORY_STATUS_DOT: Record<"healthy" | "error", string> = {
+  healthy: "bg-success",
+  error: "bg-critical",
+};
+
+function SyncHistoryButton({ history }: { history: DataSourceHealth["history"] }) {
+  if (!history || history.length === 0) return null;
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="ml-1 inline-flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Riwayat sinkronisasi"
+          >
+            <History className="size-3.5" />
+          </button>
+        }
+      />
+      <PopoverContent align="end" className="w-80">
+        <PopoverTitle className="text-xs font-semibold tracking-wide uppercase">
+          Riwayat Sinkronisasi
+        </PopoverTitle>
+        <ul className="flex max-h-64 flex-col gap-1.5 overflow-y-auto text-xs">
+          {history.map((event, idx) => (
+            <li key={idx} className="flex items-start gap-2 border-b border-border/60 pb-1.5 last:border-0">
+              <span className={cn("mt-1 size-1.5 shrink-0 rounded-full", HISTORY_STATUS_DOT[event.status])} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground">{event.timestamp}</span>
+                  <span className="text-muted-foreground">
+                    {event.status === "healthy" ? `${event.rows ?? 0} baris` : "Gagal"}
+                  </span>
+                </div>
+                {event.error ? <p className="mt-0.5 truncate text-muted-foreground" title={event.error}>{event.error}</p> : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // "pending" means the module's source was never expected to exist yet — a
 // Coming Soon module, not a broken integration — so it gets the same
@@ -129,14 +181,17 @@ export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
                     {row.rows !== null ? row.rows.toLocaleString("id-ID") : "–"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-                        status.pillClassName,
-                      )}
-                    >
-                      <span className={cn("size-1.5 rounded-full", status.dotClassName)} />
-                      {status.label}
+                    <span className="inline-flex items-center">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                          status.pillClassName,
+                        )}
+                      >
+                        <span className={cn("size-1.5 rounded-full", status.dotClassName)} />
+                        {status.label}
+                      </span>
+                      <SyncHistoryButton history={row.history} />
                     </span>
                     {row.error ? <div className="mt-0.5 text-xs text-muted-foreground">{row.error}</div> : null}
                   </TableCell>

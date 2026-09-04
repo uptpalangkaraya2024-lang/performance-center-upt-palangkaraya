@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
+import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import type { UptKpiCategory, UptPerformanceSnapshot } from "@/types";
 import { UptCategorySection } from "./upt-category-section";
@@ -55,19 +56,38 @@ export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnaps
           </>
         }
         actions={
-          <Select value={selectedPeriod} onValueChange={(value) => value && setSelectedPeriod(value)}>
-            <SelectTrigger size="sm" className="w-[190px] bg-card">
-              <SelectValue placeholder="Periode">{selectedLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {snapshot.periodOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                  {!option.hasData ? " (belum ada data)" : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <>
+            <Select value={selectedPeriod} onValueChange={(value) => value && setSelectedPeriod(value)}>
+              <SelectTrigger size="sm" className="w-[190px] bg-card">
+                <SelectValue placeholder="Periode">{selectedLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {snapshot.periodOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                    {!option.hasData ? " (belum ada data)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <ExportExcelButton
+              filename={`Kinerja-UPT-${snapshot.period}.xlsx`}
+              sheets={[
+                {
+                  name: "Kinerja UPT",
+                  rows: snapshot.kpis.map((kpi) => ({
+                    KPI: kpi.displayName,
+                    Kategori: kpi.category,
+                    Target: kpi.targetLabel ?? "",
+                    Realisasi: kpi.actualLabel ?? "",
+                    "Achievement (%)": kpi.achievement ?? "",
+                    Status: kpi.status,
+                    Arah: kpi.direction ?? "",
+                  })),
+                },
+              ]}
+            />
+          </>
         }
       />
 

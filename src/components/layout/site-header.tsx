@@ -1,13 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { Bell, Search, Sparkles } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CommandPalette } from "@/components/layout/command-palette";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,18 +19,25 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function SiteHeader() {
+  const [searchOpen, setSearchOpen] = useState(false);
+
   return (
     <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-1 h-5" />
 
-      <div className="relative hidden max-w-sm flex-1 sm:block">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Cari GI, Trafo, Gangguan, Case..."
-          className="h-9 pl-8"
-        />
-      </div>
+      <button
+        type="button"
+        onClick={() => setSearchOpen(true)}
+        className="relative hidden max-w-sm flex-1 items-center rounded-md border bg-background px-2.5 h-9 text-left text-sm text-muted-foreground hover:bg-muted sm:flex"
+      >
+        <Search className="mr-2 size-4 shrink-0" />
+        <span className="flex-1">Cari GI, Trafo, Gangguan, Case...</span>
+        <kbd className="ml-2 hidden shrink-0 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:inline-block">
+          Ctrl K
+        </kbd>
+      </button>
+      <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
 
       <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
