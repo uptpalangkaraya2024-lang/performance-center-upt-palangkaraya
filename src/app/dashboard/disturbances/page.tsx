@@ -164,6 +164,7 @@ function CategorySection({
           <DisturbanceYoyMonthlyChart
             monthlyByYear={data.monthlyByYear}
             monthlyByYearByCause={data.monthlyByYearByCause}
+            monthlyByYearByKind={data.monthlyByYearByKind}
             years={data.years}
           />
         </CardContent>

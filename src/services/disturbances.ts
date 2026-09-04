@@ -13,6 +13,7 @@ import type {
   DisturbanceDurationRecord,
   DisturbanceFollowUpSummary,
   DisturbanceGiCount,
+  DisturbanceKindMonthlyYear,
   DisturbanceMonthlyYearPoint,
   DisturbanceUltgSummary,
 } from "@/types";
@@ -148,6 +149,7 @@ function emptyCategory(): DisturbanceCategoryResult {
     kindBreakdown: [],
     monthlyByYear: [],
     monthlyByYearByCause: [],
+    monthlyByYearByKind: [],
     years: [],
     topBay: [],
     allBayCounts: [],
@@ -289,15 +291,23 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     count: causeCounts.get(cause) ?? 0,
   }));
 
-  const kindBreakdown: DisturbanceCause[] = [...kindCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([kind, count]) => ({ cause: KIND_LABELS[kind] ?? titleCase(kind), count }));
+  // Same order as kindBreakdown, so the two stay consistent.
+  const kindOrder = [...kindCounts.entries()].sort((a, b) => b[1] - a[1]).map(([kind]) => kind);
+
+  const kindBreakdown: DisturbanceCause[] = kindOrder.map((kind) => ({
+    cause: KIND_LABELS[kind] ?? titleCase(kind),
+    count: kindCounts.get(kind) ?? 0,
+  }));
 
   const sortedYears = [...years].sort();
   const monthlyByYear = buildMonthlyByYear(rows, sortedYears);
   const monthlyByYearByCause: DisturbanceCauseMonthlyYear[] = causeOrder.map((rawCause) => ({
     cause: CAUSE_LABELS[rawCause] ?? titleCase(rawCause),
     data: buildMonthlyByYear(rows.filter((r) => r.cause === rawCause), sortedYears),
+  }));
+  const monthlyByYearByKind: DisturbanceKindMonthlyYear[] = kindOrder.map((rawKind) => ({
+    kind: KIND_LABELS[rawKind] ?? titleCase(rawKind),
+    data: buildMonthlyByYear(rows.filter((r) => r.kind === rawKind), sortedYears),
   }));
 
   const allBayCounts: DisturbanceBayCount[] = [...bayCounts.entries()]
@@ -357,6 +367,7 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     kindBreakdown,
     monthlyByYear,
     monthlyByYearByCause,
+    monthlyByYearByKind,
     years: sortedYears,
     topBay,
     allBayCounts,

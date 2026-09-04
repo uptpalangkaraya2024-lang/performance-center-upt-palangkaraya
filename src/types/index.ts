@@ -97,6 +97,14 @@ export interface DisturbanceCauseMonthlyYear {
   data: DisturbanceMonthlyYearPoint[];
 }
 
+/** Same shape as DisturbanceCauseMonthlyYear, sliced by KODE GGN (Trip / AR
+ *  Sukses / Tidak Trip) instead of PENYEBAB — lets the YoY chart filter to
+ *  one jenis gangguan instead of one cause. */
+export interface DisturbanceKindMonthlyYear {
+  kind: string;
+  data: DisturbanceMonthlyYearPoint[];
+}
+
 /** Everything needed to render one category's (Transmisi or Trafo) section
  *  of the Gangguan page — see src/services/disturbances.ts. */
 export interface DisturbanceCategoryResult {
@@ -107,6 +115,8 @@ export interface DisturbanceCategoryResult {
   monthlyByYear: DisturbanceMonthlyYearPoint[];
   /** Same shape, one entry per cause (see causePareto for the same set/order) — lets the YoY chart filter to a single cause. */
   monthlyByYearByCause: DisturbanceCauseMonthlyYear[];
+  /** Same shape, one entry per KODE GGN (Trip/AR Sukses/Tidak Trip) — lets the YoY chart filter to a single jenis gangguan. */
+  monthlyByYearByKind: DisturbanceKindMonthlyYear[];
   years: string[];
   topBay: DisturbanceBayCount[];
   /** Every bay's count, not just the top 8 in `topBay` — kept for anything

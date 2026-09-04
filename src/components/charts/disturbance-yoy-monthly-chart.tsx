@@ -21,10 +21,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { DisturbanceCauseMonthlyYear, DisturbanceMonthlyYearPoint } from "@/types";
+import type { DisturbanceCauseMonthlyYear, DisturbanceKindMonthlyYear, DisturbanceMonthlyYearPoint } from "@/types";
 
 const YEAR_COLORS = ["var(--chart-1)", "var(--chart-5)", "var(--chart-3)", "var(--chart-4)", "var(--chart-2)"];
-const ALL_CAUSES_VALUE = "__all__";
+const ALL_VALUE = "__all__";
+
+// Same 12-month Indonesian label order buildMonthlyByYear() in
+// src/services/disturbances.ts already produces each point's `.month` in —
+// duplicated here rather than imported since that file is server-only.
+const MONTH_ID = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+type FilterMode = "all" | "cause" | "kind";
 
 function toCumulative(data: DisturbanceMonthlyYearPoint[], years: string[]): DisturbanceMonthlyYearPoint[] {
   const running: Record<string, number> = Object.fromEntries(years.map((year) => [year, 0]));
@@ -41,10 +51,12 @@ function toCumulative(data: DisturbanceMonthlyYearPoint[], years: string[]): Dis
 export function DisturbanceYoyMonthlyChart({
   monthlyByYear,
   monthlyByYearByCause,
+  monthlyByYearByKind,
   years,
 }: {
   monthlyByYear: DisturbanceMonthlyYearPoint[];
   monthlyByYearByCause: DisturbanceCauseMonthlyYear[];
+  monthlyByYearByKind: DisturbanceKindMonthlyYear[];
   years: string[];
 }) {
   // Default to the two most recent years — "dibandingkan antara 2 tahun" —
@@ -53,14 +65,18 @@ export function DisturbanceYoyMonthlyChart({
   const searchParams = useSearchParams();
   // A Management Attention / Top Issue link on the Overview dashboard can
   // point here with ?cause=<cause> to preselect that cause's line instead of
-  // "Semua Penyebab" — both the Transmisi and Trafo chart instances read the
-  // same param, so a cause that only exists in one category simply leaves
-  // the other showing no match (its own Select still falls back cleanly).
+  // "Semua" — both the Transmisi and Trafo chart instances read the same
+  // param, so a cause that only exists in one category simply leaves the
+  // other showing no match (its own Select still falls back cleanly).
   const initialCause = searchParams.get("cause");
-  const [selectedCause, setSelectedCause] = useState(
-    initialCause && monthlyByYearByCause.some((c) => c.cause === initialCause) ? initialCause : ALL_CAUSES_VALUE,
-  );
+  const initialHasCause = !!initialCause && monthlyByYearByCause.some((c) => c.cause === initialCause);
+
+  const [filterMode, setFilterMode] = useState<FilterMode>(initialHasCause ? "cause" : "all");
+  const [selectedCause, setSelectedCause] = useState(initialHasCause ? (initialCause as string) : ALL_VALUE);
+  const [selectedKind, setSelectedKind] = useState(ALL_VALUE);
   const [cumulative, setCumulative] = useState(false);
+  const [fromMonth, setFromMonth] = useState(0);
+  const [toMonth, setToMonth] = useState(11);
 
   function toggleYear(year: string) {
     setSelectedYears((prev) => (prev.includes(year) ? prev.filter((y) => y !== year) : [...prev, year]));
@@ -70,34 +86,81 @@ export function DisturbanceYoyMonthlyChart({
 
   const chartData = useMemo(() => {
     const baseData =
-      selectedCause === ALL_CAUSES_VALUE
-        ? monthlyByYear
-        : (monthlyByYearByCause.find((c) => c.cause === selectedCause)?.data ?? []);
-    return cumulative ? toCumulative(baseData, years) : baseData;
-  }, [monthlyByYear, monthlyByYearByCause, selectedCause, cumulative, years]);
+      filterMode === "cause" && selectedCause !== ALL_VALUE
+        ? (monthlyByYearByCause.find((c) => c.cause === selectedCause)?.data ?? [])
+        : filterMode === "kind" && selectedKind !== ALL_VALUE
+          ? (monthlyByYearByKind.find((k) => k.kind === selectedKind)?.data ?? [])
+          : monthlyByYear;
+
+    // Range is applied first — cumulative then restarts at 0 from "Dari",
+    // matching "hanya lihat rentang ini" rather than a partial view into a
+    // full-year running total.
+    const ranged = baseData.slice(fromMonth, toMonth + 1);
+    return cumulative ? toCumulative(ranged, years) : ranged;
+  }, [monthlyByYear, monthlyByYearByCause, monthlyByYearByKind, filterMode, selectedCause, selectedKind, cumulative, fromMonth, toMonth, years]);
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedCause} onValueChange={(value) => setSelectedCause(value ?? ALL_CAUSES_VALUE)}>
-          <SelectTrigger size="sm" className="w-[180px]">
-            {/* Rendered explicitly instead of relying on SelectValue's
-                own item-label lookup — that only resolves once the popup
-                has actually mounted at least once, so the trigger shows
-                the raw value ("__all__") on first paint otherwise. */}
-            <SelectValue placeholder="Penyebab">
-              {selectedCause === ALL_CAUSES_VALUE ? "Semua Penyebab" : selectedCause}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_CAUSES_VALUE}>Semua Penyebab</SelectItem>
-            {monthlyByYearByCause.map((c) => (
-              <SelectItem key={c.cause} value={c.cause}>
-                {c.cause}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center rounded-full border p-0.5">
+          {([
+            { mode: "all" as const, label: "Semua" },
+            { mode: "cause" as const, label: "Per Penyebab" },
+            { mode: "kind" as const, label: "Per Jenis" },
+          ]).map(({ mode, label }) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setFilterMode(mode)}
+              className={cn(
+                "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                filterMode === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {filterMode === "cause" ? (
+          <Select value={selectedCause} onValueChange={(value) => setSelectedCause(value ?? ALL_VALUE)}>
+            <SelectTrigger size="sm" className="w-[180px]">
+              {/* Rendered explicitly instead of relying on SelectValue's own
+                  item-label lookup — that only resolves once the popup has
+                  actually mounted at least once, so the trigger shows the
+                  raw value ("__all__") on first paint otherwise. */}
+              <SelectValue placeholder="Penyebab">
+                {selectedCause === ALL_VALUE ? "Semua Penyebab" : selectedCause}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Semua Penyebab</SelectItem>
+              {monthlyByYearByCause.map((c) => (
+                <SelectItem key={c.cause} value={c.cause}>
+                  {c.cause}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+
+        {filterMode === "kind" ? (
+          <Select value={selectedKind} onValueChange={(value) => setSelectedKind(value ?? ALL_VALUE)}>
+            <SelectTrigger size="sm" className="w-[180px]">
+              <SelectValue placeholder="Jenis Gangguan">
+                {selectedKind === ALL_VALUE ? "Semua Jenis" : selectedKind}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Semua Jenis</SelectItem>
+              {monthlyByYearByKind.map((k) => (
+                <SelectItem key={k.kind} value={k.kind}>
+                  {k.kind}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
 
         <div className="flex items-center rounded-full border p-0.5">
           {(["Bulanan", "Kumulatif"] as const).map((label) => {
@@ -138,6 +201,63 @@ export function DisturbanceYoyMonthlyChart({
             );
           })}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>Rentang bulan:</span>
+        <Select
+          value={String(fromMonth)}
+          onValueChange={(value) => {
+            if (!value) return;
+            const idx = Number(value);
+            setFromMonth(idx);
+            if (idx > toMonth) setToMonth(idx);
+          }}
+        >
+          <SelectTrigger size="sm" className="w-[130px]">
+            <SelectValue placeholder="Dari">{MONTH_ID[fromMonth]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {MONTH_ID.map((month, idx) => (
+              <SelectItem key={month} value={String(idx)}>
+                {month}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span>sampai</span>
+        <Select
+          value={String(toMonth)}
+          onValueChange={(value) => {
+            if (!value) return;
+            const idx = Number(value);
+            setToMonth(idx);
+            if (idx < fromMonth) setFromMonth(idx);
+          }}
+        >
+          <SelectTrigger size="sm" className="w-[130px]">
+            <SelectValue placeholder="Sampai">{MONTH_ID[toMonth]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {MONTH_ID.map((month, idx) => (
+              <SelectItem key={month} value={String(idx)}>
+                {month}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {fromMonth !== 0 || toMonth !== 11 ? (
+          <button
+            type="button"
+            onClick={() => {
+              setFromMonth(0);
+              setToMonth(11);
+            }}
+            className="text-primary hover:underline"
+          >
+            Reset ke Jan–Des
+          </button>
+        ) : null}
       </div>
 
       <ResponsiveContainer width="100%" height={260}>
