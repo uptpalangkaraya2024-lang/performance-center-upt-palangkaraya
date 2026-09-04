@@ -224,7 +224,14 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     else followUp.unknown += 1;
   }
 
-  const withDuration = rows.filter((r): r is DisturbanceRow & { durationMinutes: number } => r.durationMinutes !== null);
+  // Only TRIP events actually left the bay de-energized — RECLOSE SUKSES
+  // (auto-reclose succeeded, confirmed live: 274/276 rows record exactly 0
+  // minutes) and TIDAK TRIP have no real recovery time. Averaging across all
+  // three kinds would drag a real ~86-minute mean down to a meaningless ~11
+  // minutes, so duration stats are scoped to TRIP rows only.
+  const withDuration = rows.filter(
+    (r): r is DisturbanceRow & { durationMinutes: number } => r.kind === "TRIP" && r.durationMinutes !== null,
+  );
   const avgDurationMinutes =
     withDuration.length > 0
       ? withDuration.reduce((sum, r) => sum + r.durationMinutes, 0) / withDuration.length

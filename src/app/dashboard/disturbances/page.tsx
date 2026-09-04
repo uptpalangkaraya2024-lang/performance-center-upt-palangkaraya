@@ -151,8 +151,11 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Durasi Pemulihan Gangguan</CardTitle>
-          <p className="text-xs text-muted-foreground">Dari kolom DURASI GGN pada sumber data.</p>
+          <CardTitle className="text-base">Durasi Pemulihan Gangguan (Trip)</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Dari kolom DURASI GGN pada sumber data — hanya gangguan Trip (padam nyata), tidak termasuk AR Sukses
+            &amp; Tidak Trip yang durasinya memang 0.
+          </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {data.avgDurationMinutes === null ? (
@@ -165,7 +168,7 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
                 <div className="text-xl font-semibold tabular-nums text-foreground">
                   {formatDurationMinutes(data.avgDurationMinutes)}
                 </div>
-                <div className="text-xs text-muted-foreground">Rata-rata Durasi Pemulihan</div>
+                <div className="text-xs text-muted-foreground">Rata-rata Durasi Pemulihan (Trip)</div>
               </div>
 
               {data.longestDisturbances.length > 0 ? (

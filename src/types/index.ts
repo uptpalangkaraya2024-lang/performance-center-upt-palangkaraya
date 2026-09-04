@@ -89,10 +89,12 @@ export interface DisturbanceCategoryResult {
   giBreakdown: DisturbanceGiCount[];
   /** Tally of the sheet's own STATUS TINDAK LANJUT GGN column. */
   followUp: DisturbanceFollowUpSummary;
-  /** Mean of every disturbance's own DURASI GGN (MENIT) in this category —
-   *  null when no row has a parseable duration. */
+  /** Mean DURASI GGN (MENIT) across this category's TRIP events only — AR
+   *  Sukses/Tidak Trip carry no real outage time (confirmed near-universally
+   *  0 in the source) and would otherwise dilute the average toward
+   *  meaninglessness. Null when no TRIP row has a parseable duration. */
   avgDurationMinutes: number | null;
-  /** Longest-duration disturbances, longest first — capped at 10. */
+  /** Longest-duration TRIP disturbances, longest first — capped at 10. */
   longestDisturbances: DisturbanceDurationRecord[];
 }
 
