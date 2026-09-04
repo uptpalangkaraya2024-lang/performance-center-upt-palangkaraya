@@ -61,6 +61,15 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
     );
   }
 
+  // Trafo protection is direct-trip (differential/REF) with no auto-reclose
+  // scheme — "AR Sukses" is a Transmisi-only concept that happens to live in
+  // the same KODE GGN column, so showing it (even as 0) under Trafo implies
+  // a protection scheme that doesn't exist there. Hidden for Trafo only.
+  const isTrafo = title === "Trafo";
+  const kindBreakdownForChart = isTrafo
+    ? data.kindBreakdown.filter((k) => k.cause !== "AR Sukses")
+    : data.kindBreakdown;
+
   return (
     <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
       <div className="flex items-baseline justify-between">
@@ -70,10 +79,12 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className={`grid grid-cols-2 gap-3 ${isTrafo ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
         <StatTile value={data.summary.total.toLocaleString("id-ID")} label="Total (Masuk Kinerja)" />
         <StatTile value={data.summary.trip.toLocaleString("id-ID")} label="Trip" className="text-critical" />
-        <StatTile value={data.summary.arSukses.toLocaleString("id-ID")} label="AR Sukses" className="text-primary" />
+        {!isTrafo ? (
+          <StatTile value={data.summary.arSukses.toLocaleString("id-ID")} label="AR Sukses" className="text-primary" />
+        ) : null}
         <StatTile value={data.summary.tidakTrip.toLocaleString("id-ID")} label="Tidak Trip" className="text-muted-foreground" />
       </div>
 
@@ -119,10 +130,10 @@ function CategorySection({ title, data, anchorId }: { title: string; data: Distu
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Pareto Jenis Gangguan (Trip / AR)</CardTitle>
+            <CardTitle className="text-base">Pareto Jenis Gangguan{isTrafo ? " (Trip)" : " (Trip / AR)"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <DisturbanceParetoChart data={data.kindBreakdown} />
+            <DisturbanceParetoChart data={kindBreakdownForChart} />
           </CardContent>
         </Card>
       </div>
