@@ -32,7 +32,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { CauseMiniChart } from "./cause-mini-chart";
 import type { DisturbanceBaySummary, DisturbanceCause } from "@/types";
 
 const TOP_N = 15;
@@ -85,7 +84,6 @@ export function CauseByBayChart({
    *  with the page's other Pareto Penyebab chart. */
   causeOrder: DisturbanceCause[];
 }) {
-  const [selectedBay, setSelectedBay] = useState<string | null>(rows[0]?.bay ?? null);
   const [selectedCause, setSelectedCause] = useState(ALL_VALUE);
   const [showFullTable, setShowFullTable] = useState(false);
   const [search, setSearch] = useState("");
@@ -137,13 +135,6 @@ export function CauseByBayChart({
     return point;
   });
 
-  const selected = rows.find((r) => r.bay === selectedBay) ?? top[0] ?? rows[0];
-  // Recharts' Bar onClick payload nests the original datum under `.payload`.
-  const handleBarClick = (data: unknown) => {
-    const bayKey = (data as { payload?: { bayKey?: string } } | undefined)?.payload?.bayKey;
-    if (bayKey) setSelectedBay(bayKey);
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -162,7 +153,7 @@ export function CauseByBayChart({
         </Select>
         <p className="text-xs text-muted-foreground">
           {top.length} ruas {selectedCause === ALL_VALUE ? "dengan gangguan terbanyak" : `dengan penyebab ${selectedCause} terbanyak`} dari{" "}
-          {rankedRows.length} ruas — klik bar untuk melihat rinciannya.
+          {rankedRows.length} ruas.
         </p>
       </div>
 
@@ -203,8 +194,6 @@ export function CauseByBayChart({
                 fill={causeColor(cause)}
                 barSize={16}
                 radius={idx === causesToStack.length - 1 ? [0, 4, 4, 0] : undefined}
-                onClick={handleBarClick}
-                cursor="pointer"
               >
                 <LabelList
                   dataKey={cause}
@@ -217,20 +206,6 @@ export function CauseByBayChart({
           </BarChart>
         </ResponsiveContainer>
       )}
-
-      {selected ? (
-        <div className="rounded-lg border p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-foreground">{selected.bay}</p>
-            <p className="text-xs text-muted-foreground">
-              {selected.ultg} · GI {selected.gi} · {selected.total} gangguan
-            </p>
-          </div>
-          <div className="mt-2">
-            <CauseMiniChart data={selected.causePareto} />
-          </div>
-        </div>
-      ) : null}
 
       <div>
         <button
@@ -275,11 +250,7 @@ export function CauseByBayChart({
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((row) => (
-                        <TableRow
-                          key={row.bay}
-                          className="cursor-pointer hover:bg-muted/40"
-                          onClick={() => setSelectedBay(row.bay)}
-                        >
+                        <TableRow key={row.bay}>
                           <TableCell className="max-w-[220px] truncate font-medium" title={row.bay}>
                             {row.bay}
                           </TableCell>

@@ -209,8 +209,8 @@ function CategorySection({
         <CardHeader>
           <CardTitle className="text-base">Gangguan per Ruas / Bay</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Kinerja relay tiap ruas/bay — filter Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip, klik bar atau baris
-            untuk melihat sebaran penyebabnya.
+            Kinerja relay tiap ruas/bay — filter jenis (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) atau status
+            tindak lanjut (Open / Selesai / Belum Diketahui) untuk meranking ulang ruas yang paling terdampak.
           </p>
         </CardHeader>
         <CardContent>
@@ -222,7 +222,8 @@ function CategorySection({
         <CardHeader>
           <CardTitle className="text-base">Penyebab Gangguan per Ruas / Bay</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Sebaran penyebab tiap ruas/bay — filter satu penyebab untuk melihat ruas mana yang paling terdampak.
+            Sebaran penyebab tiap ruas/bay dalam satu bar — filter satu penyebab untuk meranking ulang ruas mana yang
+            paling terdampak.
           </p>
         </CardHeader>
         <CardContent>
