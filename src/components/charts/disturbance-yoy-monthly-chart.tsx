@@ -21,7 +21,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { DisturbanceCauseMonthlyYear, DisturbanceKindMonthlyYear, DisturbanceMonthlyYearPoint } from "@/types";
+import type {
+  DisturbanceCauseMonthlyYear,
+  DisturbanceKindMonthlyYear,
+  DisturbanceMonthlyYearPoint,
+  DisturbanceUltgMonthlyYear,
+} from "@/types";
 
 const YEAR_COLORS = ["var(--chart-1)", "var(--chart-5)", "var(--chart-3)", "var(--chart-4)", "var(--chart-2)"];
 const ALL_VALUE = "__all__";
@@ -34,7 +39,7 @@ const MONTH_ID = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
 
-type FilterMode = "all" | "cause" | "kind";
+type FilterMode = "all" | "cause" | "kind" | "ultg";
 
 function toCumulative(data: DisturbanceMonthlyYearPoint[], years: string[]): DisturbanceMonthlyYearPoint[] {
   const running: Record<string, number> = Object.fromEntries(years.map((year) => [year, 0]));
@@ -52,11 +57,13 @@ export function DisturbanceYoyMonthlyChart({
   monthlyByYear,
   monthlyByYearByCause,
   monthlyByYearByKind,
+  monthlyByYearByUltg,
   years,
 }: {
   monthlyByYear: DisturbanceMonthlyYearPoint[];
   monthlyByYearByCause: DisturbanceCauseMonthlyYear[];
   monthlyByYearByKind: DisturbanceKindMonthlyYear[];
+  monthlyByYearByUltg: DisturbanceUltgMonthlyYear[];
   years: string[];
 }) {
   // Default to the two most recent years — "dibandingkan antara 2 tahun" —
@@ -74,6 +81,7 @@ export function DisturbanceYoyMonthlyChart({
   const [filterMode, setFilterMode] = useState<FilterMode>(initialHasCause ? "cause" : "all");
   const [selectedCause, setSelectedCause] = useState(initialHasCause ? (initialCause as string) : ALL_VALUE);
   const [selectedKind, setSelectedKind] = useState(ALL_VALUE);
+  const [selectedUltg, setSelectedUltg] = useState(ALL_VALUE);
   const [cumulative, setCumulative] = useState(false);
   const [fromMonth, setFromMonth] = useState(0);
   const [toMonth, setToMonth] = useState(11);
@@ -90,14 +98,29 @@ export function DisturbanceYoyMonthlyChart({
         ? (monthlyByYearByCause.find((c) => c.cause === selectedCause)?.data ?? [])
         : filterMode === "kind" && selectedKind !== ALL_VALUE
           ? (monthlyByYearByKind.find((k) => k.kind === selectedKind)?.data ?? [])
-          : monthlyByYear;
+          : filterMode === "ultg" && selectedUltg !== ALL_VALUE
+            ? (monthlyByYearByUltg.find((u) => u.ultg === selectedUltg)?.data ?? [])
+            : monthlyByYear;
 
     // Range is applied first — cumulative then restarts at 0 from "Dari",
     // matching "hanya lihat rentang ini" rather than a partial view into a
     // full-year running total.
     const ranged = baseData.slice(fromMonth, toMonth + 1);
     return cumulative ? toCumulative(ranged, years) : ranged;
-  }, [monthlyByYear, monthlyByYearByCause, monthlyByYearByKind, filterMode, selectedCause, selectedKind, cumulative, fromMonth, toMonth, years]);
+  }, [
+    monthlyByYear,
+    monthlyByYearByCause,
+    monthlyByYearByKind,
+    monthlyByYearByUltg,
+    filterMode,
+    selectedCause,
+    selectedKind,
+    selectedUltg,
+    cumulative,
+    fromMonth,
+    toMonth,
+    years,
+  ]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -107,6 +130,7 @@ export function DisturbanceYoyMonthlyChart({
             { mode: "all" as const, label: "Semua" },
             { mode: "cause" as const, label: "Per Penyebab" },
             { mode: "kind" as const, label: "Per Jenis" },
+            { mode: "ultg" as const, label: "Per ULTG" },
           ]).map(({ mode, label }) => (
             <button
               key={mode}
@@ -156,6 +180,24 @@ export function DisturbanceYoyMonthlyChart({
               {monthlyByYearByKind.map((k) => (
                 <SelectItem key={k.kind} value={k.kind}>
                   {k.kind}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+
+        {filterMode === "ultg" ? (
+          <Select value={selectedUltg} onValueChange={(value) => setSelectedUltg(value ?? ALL_VALUE)}>
+            <SelectTrigger size="sm" className="w-[180px]">
+              <SelectValue placeholder="ULTG">
+                {selectedUltg === ALL_VALUE ? "Semua ULTG" : selectedUltg}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_VALUE}>Semua ULTG</SelectItem>
+              {monthlyByYearByUltg.map((u) => (
+                <SelectItem key={u.ultg} value={u.ultg}>
+                  {u.ultg}
                 </SelectItem>
               ))}
             </SelectContent>

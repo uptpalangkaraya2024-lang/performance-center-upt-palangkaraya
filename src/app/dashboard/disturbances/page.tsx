@@ -187,6 +187,7 @@ function CategorySection({
             monthlyByYear={data.monthlyByYear}
             monthlyByYearByCause={data.monthlyByYearByCause}
             monthlyByYearByKind={data.monthlyByYearByKind}
+            monthlyByYearByUltg={data.monthlyByYearByUltg}
             years={data.years}
           />
         </CardContent>

@@ -15,6 +15,7 @@ import type {
   DisturbanceGiCount,
   DisturbanceKindMonthlyYear,
   DisturbanceMonthlyYearPoint,
+  DisturbanceUltgMonthlyYear,
   DisturbanceUltgSummary,
 } from "@/types";
 
@@ -150,6 +151,7 @@ function emptyCategory(): DisturbanceCategoryResult {
     monthlyByYear: [],
     monthlyByYearByCause: [],
     monthlyByYearByKind: [],
+    monthlyByYearByUltg: [],
     years: [],
     topBay: [],
     allBayCounts: [],
@@ -310,6 +312,18 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     data: buildMonthlyByYear(rows.filter((r) => r.kind === rawKind), sortedYears),
   }));
 
+  // Same order as ultgBreakdown (total desc) so the two stay consistent.
+  const ultgCounts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.ultg) continue;
+    ultgCounts.set(row.ultg, (ultgCounts.get(row.ultg) ?? 0) + 1);
+  }
+  const ultgOrder = [...ultgCounts.entries()].sort((a, b) => b[1] - a[1]).map(([ultg]) => ultg);
+  const monthlyByYearByUltg: DisturbanceUltgMonthlyYear[] = ultgOrder.map((ultg) => ({
+    ultg,
+    data: buildMonthlyByYear(rows.filter((r) => r.ultg === ultg), sortedYears),
+  }));
+
   const allBayCounts: DisturbanceBayCount[] = [...bayCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([bay, count]) => ({ bay, count }));
@@ -368,6 +382,7 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     monthlyByYear,
     monthlyByYearByCause,
     monthlyByYearByKind,
+    monthlyByYearByUltg,
     years: sortedYears,
     topBay,
     allBayCounts,

@@ -105,6 +105,13 @@ export interface DisturbanceKindMonthlyYear {
   data: DisturbanceMonthlyYearPoint[];
 }
 
+/** Same shape again, sliced by ULTG — lets the YoY chart filter to one sub
+ *  unit to see how much of the year-over-year trend it's driving. */
+export interface DisturbanceUltgMonthlyYear {
+  ultg: string;
+  data: DisturbanceMonthlyYearPoint[];
+}
+
 /** Everything needed to render one category's (Transmisi or Trafo) section
  *  of the Gangguan page — see src/services/disturbances.ts. */
 export interface DisturbanceCategoryResult {
@@ -117,6 +124,8 @@ export interface DisturbanceCategoryResult {
   monthlyByYearByCause: DisturbanceCauseMonthlyYear[];
   /** Same shape, one entry per KODE GGN (Trip/AR Sukses/Tidak Trip) — lets the YoY chart filter to a single jenis gangguan. */
   monthlyByYearByKind: DisturbanceKindMonthlyYear[];
+  /** Same shape, one entry per ULTG — lets the YoY chart filter to a single sub unit. */
+  monthlyByYearByUltg: DisturbanceUltgMonthlyYear[];
   years: string[];
   topBay: DisturbanceBayCount[];
   /** Every bay's count, not just the top 8 in `topBay` — kept for anything
