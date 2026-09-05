@@ -446,6 +446,9 @@ export interface RenusData {
   risks: string[];
   summary: RenusSummary;
   weekPeriod: RenusWeekPeriod;
+  /** Next Friday–Thursday period after `weekPeriod`. */
+  nextWeekPeriod: RenusWeekPeriod;
+  nextWeekRows: RenusRow[];
   nextMonth: { year: string; monthLabel: string; monthIndex: number; rows: RenusRow[] };
   /** Rule-based, priority-ordered — overdue, then today, then high risk, then this week's upcoming count. Empty when no condition applies. */
   reminders: AiInsight[];

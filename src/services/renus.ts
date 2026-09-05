@@ -67,6 +67,8 @@ function emptyRenusData(error: string | null): RenusData {
     risks: [],
     summary: { total: 0, thisWeek: 0, highRisk: 0, upcoming: 0 },
     weekPeriod: getFridayThursdayPeriod(todayISO),
+    nextWeekPeriod: getNextWeekPeriod(todayISO),
+    nextWeekRows: [],
     nextMonth: { ...getNextMonthInfo(todayISO), rows: [] },
     reminders: [],
     error,
@@ -163,6 +165,15 @@ export function getFridayThursdayPeriod(todayISO: string): RenusWeekPeriod {
   return { start: startISO, end: endISO, label: `${formatShortDate(startISO)} – ${formatShortDate(endISO)} ${year}` };
 }
 
+// Feeding a date 7 days ahead into the same Friday->Thursday calculation
+// yields exactly next week's period, since the cycle repeats every 7 days —
+// no separate date-math path, so it can't drift from getFridayThursdayPeriod.
+export function getNextWeekPeriod(todayISO: string): RenusWeekPeriod {
+  const d = new Date(`${todayISO}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 7);
+  return getFridayThursdayPeriod(d.toISOString().slice(0, 10));
+}
+
 export function getNextMonthInfo(todayISO: string): { year: string; monthIndex: number; monthLabel: string } {
   const [yearStr, monthStr] = todayISO.split("-");
   let year = Number(yearStr);
@@ -204,6 +215,8 @@ export async function getRenusData(): Promise<RenusData> {
 
   const todayISO = getJakartaTodayISO();
   const weekPeriod = getFridayThursdayPeriod(todayISO);
+  const nextWeekPeriod = getNextWeekPeriod(todayISO);
+  const nextWeekRows = rows.filter((r) => r.rencanaDate >= nextWeekPeriod.start && r.rencanaDate <= nextWeekPeriod.end);
   const nextMonthInfo = getNextMonthInfo(todayISO);
   const nextMonthRows = rows.filter(
     (r) => r.year === nextMonthInfo.year && r.rencanaDate.slice(5, 7) === String(nextMonthInfo.monthIndex + 1).padStart(2, "0"),
@@ -224,6 +237,8 @@ export async function getRenusData(): Promise<RenusData> {
     risks: distinct(rows.map((r) => r.risk || null)),
     summary: computeSummary(rows, todayISO, weekPeriod),
     weekPeriod,
+    nextWeekPeriod,
+    nextWeekRows,
     nextMonth: { ...nextMonthInfo, rows: nextMonthRows },
     reminders: [],
     error: null,

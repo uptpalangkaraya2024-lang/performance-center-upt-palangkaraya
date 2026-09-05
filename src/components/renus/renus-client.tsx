@@ -30,10 +30,11 @@ const ALL = "__all__";
 const BLANK = "__blank__";
 const HIGH_RISK_ANY = "high-risk-any";
 
-type ViewScope = "all" | "week" | "month" | "overdue" | "today";
+type ViewScope = "all" | "week" | "next-week" | "month" | "overdue" | "today";
 const VIEW_LABEL: Record<ViewScope, string> = {
   all: "Semua",
   week: "Minggu Ini (Jumat–Kamis)",
+  "next-week": "Minggu Depan (Jumat–Kamis)",
   month: "Bulan Depan",
   overdue: "Overdue",
   today: "Hari Ini",
@@ -53,6 +54,31 @@ function computeSummaryFor(rows: RenusRow[], today: string, week: RenusWeekPerio
     highRisk: rows.filter((r) => isActive(r) && isRenusHighRisk(r)).length,
     upcoming: rows.filter((r) => isActive(r) && r.rencanaDate > today).length,
   };
+}
+
+// Shared by the Bulan Depan / Minggu Ini / Minggu Depan preview cards — same
+// compact "what, where, when" list, just fed a different rows array.
+function WorkListPreview({ rows, limit = 5 }: { rows: RenusRow[]; limit?: number }) {
+  if (rows.length === 0) {
+    return <p className="py-6 text-center text-sm text-muted-foreground">Tidak ada pekerjaan pada periode ini.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-2">
+      {rows.slice(0, limit).map((r) => (
+        <li key={r.id} className="flex items-start justify-between gap-3 border-b pb-2 text-sm last:border-0">
+          <div className="min-w-0">
+            <p className="truncate font-medium text-foreground" title={r.workDetail}>
+              {r.workDetail}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {r.ultg} · {r.gi} · {r.bay}
+            </p>
+          </div>
+          <span className="shrink-0 text-xs text-muted-foreground">{formatShort(r.rencanaDate)}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
@@ -115,7 +141,9 @@ export function RenusClient({ data }: { data: RenusData }) {
   const initial = (key: string) => searchParams.get(key) ?? ALL;
   const rawView = searchParams.get("view");
   const initialView: ViewScope =
-    rawView === "week" || rawView === "month" || rawView === "overdue" || rawView === "today" ? rawView : "all";
+    rawView === "week" || rawView === "next-week" || rawView === "month" || rawView === "overdue" || rawView === "today"
+      ? rawView
+      : "all";
 
   const [view, setView] = useState<ViewScope>(initialView);
   const [year, setYear] = useState(initial("year"));
@@ -145,6 +173,8 @@ export function RenusClient({ data }: { data: RenusData }) {
     switch (view) {
       case "week":
         return weekRows;
+      case "next-week":
+        return data.nextWeekRows;
       case "month":
         return data.nextMonth.rows;
       case "overdue":
@@ -237,47 +267,27 @@ export function RenusClient({ data }: { data: RenusData }) {
         <StatTile value={summary.upcoming.toLocaleString("id-ID")} label="Upcoming" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-1.5 text-base">
-              <CalendarClock className="size-4 text-primary" />
-              Rencana Pemeliharaan Bulan Depan
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              {data.nextMonth.monthLabel} {data.nextMonth.year} — {data.nextMonth.rows.length} pekerjaan direncanakan.
-            </p>
-          </CardHeader>
-          <CardContent>
-            {data.nextMonth.rows.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Belum ada pekerjaan yang direncanakan bulan depan.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {data.nextMonth.rows.slice(0, 5).map((r) => (
-                  <li key={r.id} className="flex items-start justify-between gap-3 border-b pb-2 text-sm last:border-0">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground" title={r.workDetail}>
-                        {r.workDetail}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {r.ultg} · {r.gi} · {r.bay}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">{formatShort(r.rencanaDate)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {data.nextMonth.rows.length > 0 ? (
-              <button type="button" onClick={() => setView("month")} className="mt-3 text-xs font-medium text-primary hover:underline">
-                Lihat semua {data.nextMonth.rows.length} pekerjaan bulan depan →
-              </button>
-            ) : null}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-1.5 text-base">
+            <CalendarClock className="size-4 text-primary" />
+            Rencana Pemeliharaan Bulan Depan
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            {data.nextMonth.monthLabel} {data.nextMonth.year} — {data.nextMonth.rows.length} pekerjaan direncanakan.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <WorkListPreview rows={data.nextMonth.rows} />
+          {data.nextMonth.rows.length > 0 ? (
+            <button type="button" onClick={() => setView("month")} className="mt-3 text-xs font-medium text-primary hover:underline">
+              Lihat semua {data.nextMonth.rows.length} pekerjaan bulan depan →
+            </button>
+          ) : null}
+        </CardContent>
+      </Card>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-1.5 text-base">
@@ -287,9 +297,8 @@ export function RenusClient({ data }: { data: RenusData }) {
             <p className="text-xs text-muted-foreground">Jumat–Kamis · {data.weekPeriod.label}</p>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {weekRows.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Tidak ada pekerjaan pada periode ini.</p>
-            ) : (
+            <WorkListPreview rows={weekRows} />
+            {weekRows.length > 0 ? (
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <span className="flex items-center gap-1.5 rounded-lg border p-2 text-critical">
                   <XCircle className="size-3.5 shrink-0" /> {overdueInWeek} Overdue
@@ -304,10 +313,40 @@ export function RenusClient({ data }: { data: RenusData }) {
                   <CircleDashed className="size-3.5 shrink-0" /> {weekRows.length} Total
                 </span>
               </div>
-            )}
-            <button type="button" onClick={() => setView("week")} className="text-xs font-medium text-primary hover:underline">
-              Lihat semua {weekRows.length} pekerjaan minggu ini →
-            </button>
+            ) : null}
+            {weekRows.length > 5 ? (
+              <button type="button" onClick={() => setView("week")} className="text-xs font-medium text-primary hover:underline">
+                Lihat semua {weekRows.length} pekerjaan minggu ini →
+              </button>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-1.5 text-base">
+              <CalendarDays className="size-4 text-muted-foreground" />
+              Periode Kerja Minggu Depan
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">Jumat–Kamis · {data.nextWeekPeriod.label}</p>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <WorkListPreview rows={data.nextWeekRows} />
+            {data.nextWeekRows.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <span className="flex items-center gap-1.5 rounded-lg border p-2 text-warning-foreground">
+                  <AlertTriangle className="size-3.5 shrink-0" /> {data.nextWeekRows.filter((r) => isRenusHighRisk(r)).length} High Risk
+                </span>
+                <span className="flex items-center gap-1.5 rounded-lg border p-2 text-muted-foreground">
+                  <CircleDashed className="size-3.5 shrink-0" /> {data.nextWeekRows.length} Total
+                </span>
+              </div>
+            ) : null}
+            {data.nextWeekRows.length > 5 ? (
+              <button type="button" onClick={() => setView("next-week")} className="text-xs font-medium text-primary hover:underline">
+                Lihat semua {data.nextWeekRows.length} pekerjaan minggu depan →
+              </button>
+            ) : null}
           </CardContent>
         </Card>
       </div>
