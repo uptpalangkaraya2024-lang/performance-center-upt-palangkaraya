@@ -17,6 +17,7 @@ import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-c
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
 import { UltgBreakdownChart } from "@/components/disturbances/ultg-breakdown-chart";
 import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart";
+import { CauseByBayChart } from "@/components/disturbances/cause-by-bay-chart";
 import { getDisturbances } from "@/services/disturbances";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { listSyncStatus } from "@/lib/sync-status";
@@ -208,11 +209,24 @@ function CategorySection({
         <CardHeader>
           <CardTitle className="text-base">Gangguan per Ruas / Bay</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Kinerja relay dan sebaran penyebab tiap ruas/bay — klik bar atau baris untuk melihat detail penyebab.
+            Kinerja relay tiap ruas/bay — filter Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip, klik bar atau baris
+            untuk melihat sebaran penyebabnya.
           </p>
         </CardHeader>
         <CardContent>
           <BayBreakdownChart rows={data.bayBreakdown} showAr={!isTrafo} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Penyebab Gangguan per Ruas / Bay</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Sebaran penyebab tiap ruas/bay — filter satu penyebab untuk melihat ruas mana yang paling terdampak.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <CauseByBayChart rows={data.bayBreakdown} causeOrder={data.causePareto} />
         </CardContent>
       </Card>
 

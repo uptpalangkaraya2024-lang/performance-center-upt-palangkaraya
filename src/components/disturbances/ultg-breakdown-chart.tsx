@@ -18,6 +18,26 @@ import type { DisturbanceUltgSummary } from "@/types";
 
 const labelStyle = { fontSize: 11, fill: "var(--card)", fontWeight: 600 } as const;
 
+// Legend's own auto-derived item order sorts alphabetically rather than
+// matching the stack's left-to-right order (Trip, AR Sukses, Tidak Trip) —
+// its `payload` prop is typed as unavailable to callers in this recharts
+// version, so a custom `content` renderer is used instead to fix the order.
+function renderFixedLegend(items: { value: string; color: string }[]) {
+  function FixedLegend() {
+    return (
+      <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-2 text-xs text-muted-foreground">
+        {items.map((item) => (
+          <li key={item.value} className="flex items-center gap-1.5">
+            <span className="inline-block size-2.5 rounded-sm" style={{ backgroundColor: item.color }} />
+            {item.value}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return FixedLegend;
+}
+
 // Only 3 ULTGs exist — small enough that every one's cause breakdown can
 // stay visible at once (no click-to-reveal needed, unlike the bay chart
 // below which has to pick a top-N). Ranking + composition both read
@@ -62,7 +82,13 @@ export function UltgBreakdownChart({ rows, showAr }: { rows: DisturbanceUltgSumm
               fontSize: 12,
             }}
           />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Legend
+            content={renderFixedLegend([
+              { value: "Trip", color: "var(--critical)" },
+              ...(showAr ? [{ value: "AR Sukses", color: "var(--primary)" }] : []),
+              { value: "Tidak Trip", color: "var(--muted-foreground)" },
+            ])}
+          />
           <Bar dataKey="Trip" stackId="kind" fill="var(--critical)" barSize={28}>
             <LabelList dataKey="Trip" position="center" style={labelStyle} formatter={(v: unknown) => (typeof v === "number" && v > 0 ? v : "")} />
           </Bar>
