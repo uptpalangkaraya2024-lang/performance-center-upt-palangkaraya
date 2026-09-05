@@ -147,7 +147,13 @@
   --success: oklch(0.68 0.14 150);
   --success-foreground: oklch(0.16 0.03 150);
   --warning: oklch(0.78 0.15 80);
-  --warning-foreground: oklch(0.22 0.06 80);
+  /* Every badge/pill in the app pairs this with a translucent bg-warning/NN
+   * fill over a dark card (never a solid --warning fill with text on top —
+   * confirmed no such usage exists), matching how --critical/--success are
+   * used directly as bright text elsewhere. The previous dark value
+   * (oklch(0.22 0.06 80), meant for dark text on a solid amber fill) was
+   * nearly invisible against that dark translucent combination. */
+  --warning-foreground: oklch(0.78 0.15 80);
   --critical: oklch(0.7 0.19 25);
   --critical-foreground: oklch(0.16 0.03 25);
   --info: oklch(0.68 0.15 250);
