@@ -250,12 +250,16 @@ export function RenusClient({ data }: { data: RenusData }) {
   const closedThisWeek = weekRows.filter((r) => isRenusDone(r)).length;
   const overdueInWeek = weekRows.filter((r) => overdueRows.includes(r)).length;
 
+  const nextMonthGiCount = new Set(data.nextMonth.rows.map((r) => r.gi)).size;
+  const nextMonthUltgCount = new Set(data.nextMonth.rows.map((r) => r.ultg)).size;
+  const nextMonthHighRisk = data.nextMonth.rows.filter((r) => isRenusHighRisk(r)).length;
+
   return (
     <div className="flex flex-col gap-6">
       {data.reminders.length > 0 ? (
         <Card className="border-warning/30 bg-warning/5">
           <CardContent className="py-4">
-            <AiInsightList data={data.reminders} title="Perhatian Minggu Ini" icon={Bell} />
+            <AiInsightList data={data.reminders} title="Perhatian" icon={Bell} />
           </CardContent>
         </Card>
       ) : null}
@@ -263,7 +267,7 @@ export function RenusClient({ data }: { data: RenusData }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile value={summary.total.toLocaleString("id-ID")} label="Total Pekerjaan" />
         <StatTile value={summary.thisWeek.toLocaleString("id-ID")} label="Minggu Ini" />
-        <StatTile value={summary.highRisk.toLocaleString("id-ID")} label="High Risk" className="text-critical" />
+        <StatTile value={summary.highRisk.toLocaleString("id-ID")} label="High Risk (Semua Periode)" className="text-critical" />
         <StatTile value={summary.upcoming.toLocaleString("id-ID")} label="Upcoming" />
       </div>
 
@@ -293,6 +297,11 @@ export function RenusClient({ data }: { data: RenusData }) {
                   <CircleDashed className="size-3.5 shrink-0" /> {weekRows.length} Total
                 </span>
               </div>
+            ) : null}
+            {weekRows.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Hitungan independen — satu pekerjaan dapat masuk lebih dari satu kategori (mis. Overdue sekaligus High Risk).
+              </p>
             ) : null}
             {weekRows.length > 5 ? (
               <button type="button" onClick={() => setView("week")} className="text-xs font-medium text-primary hover:underline">
@@ -338,7 +347,10 @@ export function RenusClient({ data }: { data: RenusData }) {
             Rencana Pemeliharaan Bulan Depan
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            {data.nextMonth.monthLabel} {data.nextMonth.year} — {data.nextMonth.rows.length} pekerjaan direncanakan.
+            {data.nextMonth.monthLabel} {data.nextMonth.year} — {data.nextMonth.rows.length} pekerjaan direncanakan
+            {data.nextMonth.rows.length > 0
+              ? ` di ${nextMonthGiCount} GI, ${nextMonthUltgCount} ULTG${nextMonthHighRisk > 0 ? ` — ${nextMonthHighRisk} berisiko tinggi` : ""}.`
+              : "."}
           </p>
         </CardHeader>
         <CardContent>

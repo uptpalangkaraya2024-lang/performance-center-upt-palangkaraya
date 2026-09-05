@@ -207,11 +207,13 @@ export function buildTopIssues(params: {
   return issues;
 }
 
-/** In-app "weekly reminder" for RENUS — surfaced when the page loads, no
- *  server notification/cron involved. Priority order per spec: overdue
- *  work, then today's work, then high-risk work (within the current
- *  Friday–Thursday period), then the period's total — a condition with a
- *  zero count is simply not pushed, never rendered as an empty reminder. */
+/** In-app reminder for RENUS — surfaced when the page loads, no server
+ *  notification/cron involved. Priority order: overdue work (not scoped to
+ *  any period — it's already late regardless of when "this week" is), then
+ *  today's work, then high-risk work within the current Friday–Thursday
+ *  period, then the period's total, then next month's workload — a
+ *  condition with a zero count is simply not pushed, never rendered as an
+ *  empty reminder. */
 export function buildRenusReminders(data: RenusData, todayISO: string): AiInsight[] {
   const insights: AiInsight[] = [];
   let nextId = 0;
@@ -251,6 +253,17 @@ export function buildRenusReminders(data: RenusData, todayISO: string): AiInsigh
       "none",
       `Terdapat ${data.summary.thisWeek} pekerjaan pemeliharaan pada periode ${weekPeriod.label}.`,
       "/dashboard/renus?view=week",
+    );
+  }
+
+  const nextMonthActive = data.nextMonth.rows.filter(isActive);
+  if (nextMonthActive.length > 0) {
+    const nextMonthHighRisk = nextMonthActive.filter((r) => isRenusHighRisk(r));
+    const riskNote = nextMonthHighRisk.length > 0 ? `, ${nextMonthHighRisk.length} di antaranya berisiko tinggi` : "";
+    push(
+      "none",
+      `${nextMonthActive.length} pekerjaan direncanakan bulan depan (${data.nextMonth.monthLabel} ${data.nextMonth.year})${riskNote}.`,
+      "/dashboard/renus?view=month",
     );
   }
 
