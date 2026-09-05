@@ -24,7 +24,7 @@ import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
 import { RenusWorkTable } from "./renus-work-table";
-import type { RenusData, RenusRow } from "@/types";
+import type { RenusData, RenusRow, RenusWeekPeriod } from "@/types";
 
 const ALL = "__all__";
 const BLANK = "__blank__";
@@ -38,6 +38,22 @@ const VIEW_LABEL: Record<ViewScope, string> = {
   overdue: "Overdue",
   today: "Hari Ini",
 };
+
+// Same formula as computeSummary() in src/services/renus.ts (business logic
+// unchanged, QA-validated) — just re-scoped to whatever dataset is passed in,
+// so the summary cards can reflect the active dropdown filters instead of
+// always the whole dataset. When no filter is active, `filtered` === all
+// rows, so this produces the exact same numbers as the server-computed
+// data.summary.
+function computeSummaryFor(rows: RenusRow[], today: string, week: RenusWeekPeriod) {
+  const isActive = (r: RenusRow) => !isRenusCancelled(r);
+  return {
+    total: rows.filter(isActive).length,
+    thisWeek: rows.filter((r) => isActive(r) && r.rencanaDate >= week.start && r.rencanaDate <= week.end).length,
+    highRisk: rows.filter((r) => isActive(r) && isRenusHighRisk(r)).length,
+    upcoming: rows.filter((r) => isActive(r) && r.rencanaDate > today).length,
+  };
+}
 
 function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
   return (
@@ -159,6 +175,16 @@ export function RenusClient({ data }: { data: RenusData }) {
   const hasActiveFilter =
     view !== "all" || [year, month, ultg, gi, bay, status, risk].some((v) => v !== ALL);
 
+  // Summary cards use the same active-filter dataset as the table/export
+  // below — recomputed with the exact same (QA-validated) formula the
+  // server uses for the unfiltered data.summary, just re-scoped to
+  // `filtered` so the two never disagree.
+  const summary = useMemo(() => computeSummaryFor(filtered, data.today, data.weekPeriod), [filtered, data.today, data.weekPeriod]);
+
+  // Bumped on Clear Filter to remount RenusWorkTable — the cleanest way to
+  // reset its internal search/pagination state without lifting it up.
+  const [tableResetKey, setTableResetKey] = useState(0);
+
   function clearFilters() {
     setView("all");
     setYear(ALL);
@@ -168,6 +194,16 @@ export function RenusClient({ data }: { data: RenusData }) {
     setBay(ALL);
     setStatus(ALL);
     setRisk(ALL);
+    setTableResetKey((k) => k + 1);
+    // All RENUS filtering happens client-side over data already on the
+    // page — a Next router navigation isn't needed (and doesn't apply here;
+    // this route is force-dynamic and a router.replace() to the bare path
+    // doesn't reliably strip an existing query string for it). Directly
+    // updating the address bar via the native History API is sufficient and
+    // avoids any server refetch.
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
   }
 
   const activeLabels: string[] = [];
@@ -195,10 +231,10 @@ export function RenusClient({ data }: { data: RenusData }) {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile value={data.summary.total.toLocaleString("id-ID")} label="Total Pekerjaan" />
-        <StatTile value={data.summary.thisWeek.toLocaleString("id-ID")} label="Minggu Ini" />
-        <StatTile value={data.summary.highRisk.toLocaleString("id-ID")} label="High Risk" className="text-critical" />
-        <StatTile value={data.summary.upcoming.toLocaleString("id-ID")} label="Upcoming" />
+        <StatTile value={summary.total.toLocaleString("id-ID")} label="Total Pekerjaan" />
+        <StatTile value={summary.thisWeek.toLocaleString("id-ID")} label="Minggu Ini" />
+        <StatTile value={summary.highRisk.toLocaleString("id-ID")} label="High Risk" className="text-critical" />
+        <StatTile value={summary.upcoming.toLocaleString("id-ID")} label="Upcoming" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -357,7 +393,7 @@ export function RenusClient({ data }: { data: RenusData }) {
             </div>
           ) : null}
 
-          <RenusWorkTable rows={filtered} />
+          <RenusWorkTable key={tableResetKey} rows={filtered} />
         </CardContent>
       </Card>
     </div>
