@@ -267,26 +267,6 @@ export function RenusClient({ data }: { data: RenusData }) {
         <StatTile value={summary.upcoming.toLocaleString("id-ID")} label="Upcoming" />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-1.5 text-base">
-            <CalendarClock className="size-4 text-primary" />
-            Rencana Pemeliharaan Bulan Depan
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            {data.nextMonth.monthLabel} {data.nextMonth.year} — {data.nextMonth.rows.length} pekerjaan direncanakan.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <WorkListPreview rows={data.nextMonth.rows} />
-          {data.nextMonth.rows.length > 0 ? (
-            <button type="button" onClick={() => setView("month")} className="mt-3 text-xs font-medium text-primary hover:underline">
-              Lihat semua {data.nextMonth.rows.length} pekerjaan bulan depan →
-            </button>
-          ) : null}
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -350,6 +330,26 @@ export function RenusClient({ data }: { data: RenusData }) {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-1.5 text-base">
+            <CalendarClock className="size-4 text-primary" />
+            Rencana Pemeliharaan Bulan Depan
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            {data.nextMonth.monthLabel} {data.nextMonth.year} — {data.nextMonth.rows.length} pekerjaan direncanakan.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <WorkListPreview rows={data.nextMonth.rows} />
+          {data.nextMonth.rows.length > 0 ? (
+            <button type="button" onClick={() => setView("month")} className="mt-3 text-xs font-medium text-primary hover:underline">
+              Lihat semua {data.nextMonth.rows.length} pekerjaan bulan depan →
+            </button>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
