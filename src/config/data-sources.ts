@@ -105,4 +105,21 @@ export const dataSources = {
       },
     ],
   },
+  renus: {
+    id: "renus",
+    label: "RENUS",
+    sources: [
+      {
+        file: "02. MONEV PEMELIHARAAN 2026",
+        sheets: [
+          {
+            name: "MONITORING",
+            purpose:
+              "Maintenance work plan/monitoring log — RENCANA/REALISASI dates, ULTG/GI/Bay, status, risk. Read via readSheetRaw (see src/services/renus.ts) — row 1 is a numbered helper row, not the real header.",
+            headerRow: 2,
+          },
+        ],
+      },
+    ],
+  },
 } satisfies Record<string, DataSourceConfig>;

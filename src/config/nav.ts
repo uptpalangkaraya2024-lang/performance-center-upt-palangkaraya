@@ -64,7 +64,7 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Planning",
-    items: [{ title: "RENUS", href: "/dashboard/renus", icon: ClipboardList, comingSoon: true }],
+    items: [{ title: "RENUS", href: "/dashboard/renus", icon: ClipboardList }],
   },
   {
     label: "Data",

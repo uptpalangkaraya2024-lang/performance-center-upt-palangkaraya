@@ -2,7 +2,8 @@
 // if/else over already-computed service data, no AI/LLM call of any kind.
 // See AGENTS.md "AI ASSISTANT" section: rule-based insight is explicitly
 // permitted, an AI backend is not.
-import type { AhiSnapshot, AiInsight, DisturbanceCategoryResult, UptPerformanceSnapshot } from "@/types";
+import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
+import type { AhiSnapshot, AiInsight, DisturbanceCategoryResult, RenusData, UptPerformanceSnapshot } from "@/types";
 
 export function monthOverMonth(
   category: DisturbanceCategoryResult,
@@ -204,4 +205,54 @@ export function buildTopIssues(params: {
   }
 
   return issues;
+}
+
+/** In-app "weekly reminder" for RENUS — surfaced when the page loads, no
+ *  server notification/cron involved. Priority order per spec: overdue
+ *  work, then today's work, then high-risk work (within the current
+ *  Friday–Thursday period), then the period's total — a condition with a
+ *  zero count is simply not pushed, never rendered as an empty reminder. */
+export function buildRenusReminders(data: RenusData, todayISO: string): AiInsight[] {
+  const insights: AiInsight[] = [];
+  let nextId = 0;
+  const push = (tone: AiInsight["tone"], text: string, href: string) =>
+    insights.push({ id: `renus-${nextId++}`, tone, text, href });
+
+  const { rows, weekPeriod } = data;
+  const isActive = (r: RenusData["rows"][number]) => !isRenusCancelled(r);
+
+  const overdue = rows.filter((r) => isActive(r) && !isRenusDone(r) && r.rencanaDate < todayISO);
+  if (overdue.length > 0) {
+    push(
+      "critical",
+      `${overdue.length} pekerjaan melewati tanggal rencana.`,
+      "/dashboard/renus?view=overdue",
+    );
+  }
+
+  const today = rows.filter((r) => isActive(r) && r.rencanaDate === todayISO);
+  if (today.length > 0) {
+    push("warning", `${today.length} pekerjaan dijadwalkan hari ini.`, "/dashboard/renus?view=today");
+  }
+
+  const highRiskThisWeek = rows.filter(
+    (r) => isActive(r) && isRenusHighRisk(r) && r.rencanaDate >= weekPeriod.start && r.rencanaDate <= weekPeriod.end,
+  );
+  if (highRiskThisWeek.length > 0) {
+    push(
+      "warning",
+      `${highRiskThisWeek.length} pekerjaan berisiko tinggi pada periode ${weekPeriod.label}.`,
+      "/dashboard/renus?view=week&risk=high-risk-any",
+    );
+  }
+
+  if (data.summary.thisWeek > 0) {
+    push(
+      "none",
+      `Terdapat ${data.summary.thisWeek} pekerjaan pemeliharaan pada periode ${weekPeriod.label}.`,
+      "/dashboard/renus?view=week",
+    );
+  }
+
+  return insights;
 }

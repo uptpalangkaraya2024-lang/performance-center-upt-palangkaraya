@@ -376,3 +376,78 @@ export interface SyncHistoryPoint {
   rows: number | null;
   error: string | null;
 }
+
+/** One maintenance work item from MONITORING — see src/services/renus.ts.
+ *  Only rows that pass the sheet's own validity signal (TAHUN non-blank —
+ *  every blank-TAHUN row is a broken formula/padding row, confirmed against
+ *  live data) ever become a RenusRow. */
+export interface RenusRow {
+  id: string;
+  year: string;
+  /** "Januari".."Desember" — stripped of the sheet's own "NN. " prefix. */
+  month: string;
+  /** RENCANA date, "yyyy-MM-dd" — always present (guaranteed by validity filter), the authoritative planning date for every period calculation. */
+  rencanaDate: string;
+  /** REALISASI date, "yyyy-MM-dd" — null on ~94% of rows (most work is still planned, not yet realized). */
+  realisasiDate: string | null;
+  ultg: string;
+  gi: string;
+  bay: string;
+  workDetail: string;
+  /** The sheet's secondary "(PASTIKAN CAPSLOCK...)" detail column — often blank/duplicate, shown only as a supplementary note when present and different. */
+  workDetailAlt: string | null;
+  pic: string | null;
+  /** Raw STATUS value — "" (blank) is a real, common state (~35% of rows), never assumed to mean RENCANA. */
+  status: string;
+  /** Raw RESIKO PEKERJAAN value — only "EXTREME-CRITICAL" / "HIGH" / "" exist in the source; never invented as Low/Medium/Critical. */
+  risk: string;
+  kodeBay: string | null;
+  section: string | null;
+  spanTower: string | null;
+  docName: string | null;
+  docLink: string | null;
+  /** "HH:mm:ss", extracted from the sheet's TIME-only cell (date part is a Sheets epoch placeholder, discarded). */
+  padamStart: string | null;
+  padamEnd: string | null;
+  /** SAP work-order status (TECO/CRTD/SFTY/PLAN/CANC) — a separate backend workflow status, not the same thing as `status`. */
+  sapWoStatus: string | null;
+  /** 1-indexed row number in the actual MONITORING sheet, for traceability. */
+  sourceRow: number;
+}
+
+export interface RenusWeekPeriod {
+  /** "yyyy-MM-dd", the Friday that starts this period. */
+  start: string;
+  /** "yyyy-MM-dd", the Thursday that ends this period. */
+  end: string;
+  /** "4 Sep – 10 Sep 2026". */
+  label: string;
+}
+
+export interface RenusSummary {
+  total: number;
+  thisWeek: number;
+  highRisk: number;
+  upcoming: number;
+}
+
+export interface RenusData {
+  /** "yyyy-MM-dd" in Asia/Jakarta, computed server-side — the client scopes "today"/"overdue" views against this rather than the browser's own clock/timezone. */
+  today: string;
+  rows: RenusRow[];
+  years: string[];
+  months: string[];
+  ultgs: string[];
+  gis: string[];
+  bays: string[];
+  /** Distinct non-blank STATUS values actually present in the source. */
+  statuses: string[];
+  /** Distinct non-blank RESIKO PEKERJAAN values actually present in the source. */
+  risks: string[];
+  summary: RenusSummary;
+  weekPeriod: RenusWeekPeriod;
+  nextMonth: { year: string; monthLabel: string; monthIndex: number; rows: RenusRow[] };
+  /** Rule-based, priority-ordered — overdue, then today, then high risk, then this week's upcoming count. Empty when no condition applies. */
+  reminders: AiInsight[];
+  error: string | null;
+}
