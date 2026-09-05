@@ -13,7 +13,6 @@ import {
 } from "recharts";
 import { CheckCircle2, CircleDashed, XCircle } from "lucide-react";
 
-import { CauseMiniChart } from "./cause-mini-chart";
 import type { DisturbanceUltgSummary } from "@/types";
 
 const labelStyle = { fontSize: 11, fill: "var(--card)", fontWeight: 600 } as const;
@@ -108,27 +107,20 @@ export function UltgBreakdownChart({ rows, showAr }: { rows: DisturbanceUltgSumm
         </BarChart>
       </ResponsiveContainer>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
         {rows.map((row) => (
-          <div key={row.ultg} className="rounded-lg border p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-foreground">
-                {row.ultg} <span className="font-normal text-muted-foreground">({row.total} gangguan)</span>
-              </p>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1 text-success">
-                  <CheckCircle2 className="size-3.5" /> {row.followUp.closed} Selesai
-                </span>
-                <span className="flex items-center gap-1 text-critical">
-                  <XCircle className="size-3.5" /> {row.followUp.open} Open
-                </span>
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <CircleDashed className="size-3.5" /> {row.followUp.unknown} Belum Diketahui
-                </span>
-              </div>
-            </div>
-            <div className="mt-2">
-              <CauseMiniChart data={row.causePareto} />
+          <div key={row.ultg} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+            <p className="text-xs font-medium text-foreground">{row.ultg}</p>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1 text-success">
+                <CheckCircle2 className="size-3.5" /> {row.followUp.closed} Selesai
+              </span>
+              <span className="flex items-center gap-1 text-critical">
+                <XCircle className="size-3.5" /> {row.followUp.open} Open
+              </span>
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <CircleDashed className="size-3.5" /> {row.followUp.unknown} Belum Diketahui
+              </span>
             </div>
           </div>
         ))}

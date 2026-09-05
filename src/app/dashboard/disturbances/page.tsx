@@ -16,6 +16,7 @@ import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
 import { UltgBreakdownChart } from "@/components/disturbances/ultg-breakdown-chart";
+import { UltgCauseChart } from "@/components/disturbances/ultg-cause-chart";
 import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart";
 import { CauseByBayChart } from "@/components/disturbances/cause-by-bay-chart";
 import { getDisturbances } from "@/services/disturbances";
@@ -152,6 +153,22 @@ function CategorySection({
         </div>
       </div>
 
+      <div className="rounded-lg border p-3">
+        <p className="mb-2 text-xs text-muted-foreground">Penyebab Gangguan Keseluruhan</p>
+        <div className="flex flex-wrap gap-2">
+          {data.causePareto.map((c) => (
+            <span
+              key={c.cause}
+              className="rounded-full border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground"
+            >
+              {c.cause} <span className="tabular-nums text-muted-foreground">
+                ({c.count} · {Math.round((c.count / data.summary.total) * 100)}%)
+              </span>
+            </span>
+          ))}
+        </div>
+      </div>
+
       <Card>
         <CardContent className="py-4">
           <AiInsightList data={buildDisturbanceInsights(data, title)} title="Insight Gangguan" icon={TrendingUp} />
@@ -197,12 +214,24 @@ function CategorySection({
         <CardHeader>
           <CardTitle className="text-base">Gangguan per ULTG</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Kinerja relay (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) dan status tindak lanjut per ULTG — klik
-            baris untuk melihat sebaran penyebab.
+            Kinerja relay (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) dan status tindak lanjut per ULTG.
           </p>
         </CardHeader>
         <CardContent>
           <UltgBreakdownChart rows={data.ultgBreakdown} showAr={!isTrafo} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Penyebab Gangguan per ULTG</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Sebaran penyebab tiap ULTG dalam satu bar — filter satu ULTG dan/atau satu penyebab untuk fokus ke
+            kombinasi yang ingin dibandingkan.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <UltgCauseChart rows={data.ultgBreakdown} causeOrder={data.causePareto} />
         </CardContent>
       </Card>
 
