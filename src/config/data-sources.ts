@@ -84,6 +84,37 @@ export const dataSources = {
             purpose:
               "Asset Healthy Index report — A:W category/parameter blocks + AM:BA poor/critical anomaly recap. Read via readSheetRaw (see src/services/ahi-performance.ts) — a single header row can't uniquely name every column here.",
           },
+          {
+            // required: false on all 5 Input sheets below — they feed the
+            // new Bay Line report only, a separate sub-tab. A failure to
+            // read any of them must never take down the existing AHI
+            // Overview (HI UPT), which stays the only required sheet here.
+            name: "Input LA",
+            required: false,
+            purpose:
+              "Per-equipment Lightning Arrester test results (one row per phase R/S/T) feeding the Bay Line report. Read via readSheetRaw (see src/services/ahi-bay-line-report.ts) — 2-row header (group label + sub-label), same reason as HI UPT.",
+          },
+          {
+            name: "Input PMS",
+            required: false,
+            purpose:
+              "Per-equipment Disconnecting Switch (Pemisah) test results — Bay Line's own line/bus-A/bus-B disconnectors, distinguished by the sheet's own \"Keterangan Alat\" column, not a fixed count (a single-busbar GI legitimately has only 2, not 3).",
+          },
+          {
+            name: "Input PT",
+            required: false,
+            purpose: "Per-equipment CVT (Capacitive Voltage Transformer, filed under PT) test results.",
+          },
+          {
+            name: "Input PMT",
+            required: false,
+            purpose: "Per-equipment Circuit Breaker test results — already wide-format (R/S/T as separate columns), unlike LA/PMS/PT/CT's one-row-per-phase layout.",
+          },
+          {
+            name: "Input CT",
+            required: false,
+            purpose: "Per-equipment Current Transformer test results.",
+          },
         ],
       },
     ],

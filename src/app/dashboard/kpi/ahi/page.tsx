@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { PageHero } from "@/components/dashboard/page-hero";
@@ -7,7 +8,9 @@ import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
 import { AhiAnomalyTable } from "@/components/ahi/ahi-anomaly-table";
 import { AhiCategoryDetail } from "@/components/ahi/ahi-category-detail";
 import { AhiDataDetail } from "@/components/ahi/ahi-data-detail";
+import { BayLineReportView } from "@/components/ahi/bay-line-report";
 import { getAhiPerformance } from "@/services/ahi-performance";
+import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +34,7 @@ export default async function AhiPage() {
   }
 
   const { sections, anomalies, lastUpdate } = result.data;
+  const bayLineReports = await getAllBayLineReports();
 
   return (
     <div className="flex flex-col gap-6">
@@ -88,57 +92,85 @@ export default async function AhiPage() {
         }
       />
 
-      <AhiExecutiveSummary sections={sections} totalAnomalies={anomalies.length} />
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="bay-line">Bay Line</TabsTrigger>
+        </TabsList>
 
-      <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight">Asset Health Breakdown</h2>
-          <p className="text-xs text-muted-foreground">
-            Healthy Index per KPI utama — MTU, Catu Daya, Trafo, dan Reaktor.
+        <TabsContent value="overview" className="flex flex-col gap-6">
+          <AhiExecutiveSummary sections={sections} totalAnomalies={anomalies.length} />
+
+          <section className="flex flex-col gap-3">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Asset Health Breakdown</h2>
+              <p className="text-xs text-muted-foreground">
+                Healthy Index per KPI utama — MTU, Catu Daya, Trafo, dan Reaktor.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {sections.map((section) => (
+                <AhiKpiCard key={section.key} section={section} />
+              ))}
+            </div>
+          </section>
+
+          <Card id="ahi-anomaly" className="scroll-mt-20">
+            <CardHeader>
+              <CardTitle className="text-base">Anomaly Perlu Perhatian</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Rekap anomali Poor &amp; Critical MTU &amp; Trafo — hasil rekapan langsung dari sumber data (AM:BA).
+              </p>
+            </CardHeader>
+            <CardContent>
+              <AhiAnomalyTable records={anomalies} />
+            </CardContent>
+          </Card>
+
+          <section id="ahi-detail" className="flex scroll-mt-20 flex-col gap-3">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Detail per Kategori</h2>
+              <p className="text-xs text-muted-foreground">
+                Rincian tiap kategori AHI per kelompok — skor, distribusi hasil pengujian, dan parameter pemeriksaan.
+              </p>
+            </div>
+            <AhiCategoryDetail sections={sections} />
+          </section>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Data Detail</CardTitle>
+              <p className="text-xs text-muted-foreground">Audit seluruh parameter pemeriksaan dari sumber A:W.</p>
+            </CardHeader>
+            <CardContent>
+              <AhiDataDetail sections={sections} />
+            </CardContent>
+          </Card>
+
+          <p className="text-[11px] text-muted-foreground">
+            Source: AHI UPT Palangkaraya 2026 fixed · Sheet: HI UPT · Range: A:W + AM:BA · Provider: Apps Script
           </p>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {sections.map((section) => (
-            <AhiKpiCard key={section.key} section={section} />
-          ))}
-        </div>
-      </section>
+        </TabsContent>
 
-      <Card id="ahi-anomaly" className="scroll-mt-20">
-        <CardHeader>
-          <CardTitle className="text-base">Anomaly Perlu Perhatian</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Rekap anomali Poor &amp; Critical MTU &amp; Trafo — hasil rekapan langsung dari sumber data (AM:BA).
+        <TabsContent value="bay-line" className="flex flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Report Bay Line</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Pilih satu bay line untuk melihat hasil uji tiap peralatan (LA, DS Line/Bus, CVT, PMT, CT) beserta
+                rekomendasi Mandatory Pengujian dan Pengujian Ulang.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <BayLineReportView reports={bayLineReports} />
+            </CardContent>
+          </Card>
+          <p className="text-[11px] text-muted-foreground">
+            Source: AHI UPT Palangkaraya 2026 fixed · Sheet: Input LA, Input PMS, Input PT, Input PMT, Input CT ·
+            Provider: Apps Script
           </p>
-        </CardHeader>
-        <CardContent>
-          <AhiAnomalyTable records={anomalies} />
-        </CardContent>
-      </Card>
-
-      <section id="ahi-detail" className="flex scroll-mt-20 flex-col gap-3">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight">Detail per Kategori</h2>
-          <p className="text-xs text-muted-foreground">
-            Rincian tiap kategori AHI per kelompok — skor, distribusi hasil pengujian, dan parameter pemeriksaan.
-          </p>
-        </div>
-        <AhiCategoryDetail sections={sections} />
-      </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Data Detail</CardTitle>
-          <p className="text-xs text-muted-foreground">Audit seluruh parameter pemeriksaan dari sumber A:W.</p>
-        </CardHeader>
-        <CardContent>
-          <AhiDataDetail sections={sections} />
-        </CardContent>
-      </Card>
-
-      <p className="text-[11px] text-muted-foreground">
-        Source: AHI UPT Palangkaraya 2026 fixed · Sheet: HI UPT · Range: A:W + AM:BA · Provider: Apps Script
-      </p>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

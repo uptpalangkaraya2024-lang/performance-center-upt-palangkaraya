@@ -352,6 +352,63 @@ export interface AhiResult {
   error: string | null;
 }
 
+/** 1-5 AHI score classified to its own text label — the same legend printed
+ *  on every sheet REPORT block: 5-Critical, 4-Poor, 3-Fair, 2-Good, 1-Best.
+ *  "NO DATA" when the score itself is missing. */
+export type AhiKlasifikasi = "BEST" | "GOOD" | "FAIR" | "POOR" | "CRITICAL" | "NO DATA";
+
+/** One test parameter within one equipment unit (e.g. "Tahanan Isolasi" for
+ *  an LA) — R/S/T raw values plus the AHI classification, and whether this
+ *  specific parameter needs mandatory testing or a retest per the sheet's
+ *  own formulas (see src/services/ahi-bay-line-report.ts). */
+export interface BayEquipmentParameter {
+  label: string;
+  r: string | number | null;
+  s: string | number | null;
+  t: string | number | null;
+  skorAhi: number | null;
+  klasifikasi: AhiKlasifikasi;
+  mandatoryPengujian: boolean;
+  pengujianUlang: boolean;
+}
+
+/** One physical equipment unit within a bay line — e.g. the LA, or one of
+ *  the bay's disconnecting switches (role distinguishes DS LINE / DS BUS A /
+ *  DS BUS B, since a bay can legitimately have 2 or 3 of these depending on
+ *  the GI's busbar configuration — never assumed to always be 3). */
+export interface BayEquipmentUnit {
+  /** Section title — "Lightning Arrester" / "Disconnecting Switch Line" / "Disconnecting Switch Bus A" / "Capacitive Voltage Transformer" / "Circuit Breaker" / "Current Transformer" / etc. */
+  role: string;
+  merk: string | null;
+  type: string | null;
+  nomorSeri: string | null;
+  techident: string | null;
+  tanggalPemeliharaanTerakhir: string | null;
+  skorAhi: number | null;
+  klasifikasi: AhiKlasifikasi;
+  kualitasData: number | null;
+  tindakLanjut: string | null;
+  keterangan: string | null;
+  sourceLink: string | null;
+  parameters: BayEquipmentParameter[];
+}
+
+export interface BayLineOption {
+  gi: string;
+  bay: string;
+  ultg: string;
+}
+
+export interface BayLineReport {
+  gi: string;
+  bay: string;
+  ultg: string;
+  /** Whatever units actually have data for this bay — never a fixed-length
+   *  array, since e.g. a single-busbar GI's bay legitimately has only a DS
+   *  Bus A and no DS Bus B. */
+  units: BayEquipmentUnit[];
+}
+
 export interface DataSourceHealth {
   key: string;
   module: string;
