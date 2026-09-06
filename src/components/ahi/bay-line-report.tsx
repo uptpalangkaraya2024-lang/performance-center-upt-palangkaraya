@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { ExternalLink, FileText, Printer } from "lucide-react";
+import { ChevronDown, ExternalLink, FileText, Printer } from "lucide-react";
 
 import {
   Select,
@@ -59,10 +59,173 @@ function formatValue(v: string | number | null): string {
   return String(v);
 }
 
-function SectionBanner({ role, accent }: { role: string; accent: string }) {
+function formatPercent(v: number | null): string {
+  if (v === null) return "—";
+  return `${Math.round(v * 100)}%`;
+}
+
+function unitAnchorId(idx: number): string {
+  return `bay-unit-${idx}`;
+}
+
+function jumpToUnit(idx: number) {
+  document.getElementById(unitAnchorId(idx))?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/** Standalone summary card — Kualitas Data % and Skor AHI per equipment,
+ *  mirroring the sheet's own bottom summary block, kept separate from the
+ *  Resume table below (which is about what needs testing, not data quality). */
+function QualityScoreCard({ units }: { units: BayEquipmentUnit[] }) {
   return (
+    <Card className="print:break-inside-avoid print:border print:shadow-none">
+      <CardHeader>
+        <CardTitle className="text-base">Kualitas Data &amp; Skor AHI</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          {units.map((unit, idx) => (
+            <div key={`${unit.role}-${idx}`} className="rounded-lg border p-3">
+              <p className="truncate text-xs text-muted-foreground" title={unit.role}>
+                {unit.role}
+              </p>
+              <div className="mt-1 flex items-baseline justify-between gap-2">
+                <span className="text-lg font-semibold tabular-nums text-foreground">
+                  {formatPercent(unit.kualitasData)}
+                </span>
+                <span className="text-xs text-muted-foreground">Kualitas Data</span>
+              </div>
+              <div className="mt-1 flex items-baseline justify-between gap-2">
+                <span className="text-lg font-semibold tabular-nums text-foreground">{unit.skorAhi ?? "—"}</span>
+                <KlasifikasiPill value={unit.klasifikasi} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** One equipment's group of rows inside the Resume table. The summary row
+ *  (klasifikasi + Mandatory/Pengujian Ulang counts for the whole unit) is
+ *  always visible — that's the thing you actually need at a glance; the
+ *  item-pengujian breakdown underneath (which specific parameter) is
+ *  collapsed by default since it can run long across 5-7 pieces of
+ *  equipment, same show/hide pattern as the raw Hasil Uji rows below.
+ *  Item rows stay in the DOM even while collapsed (hidden via a class, not
+ *  unmounted) so print output can force them back on regardless of the
+ *  on-screen toggle state — see the print:table-row override. */
+function ResumeUnitGroup({ unit, idx }: { unit: BayEquipmentUnit; idx: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const mandatoryCount = unit.parameters.filter((p) => p.mandatoryPengujian).length;
+  const retestCount = unit.parameters.filter((p) => p.pengujianUlang).length;
+  return (
+    <>
+      <tr
+        className="cursor-pointer border-b bg-muted/20 hover:bg-muted/30 print:cursor-auto"
+        onClick={() => jumpToUnit(idx)}
+      >
+        <td className="px-3 py-2 text-xs font-bold tracking-tight text-foreground">
+          <div className="flex items-center gap-2">
+            {unit.role}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded((v) => !v);
+              }}
+              className="flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-muted/50 print:hidden"
+            >
+              <ChevronDown className={cn("size-3 transition-transform", expanded && "rotate-180")} />
+              {expanded ? "Sembunyikan item" : "Tampilkan item"}
+            </button>
+          </div>
+        </td>
+        <td className="px-3 py-2">
+          <KlasifikasiPill value={unit.klasifikasi} />
+        </td>
+        <td className="px-3 py-2">
+          {mandatoryCount > 0 ? (
+            <FlagPill active label={`${mandatoryCount} parameter`} tone="warning" />
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </td>
+        <td className="px-3 py-2">
+          {retestCount > 0 ? (
+            <FlagPill active label={`${retestCount} parameter`} tone="critical" />
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </td>
+      </tr>
+      {unit.parameters.map((p) => (
+        <tr
+          key={p.label}
+          onClick={() => jumpToUnit(idx)}
+          className={cn(
+            "cursor-pointer border-b last:border-0 hover:bg-muted/10 print:cursor-auto",
+            !expanded && "hidden print:table-row",
+          )}
+        >
+          <td className="px-3 py-2 pl-6 text-muted-foreground">{p.label}</td>
+          <td className="px-3 py-2">
+            <KlasifikasiPill value={p.klasifikasi} />
+          </td>
+          <td className="px-3 py-2">
+            <FlagPill active={p.mandatoryPengujian} label="Mandatory" tone="warning" />
+          </td>
+          <td className="px-3 py-2">
+            <FlagPill active={p.pengujianUlang} label="Ulang" tone="critical" />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+/** Resume: for every equipment unit, every item pengujian (parameter) — so
+ *  which specific parameters need Mandatory Pengujian / Pengujian Ulang is
+ *  visible in one place, without scrolling through each equipment's own
+ *  detail card below. Clicking any row jumps to that equipment's own detail
+ *  section further down the page. */
+function ResumeTable({ units }: { units: BayEquipmentUnit[] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+            <th className="px-3 py-2 font-medium">Peralatan / Item Pengujian</th>
+            <th className="px-3 py-2 font-medium">Klasifikasi</th>
+            <th className="px-3 py-2 font-medium">Mandatory Pengujian</th>
+            <th className="px-3 py-2 font-medium">Pengujian Ulang</th>
+          </tr>
+        </thead>
+        <tbody>
+          {units.map((unit, idx) => (
+            <ResumeUnitGroup key={`${unit.role}-${idx}`} unit={unit} idx={idx} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SectionBanner({ id, role, accent }: { id: string; role: string; accent: string }) {
+  return (
+    // -mx-4/px-4 must match CardContent's own --card-spacing (always 1rem,
+    // there's no md:6 step inside a Card) — using Gangguan's md:-mx-6 here
+    // overshot the Card's edge once its ancestor Card went overflow-visible,
+    // which is what made the banner look detached ("mengambang") at desktop
+    // widths instead of flush with the card it belongs to.
+    // top-0 + z-20 (above SiteHeader's z-10): once scrolled past, the section
+    // banner takes over the very top of the viewport instead of parking
+    // below a persistent header — maximizes vertical space for the table
+    // content below, per explicit request to prioritize that over keeping
+    // the search/nav header visible during a deep scroll.
     <div
-      className="sticky top-14 z-[5] -mx-4 border-y bg-card/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/85 md:-mx-6 md:px-6 print:static print:border-0 print:bg-transparent print:px-0 print:py-1 print:backdrop-blur-none"
+      id={id}
+      className="sticky top-0 z-20 -mx-4 -mb-2 scroll-mt-4 border-y bg-card px-4 py-2 print:static print:border-0 print:bg-transparent print:px-0 print:py-1"
       style={{ borderLeft: `4px solid ${accent}` }}
     >
       <div className="flex items-center gap-2">
@@ -74,9 +237,7 @@ function SectionBanner({ role, accent }: { role: string; accent: string }) {
 }
 
 function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
-  const mandatoryCount = unit.parameters.filter((p) => p.mandatoryPengujian).length;
-  const retestCount = unit.parameters.filter((p) => p.pengujianUlang).length;
-
+  const [showRaw, setShowRaw] = useState(false);
   return (
     <Card className="print:break-inside-avoid print:border print:shadow-none">
       <CardHeader>
@@ -95,23 +256,6 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {(mandatoryCount > 0 || retestCount > 0) ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {mandatoryCount > 0 ? (
-              <span className="rounded-full border border-warning/40 bg-warning/15 px-2.5 py-1 font-medium text-warning-foreground">
-                {mandatoryCount} parameter wajib diuji
-              </span>
-            ) : null}
-            {retestCount > 0 ? (
-              <span className="rounded-full border border-critical/40 bg-critical/10 px-2.5 py-1 font-medium text-critical">
-                {retestCount} parameter perlu diuji ulang
-              </span>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-xs text-success">Seluruh parameter dalam kondisi baik, tidak ada tindak lanjut wajib.</p>
-        )}
-
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>
@@ -121,8 +265,6 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
                 <th className="px-3 py-2 font-medium">S</th>
                 <th className="px-3 py-2 font-medium">T</th>
                 <th className="px-3 py-2 font-medium">Klasifikasi</th>
-                <th className="px-3 py-2 font-medium">Mandatory</th>
-                <th className="px-3 py-2 font-medium">Pengujian Ulang</th>
               </tr>
             </thead>
             <tbody>
@@ -136,15 +278,12 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
                     <td className="px-3 py-2">
                       <KlasifikasiPill value={p.klasifikasi} />
                     </td>
-                    <td className="px-3 py-2">
-                      <FlagPill active={p.mandatoryPengujian} label="Mandatory" tone="warning" />
-                    </td>
-                    <td className="px-3 py-2">
-                      <FlagPill active={p.pengujianUlang} label="Ulang" tone="critical" />
-                    </td>
                   </tr>
                   {p.rawReadings.map((reading, idx) => (
-                    <tr key={`${p.label}-raw-${idx}`} className="border-b text-xs last:border-0">
+                    <tr
+                      key={`${p.label}-raw-${idx}`}
+                      className={cn("border-b text-xs last:border-0", !showRaw && "hidden print:table-row")}
+                    >
                       <td className="py-1.5 pr-3 pl-6 text-muted-foreground">
                         <span className="text-muted-foreground/70">↳ </span>
                         {reading.label}
@@ -152,7 +291,7 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
                       <td className="py-1.5 pr-3">{formatValue(reading.r)}</td>
                       <td className="py-1.5 pr-3">{formatValue(reading.s)}</td>
                       <td className="py-1.5 pr-3">{formatValue(reading.t)}</td>
-                      <td colSpan={3} />
+                      <td />
                     </tr>
                   ))}
                 </Fragment>
@@ -160,6 +299,15 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
             </tbody>
           </table>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowRaw((v) => !v)}
+          className="flex w-fit items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/50 print:hidden"
+        >
+          <ChevronDown className={cn("size-3.5 transition-transform", showRaw && "rotate-180")} />
+          {showRaw ? "Sembunyikan Hasil Uji (nilai mentah)" : "Tampilkan Hasil Uji (nilai mentah)"}
+        </button>
 
         {unit.tindakLanjut || unit.sourceLink ? (
           <div className="flex flex-col gap-1 text-xs">
@@ -210,6 +358,20 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
+        {/* Report type is its own selector — the AHI page has a "Report" tab
+            (not "Bay Line") because the source spreadsheet has several report
+            sheets (Bay Line, Bay GT, Bus, Trafo). Only Bay Line is built so
+            far; this makes that scope explicit instead of the tab label
+            implying Bay Line is the only report that will ever exist. */}
+        <Select value="bay-line" onValueChange={() => {}}>
+          <SelectTrigger size="sm" className="w-[160px]">
+            <SelectValue placeholder="Jenis Report">Bay Line</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="bay-line">Bay Line</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select
           value={gi}
           onValueChange={(v) => {
@@ -266,12 +428,35 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
           {selected.units.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Data belum tersedia untuk bay ini.</p>
           ) : (
-            selected.units.map((unit, idx) => (
-              <div key={`${unit.role}-${unit.techident ?? unit.nomorSeri}`} className="flex flex-col gap-2">
-                <SectionBanner role={unit.role} accent={SECTION_COLORS[idx % SECTION_COLORS.length]} />
-                <UnitCard unit={unit} />
+            <>
+              <QualityScoreCard units={selected.units} />
+
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold tracking-tight text-foreground">Resume Semua Peralatan</h3>
+                <ResumeTable units={selected.units} />
               </div>
-            ))
+
+              {selected.units.map((unit, idx) => (
+                // Banner and card are flat siblings of the same long list, not
+                // each wrapped in their own short container — sticky's
+                // containing block is the nearest ancestor, so a banner
+                // wrapped alone with just its one card could only ever stick
+                // for that card's few hundred px before being forced off,
+                // which read as "floating past" rather than truly anchored.
+                // As direct siblings, each banner stays parked at top-14 for
+                // the whole remaining list until the next section's banner
+                // scrolls up and physically overlaps it (later element,
+                // same stacking context, paints on top).
+                <Fragment key={`${unit.role}-${unit.techident ?? unit.nomorSeri}`}>
+                  <SectionBanner
+                    id={unitAnchorId(idx)}
+                    role={unit.role}
+                    accent={SECTION_COLORS[idx % SECTION_COLORS.length]}
+                  />
+                  <UnitCard unit={unit} />
+                </Fragment>
+              ))}
+            </>
           )}
         </div>
       )}

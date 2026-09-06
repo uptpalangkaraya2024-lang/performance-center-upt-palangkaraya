@@ -61,11 +61,14 @@ const CATEGORY_ACCENT: Record<string, string> = {
 function CategoryBanner({ title, subtitle, latest }: { title: string; subtitle?: string; latest: string | null }) {
   const accent = CATEGORY_ACCENT[title] ?? "var(--chart-2)";
   return (
-    // Sticks right under the site header (h-14) while its own section is in
-    // view — scrolling through a long list of cards no longer loses track of
-    // which of Transmisi / Trafo HV / Trafo Low Voltage you're looking at.
+    // Sticks at the very top of the viewport (above the site header, z-20 >
+    // header's z-10) once scrolled past — takes over the top of the screen
+    // instead of parking below a persistent header, so scrolling through a
+    // long list of cards keeps the most content visible while still never
+    // losing track of which of Transmisi / Trafo HV / Trafo Low Voltage
+    // you're looking at.
     <div
-      className="sticky top-14 z-[5] -mx-4 border-y bg-card/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/85 md:-mx-6 md:px-6"
+      className="sticky top-0 z-20 -mx-4 border-y bg-card px-4 py-3 md:-mx-6 md:px-6"
       style={{ borderLeft: `4px solid ${accent}` }}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">

@@ -97,7 +97,7 @@ export default async function AhiPage() {
       <Tabs defaultValue="overview">
         <TabsList className="print:hidden">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="bay-line">Bay Line</TabsTrigger>
+          <TabsTrigger value="bay-line">Report</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="flex flex-col gap-6">
@@ -155,12 +155,16 @@ export default async function AhiPage() {
         </TabsContent>
 
         <TabsContent value="bay-line" className="flex flex-col gap-4">
-          <Card>
+          {/* overflow-visible overrides Card's own overflow-hidden — required
+              for the sticky per-section banners inside BayLineReportView to
+              actually stick (an overflow-hidden ancestor otherwise silently
+              neutralizes position: sticky for every descendant). */}
+          <Card className="overflow-visible">
             <CardHeader className="print:hidden">
               <CardTitle className="text-base">Report Bay Line</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Pilih satu bay line untuk melihat hasil uji tiap peralatan (LA, DS Line/Bus, CVT, PMT, CT) beserta
-                rekomendasi Mandatory Pengujian dan Pengujian Ulang.
+                Pilih satu bay line untuk melihat resume, hasil uji, dan hasil evaluasi AHI tiap peralatan (LA, DS
+                Line/Bus, CVT, PMT, CT).
               </p>
             </CardHeader>
             <CardContent>
