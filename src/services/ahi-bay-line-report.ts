@@ -53,6 +53,17 @@ function groupCols(row1: unknown[], startCol: number): number[] {
   return cols;
 }
 
+/** Exact match against row 2's own sub-label first (the specific reading a
+ *  raw group fans out into, e.g. "Purity (%)" / "Dew Point (deg Celcius)" /
+ *  "SO2 (ppmv)" all sharing one "Pengujian SF6" row 1 group), falling back
+ *  to row 1 for a single-column group with no distinct sub-label. */
+function findAnyLabelCol(row1: unknown[], row2: unknown[], label: string): number {
+  const needle = normalize(label);
+  const inRow2 = row2.findIndex((c) => normalize(String(c ?? "")) === needle);
+  if (inRow2 !== -1) return inRow2;
+  return row1.findIndex((c) => normalize(String(c ?? "")) === needle);
+}
+
 function toGrid(rawRows: unknown[][]): SheetGrid {
   return { row1: rawRows[0] ?? [], row2: rawRows[1] ?? [], dataRows: rawRows.slice(2) };
 }
@@ -125,6 +136,120 @@ const EQUIPMENT_TYPES: EquipmentTypeConfig[] = [
   { sheetName: "Input PMT", roleFixed: "Circuit Breaker", phasePivot: false },
   { sheetName: "Input CT", roleFixed: "Current Transformer", phasePivot: true },
 ];
+
+// One Evaluasi AHI parameter (e.g. "Tahanan Isolasi") is derived from one or
+// more raw measurement columns elsewhere in the same sheet — mapped
+// explicitly per equipment type below rather than guessed, since a single
+// row 1 group sometimes fans out into several distinct Evaluasi AHI
+// parameters (Input PMT's one "Pengujian SF6" group covers Purity, Dew
+// Point, and SO2 separately).
+type RawSource =
+  | { kind: "group"; label: string } // row 1 group label — use every one of its sub-columns
+  | { kind: "single"; label: string }; // one exact row 1 or row 2 label — use just that column
+
+const RAW_MAPPINGS: Record<string, Record<string, RawSource[]>> = {
+  "Input LA": {
+    "Tahanan Isolasi": [{ kind: "group", label: "Hasil Ukur Tahanan Isolasi (Mega Ohm)" }],
+    LCM: [{ kind: "group", label: "Hasil LCM (micro Ampere)" }],
+    "Thermovisi Bodi LA": [{ kind: "group", label: "Thermovisi pada Bodi LA" }],
+    "Kondisi visual": [{ kind: "group", label: "Inpseksi Visual #1 - Kondisi Insulator" }],
+  },
+  "Input PMS": {
+    "Tahanan Isolasi": [{ kind: "group", label: "Hasil Uji Tahanan Isolasi Terendah (Mega Ohm)" }],
+    "Tahanan Kontak": [{ kind: "group", label: "Pengujian Tahanan Kontak (mikro Ohm)" }],
+    "Thermovisi Kontak PMS": [{ kind: "group", label: "Thermovisi pada Kontak Finger/Pisau" }],
+    "Kondisi penggerak": [
+      { kind: "single", label: "Inspeksi Visual #2 - Kondisi penggerak" },
+      { kind: "single", label: "Uji Fungsi Penggerak" },
+    ],
+    "Kondisi insulator": [{ kind: "single", label: "Inpseksi Visual #1 - Kondisi Insulator" }],
+  },
+  "Input PT": {
+    "Tahanan Isolasi Primer": [{ kind: "group", label: "Uji Tahanan Isolasi" }],
+    "Tan Delta": [{ kind: "group", label: "Hasil Uji Tan Delta (%)" }],
+    Ratio: [{ kind: "group", label: "Deviasi/ Error Hasil Uji Rasio (%)" }],
+    Kapasitansi: [{ kind: "group", label: "Deviasi Hasil Uji Kapasitansi (%) khusus CVT" }],
+    Thermovisi: [{ kind: "group", label: "Thermovisi Body Insulator" }],
+    "Kondisi Visual": [
+      { kind: "single", label: "Inspeksi Visual #4 - Spark Gap PT (shutdown inspection) jika ada" },
+      { kind: "single", label: "Inspeksi Visual #3 - Terminal Sekunder PT (shutdown inspection)" },
+      { kind: "single", label: "Inspeksi Visual #2 - Kebocoran PT" },
+      { kind: "single", label: "Inpseksi Visual #1 - Kondisi Insulator" },
+    ],
+  },
+  "Input PMT": {
+    "Tahanan Isolasi": [{ kind: "group", label: "Hasil Uji Tahanan Isolasi Minimum (Mega Ohm)" }],
+    "Tahanan Kontak": [{ kind: "group", label: "Pengujian Tahanan Kontak (mikro Ohm)" }],
+    "Closing Time": [{ kind: "group", label: "Pengujian Closing Time (ms)" }],
+    "Opening Time": [{ kind: "group", label: "Pengujian Opening Time (ms)" }],
+    // No distinct raw column exists for Keserempakan (SKDIR/Evaluasi AHI
+    // computes it) — left empty rather than guessed.
+    Keserempakan: [],
+    Purity: [{ kind: "single", label: "Purity (%)" }],
+    "Dew Point": [{ kind: "single", label: "Dew Point (deg Celcius)" }],
+    SO2: [{ kind: "single", label: "SO2 (ppmv)" }],
+    Kevakuman: [{ kind: "group", label: "Pengujian Kevakuman" }],
+    "BDV Minyak": [{ kind: "group", label: "Pengujian BDV Minyak Main Tank (kV/mm)" }],
+    "Thermovisi Body PMT": [{ kind: "group", label: "Thermovisi Body Insulator" }],
+    "Kondisi Visual": [
+      { kind: "single", label: "Inspeksi Visual #2 - Kebocoran PMT" },
+      { kind: "single", label: "Inpseksi Visual #1 - Kondisi Insulator" },
+    ],
+  },
+  "Input CT": {
+    "Tahanan Isolasi Primer": [{ kind: "group", label: "Uji Tahanan Insulasi" }],
+    "Tan Delta": [{ kind: "group", label: "Hasil Uji Tan Delta (%)" }],
+    Ratio: [{ kind: "group", label: "Deviasi/ Error Hasil Uji Rasio (%)" }],
+    "V knee point": [{ kind: "group", label: "Perbandingan Hasil Ukur dengan V knee Nameplate (%)" }],
+    Thermovisi: [{ kind: "group", label: "Thermovisi Body Insulator" }],
+    "Kondisi Visual": [
+      { kind: "single", label: "Inspeksi Visual #3 - Terminal Sekunder CT (shutdown inspection)" },
+      { kind: "single", label: "Inspeksi Visual #2 - Kebocoran CT" },
+      { kind: "single", label: "Inpseksi Visual #1 - Kondisi Insulator" },
+    ],
+  },
+};
+
+function extractRawReadings(
+  groupRows: unknown[][],
+  row1: unknown[],
+  row2: unknown[],
+  phasaCol: number,
+  phasePivot: boolean,
+  sources: RawSource[],
+): { label: string; r: string | number | null; s: string | number | null; t: string | number | null }[] {
+  const readByPhase = (col: number, phasaValue: string) => {
+    const row = groupRows.find((r) => textAt(r, phasaCol) === phasaValue);
+    return row ? (row[col] as string | number | null) : null;
+  };
+  const readSingleRow = (col: number) => (groupRows[0]?.[col] as string | number | null) ?? null;
+
+  const pushOne = (
+    out: { label: string; r: string | number | null; s: string | number | null; t: string | number | null }[],
+    label: string,
+    col: number,
+  ) => {
+    if (col === -1) return;
+    if (phasePivot) {
+      out.push({ label, r: readByPhase(col, "R"), s: readByPhase(col, "S"), t: readByPhase(col, "T") });
+    } else {
+      out.push({ label, r: readSingleRow(col), s: null, t: null });
+    }
+  };
+
+  const readings: { label: string; r: string | number | null; s: string | number | null; t: string | number | null }[] = [];
+  for (const source of sources) {
+    if (source.kind === "single") {
+      pushOne(readings, source.label, findAnyLabelCol(row1, row2, source.label));
+    } else {
+      const startCol = findCol(row1, source.label);
+      for (const col of groupCols(row1, startCol)) {
+        pushOne(readings, textAt(row2, col) || textAt(row1, col), col);
+      }
+    }
+  }
+  return readings;
+}
 
 // Report sections read top-to-bottom in this fixed, human-meaningful order —
 // same order the sheet's own REPORT BAY LINE uses.
@@ -204,6 +329,8 @@ function parseUnitsForBay(grid: SheetGrid, bay: string, config: EquipmentTypeCon
         const row = groupRows.find((r) => textAt(r, phasaCol) === phasaValue);
         return row ? (row[col] as string | number | null) : null;
       };
+      const rawSources = RAW_MAPPINGS[config.sheetName]?.[label] ?? [];
+      const rawReadings = extractRawReadings(groupRows, row1, row2, phasaCol, config.phasePivot, rawSources);
       return {
         label: label || `Parameter ${i + 1}`,
         r: config.phasePivot ? byPhase("R") : (first[col] as string | number | null),
@@ -213,6 +340,7 @@ function parseUnitsForBay(grid: SheetGrid, bay: string, config: EquipmentTypeCon
         klasifikasi,
         mandatoryPengujian: mandatory,
         pengujianUlang: retest,
+        rawReadings,
       };
     });
 

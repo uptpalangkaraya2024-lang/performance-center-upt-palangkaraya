@@ -357,10 +357,23 @@ export interface AhiResult {
  *  "NO DATA" when the score itself is missing. */
 export type AhiKlasifikasi = "BEST" | "GOOD" | "FAIR" | "POOR" | "CRITICAL" | "NO DATA";
 
+/** One raw measurement ("hasil uji") feeding a parameter's evaluation — e.g.
+ *  "Tahanan Isolasi" can have several titik ukur (Atas-Bawah / Atas-Tanah /
+ *  Bawah-Tanah), each its own reading. */
+export interface BayEquipmentRawReading {
+  label: string;
+  r: string | number | null;
+  s: string | number | null;
+  t: string | number | null;
+}
+
 /** One test parameter within one equipment unit (e.g. "Tahanan Isolasi" for
- *  an LA) — R/S/T raw values plus the AHI classification, and whether this
- *  specific parameter needs mandatory testing or a retest per the sheet's
- *  own formulas (see src/services/ahi-bay-line-report.ts). */
+ *  an LA) — R/S/T evaluation scores (Hasil Evaluasi) plus the AHI
+ *  classification, whether this specific parameter needs mandatory testing
+ *  or a retest per the sheet's own formulas (see
+ *  src/services/ahi-bay-line-report.ts), and the raw measurements (Hasil
+ *  Uji) that evaluation was derived from — empty when the sheet has no
+ *  distinct raw column for this parameter (never fabricated). */
 export interface BayEquipmentParameter {
   label: string;
   r: string | number | null;
@@ -370,6 +383,7 @@ export interface BayEquipmentParameter {
   klasifikasi: AhiKlasifikasi;
   mandatoryPengujian: boolean;
   pengujianUlang: boolean;
+  rawReadings: BayEquipmentRawReading[];
 }
 
 /** One physical equipment unit within a bay line — e.g. the LA, or one of

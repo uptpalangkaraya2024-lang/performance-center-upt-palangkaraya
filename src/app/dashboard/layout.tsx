@@ -7,9 +7,13 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <div className="print:hidden">
+        <AppSidebar />
+      </div>
       <SidebarInset>
-        <SiteHeader />
+        <div className="print:hidden">
+          <SiteHeader />
+        </div>
         <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>

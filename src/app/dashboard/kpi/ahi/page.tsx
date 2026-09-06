@@ -38,6 +38,7 @@ export default async function AhiPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="print:hidden">
       <PageHero
         title="AHI UPT Palangkaraya"
         description="Healthy Index Monitoring 2026 — Unit Induk UIP3B Kalimantan / UPT Palangkaraya"
@@ -91,9 +92,10 @@ export default async function AhiPage() {
           />
         }
       />
+      </div>
 
       <Tabs defaultValue="overview">
-        <TabsList>
+        <TabsList className="print:hidden">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="bay-line">Bay Line</TabsTrigger>
         </TabsList>
@@ -154,7 +156,7 @@ export default async function AhiPage() {
 
         <TabsContent value="bay-line" className="flex flex-col gap-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="print:hidden">
               <CardTitle className="text-base">Report Bay Line</CardTitle>
               <p className="text-xs text-muted-foreground">
                 Pilih satu bay line untuk melihat hasil uji tiap peralatan (LA, DS Line/Bus, CVT, PMT, CT) beserta
@@ -165,7 +167,7 @@ export default async function AhiPage() {
               <BayLineReportView reports={bayLineReports} />
             </CardContent>
           </Card>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground print:hidden">
             Source: AHI UPT Palangkaraya 2026 fixed · Sheet: Input LA, Input PMS, Input PT, Input PMT, Input CT ·
             Provider: Apps Script
           </p>

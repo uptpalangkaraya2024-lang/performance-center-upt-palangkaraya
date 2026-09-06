@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ExternalLink, FileText } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ExternalLink, FileText, Printer } from "lucide-react";
 
 import {
   Select,
@@ -10,11 +10,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { AhiKlasifikasi, BayEquipmentUnit, BayLineReport } from "@/types";
 
 const ALL_VALUE = "__all__";
+
+// One accent color per section — same purpose as Gangguan's sticky category
+// banners (src/app/dashboard/disturbances/page.tsx): scrolling through 5-7
+// equipment cards for one bay no longer loses track of which one is in
+// view. Cycled by role order rather than a fixed per-role map, so a role
+// this bay doesn't have never wastes a slot.
+const SECTION_COLORS = [
+  "var(--chart-1)",
+  "var(--brand)",
+  "var(--chart-4)",
+  "var(--chart-3)",
+  "var(--chart-5)",
+  "var(--primary)",
+  "var(--chart-2)",
+];
 
 function klasifikasiClass(k: AhiKlasifikasi): string {
   if (k === "CRITICAL") return "border-critical/40 bg-critical/10 text-critical";
@@ -43,12 +59,26 @@ function formatValue(v: string | number | null): string {
   return String(v);
 }
 
+function SectionBanner({ role, accent }: { role: string; accent: string }) {
+  return (
+    <div
+      className="sticky top-14 z-[5] -mx-4 border-y bg-card/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/85 md:-mx-6 md:px-6 print:static print:border-0 print:bg-transparent print:px-0 print:py-1 print:backdrop-blur-none"
+      style={{ borderLeft: `4px solid ${accent}` }}
+    >
+      <div className="flex items-center gap-2">
+        <span className="size-2 shrink-0 rounded-full print:hidden" style={{ backgroundColor: accent }} />
+        <h3 className="text-base font-bold tracking-tight text-foreground">{role}</h3>
+      </div>
+    </div>
+  );
+}
+
 function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
   const mandatoryCount = unit.parameters.filter((p) => p.mandatoryPengujian).length;
   const retestCount = unit.parameters.filter((p) => p.pengujianUlang).length;
 
   return (
-    <Card>
+    <Card className="print:break-inside-avoid print:border print:shadow-none">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">{unit.role}</CardTitle>
@@ -86,7 +116,7 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Parameter</th>
+                <th className="px-3 py-2 font-medium">Parameter / Hasil Uji</th>
                 <th className="px-3 py-2 font-medium">R</th>
                 <th className="px-3 py-2 font-medium">S</th>
                 <th className="px-3 py-2 font-medium">T</th>
@@ -97,21 +127,35 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
             </thead>
             <tbody>
               {unit.parameters.map((p) => (
-                <tr key={p.label} className="border-b last:border-0">
-                  <td className="px-3 py-2 font-medium text-foreground">{p.label}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{formatValue(p.r)}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{formatValue(p.s)}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{formatValue(p.t)}</td>
-                  <td className="px-3 py-2">
-                    <KlasifikasiPill value={p.klasifikasi} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <FlagPill active={p.mandatoryPengujian} label="Mandatory" tone="warning" />
-                  </td>
-                  <td className="px-3 py-2">
-                    <FlagPill active={p.pengujianUlang} label="Ulang" tone="critical" />
-                  </td>
-                </tr>
+                <Fragment key={p.label}>
+                  <tr className="border-b bg-muted/10 last:border-0">
+                    <td className="px-3 py-2 font-medium text-foreground">{p.label}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{formatValue(p.r)}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{formatValue(p.s)}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{formatValue(p.t)}</td>
+                    <td className="px-3 py-2">
+                      <KlasifikasiPill value={p.klasifikasi} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <FlagPill active={p.mandatoryPengujian} label="Mandatory" tone="warning" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <FlagPill active={p.pengujianUlang} label="Ulang" tone="critical" />
+                    </td>
+                  </tr>
+                  {p.rawReadings.map((reading, idx) => (
+                    <tr key={`${p.label}-raw-${idx}`} className="border-b text-xs last:border-0">
+                      <td className="py-1.5 pr-3 pl-6 text-muted-foreground">
+                        <span className="text-muted-foreground/70">↳ </span>
+                        {reading.label}
+                      </td>
+                      <td className="py-1.5 pr-3">{formatValue(reading.r)}</td>
+                      <td className="py-1.5 pr-3">{formatValue(reading.s)}</td>
+                      <td className="py-1.5 pr-3">{formatValue(reading.t)}</td>
+                      <td colSpan={3} />
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -130,7 +174,7 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
                 href={unit.sourceLink}
                 target="_blank"
                 rel="noreferrer"
-                className="flex w-fit items-center gap-1.5 text-primary hover:underline"
+                className="flex w-fit items-center gap-1.5 text-primary hover:underline print:hidden"
               >
                 <FileText className="size-3.5 shrink-0" />
                 Dokumen sumber
@@ -165,7 +209,7 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
         <Select
           value={gi}
           onValueChange={(v) => {
@@ -198,13 +242,22 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
             ))}
           </SelectContent>
         </Select>
+
+        {selected ? (
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
+            <Printer className="size-3.5" />
+            Cetak / Simpan PDF
+          </Button>
+        ) : null}
       </div>
 
       {!selected ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">Pilih Bay Line untuk melihat detail report.</p>
+        <p className="py-8 text-center text-sm text-muted-foreground print:hidden">
+          Pilih Bay Line untuk melihat detail report.
+        </p>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg border bg-muted/20 p-3">
+          <div className="rounded-lg border bg-muted/20 p-3 print:border-0 print:bg-transparent print:p-0">
             <p className="text-sm font-semibold text-foreground">{selected.bay}</p>
             <p className="text-xs text-muted-foreground">
               {selected.ultg} · GI {selected.gi} · {selected.units.length} unit peralatan
@@ -213,7 +266,12 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
           {selected.units.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Data belum tersedia untuk bay ini.</p>
           ) : (
-            selected.units.map((unit) => <UnitCard key={`${unit.role}-${unit.techident ?? unit.nomorSeri}`} unit={unit} />)
+            selected.units.map((unit, idx) => (
+              <div key={`${unit.role}-${unit.techident ?? unit.nomorSeri}`} className="flex flex-col gap-2">
+                <SectionBanner role={unit.role} accent={SECTION_COLORS[idx % SECTION_COLORS.length]} />
+                <UnitCard unit={unit} />
+              </div>
+            ))
           )}
         </div>
       )}
