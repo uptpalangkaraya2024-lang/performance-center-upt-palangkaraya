@@ -7,7 +7,7 @@ import { AhiExecutiveSummary } from "@/components/ahi/ahi-executive-summary";
 import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
 import { AhiAnomalyTable } from "@/components/ahi/ahi-anomaly-table";
 import { AhiCategoryDetail } from "@/components/ahi/ahi-category-detail";
-import { AhiDataDetail } from "@/components/ahi/ahi-data-detail";
+import { CollapsibleDataDetail } from "@/components/ahi/collapsible-data-detail";
 import { BayLineReportView } from "@/components/ahi/bay-line-report";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
@@ -125,6 +125,7 @@ export default async function AhiPage() {
               </p>
             </div>
             <AhiCategoryDetail sections={sections} />
+            <CollapsibleDataDetail sections={sections} />
           </section>
 
           <Card id="ahi-anomaly" className="scroll-mt-20">
@@ -136,16 +137,6 @@ export default async function AhiPage() {
             </CardHeader>
             <CardContent>
               <AhiAnomalyTable records={anomalies} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Data Detail</CardTitle>
-              <p className="text-xs text-muted-foreground">Audit seluruh parameter pemeriksaan dari sumber A:W.</p>
-            </CardHeader>
-            <CardContent>
-              <AhiDataDetail sections={sections} />
             </CardContent>
           </Card>
 
