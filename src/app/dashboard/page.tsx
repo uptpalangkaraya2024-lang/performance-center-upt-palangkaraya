@@ -10,6 +10,8 @@ import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-c
 import { getUptPerformance } from "@/services/upt-performance";
 import { getDisturbances } from "@/services/disturbances";
 import { getAhiPerformance } from "@/services/ahi-performance";
+import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
+import { getRenusData } from "@/services/renus";
 import { buildManagementAttention, buildTopIssues } from "@/lib/executive-insights";
 import { buildGiCorrelation } from "@/lib/asset-correlation";
 import { listSyncStatus } from "@/lib/sync-status";
@@ -23,10 +25,12 @@ function formatTime(date: Date | null): string | null {
 }
 
 export default async function OverviewPage() {
-  const [upt, disturbances, ahi] = await Promise.all([
+  const [upt, disturbances, ahi, renus, bayLineReports] = await Promise.all([
     getUptPerformance(),
     getDisturbances(),
     getAhiPerformance(),
+    getRenusData(),
+    getAllBayLineReports(),
   ]);
 
   const uptStatus: StatusLevel = !upt.data
@@ -40,7 +44,11 @@ export default async function OverviewPage() {
   const managementAttention = buildManagementAttention({
     upt: upt.data,
     transmisi: disturbances.error ? null : disturbances.transmisi,
+    trafoHv: disturbances.error ? null : disturbances.trafoHv,
+    trafoLv: disturbances.error ? null : disturbances.trafoLv,
     ahi: ahi.data,
+    bayLineReports: bayLineReports.length > 0 ? bayLineReports : null,
+    renusReminders: renus.error ? null : renus.reminders,
   });
   const topIssues = buildTopIssues({
     upt: upt.data,

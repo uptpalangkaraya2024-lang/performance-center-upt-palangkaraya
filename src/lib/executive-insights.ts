@@ -3,7 +3,14 @@
 // See AGENTS.md "AI ASSISTANT" section: rule-based insight is explicitly
 // permitted, an AI backend is not.
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
-import type { AhiSnapshot, AiInsight, DisturbanceCategoryResult, RenusData, UptPerformanceSnapshot } from "@/types";
+import type {
+  AhiSnapshot,
+  AiInsight,
+  BayLineReport,
+  DisturbanceCategoryResult,
+  RenusData,
+  UptPerformanceSnapshot,
+} from "@/types";
 
 export function monthOverMonth(
   category: DisturbanceCategoryResult,
@@ -24,17 +31,52 @@ export function monthOverMonth(
   return { current, previous, pctChange: ((current - previous) / previous) * 100 };
 }
 
+/** Trend + dominant-cause pair shared by Transmisi, Trafo HV, and Trafo Low
+ *  Voltage — same two rules, just parameterized by category + anchor. */
+function pushDisturbanceAttention(
+  push: (tone: AiInsight["tone"], text: string, href?: string) => void,
+  category: DisturbanceCategoryResult,
+  label: string,
+  anchorId: string,
+) {
+  if (category.summary.total === 0) return;
+
+  const trend = monthOverMonth(category);
+  if (trend) {
+    const tone = trend.pctChange > 0 ? "warning" : trend.pctChange < 0 ? "good" : "none";
+    const direction = trend.pctChange > 0 ? "meningkat" : trend.pctChange < 0 ? "menurun" : "stabil";
+    push(
+      tone,
+      `Gangguan ${label} ${direction} ${Math.abs(trend.pctChange).toFixed(0)}% dibanding bulan sebelumnya (${trend.previous} → ${trend.current} kejadian).`,
+      `/dashboard/disturbances#${anchorId}`,
+    );
+  }
+  const topCause = category.causePareto[0];
+  if (topCause) {
+    const pct = Math.round((topCause.count / category.summary.total) * 100);
+    push(
+      "none",
+      `Penyebab gangguan ${label} terbesar: ${topCause.cause} (${pct}% dari total).`,
+      `/dashboard/disturbances?cause=${encodeURIComponent(topCause.cause)}#${anchorId}`,
+    );
+  }
+}
+
 export function buildManagementAttention(params: {
   upt: UptPerformanceSnapshot | null;
   transmisi: DisturbanceCategoryResult | null;
+  trafoHv: DisturbanceCategoryResult | null;
+  trafoLv: DisturbanceCategoryResult | null;
   ahi: AhiSnapshot | null;
+  bayLineReports: BayLineReport[] | null;
+  renusReminders: AiInsight[] | null;
 }): AiInsight[] {
   const insights: AiInsight[] = [];
   let nextId = 0;
   const push = (tone: AiInsight["tone"], text: string, href?: string) =>
     insights.push({ id: String(nextId++), tone, text, href });
 
-  const { upt, transmisi, ahi } = params;
+  const { upt, transmisi, trafoHv, trafoLv, ahi, bayLineReports, renusReminders } = params;
 
   if (upt) {
     if (upt.overall.critical > 0) {
@@ -64,26 +106,12 @@ export function buildManagementAttention(params: {
     }
   }
 
-  if (transmisi && transmisi.summary.total > 0) {
-    const trend = monthOverMonth(transmisi);
-    if (trend) {
-      const tone = trend.pctChange > 0 ? "warning" : trend.pctChange < 0 ? "good" : "none";
-      const direction = trend.pctChange > 0 ? "meningkat" : trend.pctChange < 0 ? "menurun" : "stabil";
-      push(
-        tone,
-        `Gangguan Transmisi ${direction} ${Math.abs(trend.pctChange).toFixed(0)}% dibanding bulan sebelumnya (${trend.previous} → ${trend.current} kejadian).`,
-        "/dashboard/disturbances#transmisi",
-      );
-    }
-    const topCause = transmisi.causePareto[0];
-    if (topCause) {
-      const pct = Math.round((topCause.count / transmisi.summary.total) * 100);
-      push(
-        "none",
-        `Penyebab gangguan Transmisi terbesar: ${topCause.cause} (${pct}% dari total).`,
-        `/dashboard/disturbances?cause=${encodeURIComponent(topCause.cause)}#transmisi`,
-      );
-    }
+  if (transmisi) pushDisturbanceAttention(push, transmisi, "Transmisi", "transmisi");
+  if (trafoHv) pushDisturbanceAttention(push, trafoHv, "Trafo HV", "trafo-hv");
+  if (trafoLv) pushDisturbanceAttention(push, trafoLv, "Trafo Low Voltage", "trafo-lv");
+
+  if (renusReminders) {
+    for (const reminder of renusReminders) insights.push(reminder);
   }
 
   if (ahi) {
@@ -105,6 +133,43 @@ export function buildManagementAttention(params: {
     }
     if (critical.length === 0 && warning.length === 0) {
       push("good", "Seluruh kategori AHI dalam kondisi sehat.", "/dashboard/kpi/ahi");
+    }
+  }
+
+  // AHI Report (Bay Line): per-equipment Mandatory Pengujian / Pengujian
+  // Ulang, rolled up across every bay line — same flags the Report tab
+  // itself shows per unit, just aggregated here so a Poor/Critical/overdue
+  // result buried in one specific bay's card doesn't go unnoticed.
+  if (bayLineReports && bayLineReports.length > 0) {
+    let retestUnits = 0;
+    let mandatoryUnits = 0;
+    const retestBays = new Set<string>();
+    const mandatoryBays = new Set<string>();
+    for (const report of bayLineReports) {
+      for (const unit of report.units) {
+        if (unit.parameters.some((p) => p.pengujianUlang)) {
+          retestUnits += 1;
+          retestBays.add(report.bay);
+        }
+        if (unit.parameters.some((p) => p.mandatoryPengujian)) {
+          mandatoryUnits += 1;
+          mandatoryBays.add(report.bay);
+        }
+      }
+    }
+    if (retestUnits > 0) {
+      push(
+        "critical",
+        `${retestUnits} peralatan di ${retestBays.size} bay line memerlukan Pengujian Ulang (AHI Report).`,
+        "/dashboard/kpi/ahi",
+      );
+    }
+    if (mandatoryUnits > 0) {
+      push(
+        "warning",
+        `${mandatoryUnits} peralatan di ${mandatoryBays.size} bay line memerlukan Mandatory Pengujian (AHI Report).`,
+        "/dashboard/kpi/ahi",
+      );
     }
   }
 
