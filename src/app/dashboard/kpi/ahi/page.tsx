@@ -117,6 +117,16 @@ export default async function AhiPage() {
             </div>
           </section>
 
+          <section id="ahi-detail" className="flex scroll-mt-20 flex-col gap-3">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Detail per Kategori</h2>
+              <p className="text-xs text-muted-foreground">
+                Rincian tiap kategori AHI per kelompok — skor, distribusi hasil pengujian, dan parameter pemeriksaan.
+              </p>
+            </div>
+            <AhiCategoryDetail sections={sections} />
+          </section>
+
           <Card id="ahi-anomaly" className="scroll-mt-20">
             <CardHeader>
               <CardTitle className="text-base">Anomaly Perlu Perhatian</CardTitle>
@@ -128,16 +138,6 @@ export default async function AhiPage() {
               <AhiAnomalyTable records={anomalies} />
             </CardContent>
           </Card>
-
-          <section id="ahi-detail" className="flex scroll-mt-20 flex-col gap-3">
-            <div>
-              <h2 className="text-base font-semibold tracking-tight">Detail per Kategori</h2>
-              <p className="text-xs text-muted-foreground">
-                Rincian tiap kategori AHI per kelompok — skor, distribusi hasil pengujian, dan parameter pemeriksaan.
-              </p>
-            </div>
-            <AhiCategoryDetail sections={sections} />
-          </section>
 
           <Card>
             <CardHeader>

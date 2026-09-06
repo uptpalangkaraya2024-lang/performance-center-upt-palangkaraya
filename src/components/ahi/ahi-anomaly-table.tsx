@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 import type { AhiAnomalyRecord } from "@/types";
 
 const ALL_VALUE = "__all__";
+const PAGE_SIZE = 20;
 
 const CATEGORY_LABEL: Record<number, { label: string; className: string }> = {
   5: { label: "5-Critical", className: "bg-critical/10 text-critical" },
@@ -51,6 +53,7 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
   const [kategoriFilter, setKategoriFilter] = useState(ALL_VALUE);
   const [giFilter, setGiFilter] = useState(initialGi && records.some((r) => r.gi === initialGi) ? initialGi : ALL_VALUE);
   const [sortDesc, setSortDesc] = useState(true);
+  const [page, setPage] = useState(0);
 
   const ultgOptions = useMemo(() => [...new Set(records.map((r) => r.ultg))].sort(), [records]);
   const jenisAsetOptions = useMemo(() => [...new Set(records.map((r) => r.jenisAset))].sort(), [records]);
@@ -90,6 +93,10 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
     return [...rows].sort((a, b) => (sortDesc ? b.kategoriAhi - a.kategoriAhi : a.kategoriAhi - b.kategoriAhi));
   }, [records, ultgFilter, jenisAsetFilter, giFilter, kategoriFilter, search, sortDesc]);
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageRows = filtered.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE);
+
   if (records.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -103,7 +110,10 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => setKategoriFilter(kategoriFilter === "5" ? ALL_VALUE : "5")}
+          onClick={() => {
+            setKategoriFilter(kategoriFilter === "5" ? ALL_VALUE : "5");
+            setPage(0);
+          }}
           className={cn(
             "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
             kategoriFilter === "5" ? "border-critical bg-critical/10 text-critical" : "border-border text-muted-foreground hover:bg-muted",
@@ -114,7 +124,10 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
         </button>
         <button
           type="button"
-          onClick={() => setKategoriFilter(kategoriFilter === "4" ? ALL_VALUE : "4")}
+          onClick={() => {
+            setKategoriFilter(kategoriFilter === "4" ? ALL_VALUE : "4");
+            setPage(0);
+          }}
           className={cn(
             "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
             kategoriFilter === "4" ? "border-warning bg-warning/15 text-warning-foreground" : "border-border text-muted-foreground hover:bg-muted",
@@ -134,11 +147,20 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(0);
+          }}
           placeholder="Cari aset, parameter, keterangan..."
           className="h-8 w-[240px]"
         />
-        <Select value={ultgFilter} onValueChange={(value) => setUltgFilter(value ?? ALL_VALUE)}>
+        <Select
+          value={ultgFilter}
+          onValueChange={(value) => {
+            setUltgFilter(value ?? ALL_VALUE);
+            setPage(0);
+          }}
+        >
           <SelectTrigger size="sm" className="w-[170px]">
             <SelectValue placeholder="ULTG">{ultgFilter === ALL_VALUE ? "Semua ULTG" : ultgFilter}</SelectValue>
           </SelectTrigger>
@@ -151,7 +173,13 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
             ))}
           </SelectContent>
         </Select>
-        <Select value={jenisAsetFilter} onValueChange={(value) => setJenisAsetFilter(value ?? ALL_VALUE)}>
+        <Select
+          value={jenisAsetFilter}
+          onValueChange={(value) => {
+            setJenisAsetFilter(value ?? ALL_VALUE);
+            setPage(0);
+          }}
+        >
           <SelectTrigger size="sm" className="w-[150px]">
             <SelectValue placeholder="Jenis Aset">
               {jenisAsetFilter === ALL_VALUE ? "Semua Aset" : jenisAsetFilter}
@@ -166,7 +194,13 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
             ))}
           </SelectContent>
         </Select>
-        <Select value={giFilter} onValueChange={(value) => setGiFilter(value ?? ALL_VALUE)}>
+        <Select
+          value={giFilter}
+          onValueChange={(value) => {
+            setGiFilter(value ?? ALL_VALUE);
+            setPage(0);
+          }}
+        >
           <SelectTrigger size="sm" className="w-[150px]">
             <SelectValue placeholder="GI">{giFilter === ALL_VALUE ? "Semua GI" : giFilter}</SelectValue>
           </SelectTrigger>
@@ -179,7 +213,13 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
             ))}
           </SelectContent>
         </Select>
-        <Select value={kategoriFilter} onValueChange={(value) => setKategoriFilter(value ?? ALL_VALUE)}>
+        <Select
+          value={kategoriFilter}
+          onValueChange={(value) => {
+            setKategoriFilter(value ?? ALL_VALUE);
+            setPage(0);
+          }}
+        >
           <SelectTrigger size="sm" className="w-[150px]">
             <SelectValue placeholder="Kategori">
               {kategoriFilter === ALL_VALUE ? "Semua Kategori" : (CATEGORY_LABEL[Number(kategoriFilter)]?.label ?? kategoriFilter)}
@@ -196,7 +236,10 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
         </Select>
         <button
           type="button"
-          onClick={() => setSortDesc((prev) => !prev)}
+          onClick={() => {
+            setSortDesc((prev) => !prev);
+            setPage(0);
+          }}
           className="ml-auto rounded-md border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
         >
           Urutkan: {sortDesc ? "Kritis → Fair" : "Fair → Kritis"}
@@ -231,7 +274,7 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((r, idx) => (
+            {pageRows.map((r, idx) => (
               <TableRow key={`${r.no}-${idx}`}>
                 <TableCell className="whitespace-nowrap">{r.ultg}</TableCell>
                 <TableCell className="whitespace-nowrap">{r.gi}</TableCell>
@@ -259,6 +302,27 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
         </Table>
       </div>
       )}
+
+      {filtered.length > 0 ? (
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          Halaman {currentPage + 1} dari {pageCount}
+        </span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={currentPage === 0} onClick={() => setPage((p) => p - 1)}>
+            Sebelumnya
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage >= pageCount - 1}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Berikutnya
+          </Button>
+        </div>
+      </div>
+      ) : null}
     </div>
   );
 }
