@@ -14,11 +14,12 @@ Tidak ada business logic (KPI, achievement, dsb) di sini — murni data pipe: te
 - `config.gs` — baca Script Properties (`MONITORING_FOLDER_ID`, `API_SECRET`)
 - `drive-service.gs` — file discovery by name, deteksi duplicate
 - `spreadsheet-service.gs` — baca sheet terpilih (Google Sheets native saja — lihat batasan `.xlsx` di bawah)
+- `ahi-history.gs` — trigger terjadwal (bukan bagian dari `doPost`/`doGet` web app) yang mencatat riwayat hasil uji AHI dari waktu ke waktu — lihat "Riwayat Pengujian AHI" di bawah
 
 ## Cara deploy
 
 1. Buka [script.google.com](https://script.google.com/) → **New project**
-2. Hapus isi default `Code.gs`, lalu copy-paste isi ke-4 file di folder ini satu per satu (buat file baru di editor Apps Script untuk masing-masing lewat ikon **+** di sebelah "Files" — nama file harus persis sama: `Code.gs`, `config.gs`, `drive-service.gs`, `spreadsheet-service.gs`)
+2. Hapus isi default `Code.gs`, lalu copy-paste isi ke-5 file di folder ini satu per satu (buat file baru di editor Apps Script untuk masing-masing lewat ikon **+** di sebelah "Files" — nama file harus persis sama: `Code.gs`, `config.gs`, `drive-service.gs`, `spreadsheet-service.gs`, `ahi-history.gs`)
 3. Buka **Project Settings** (ikon gear) → **Script Properties** → **Add script property**:
    - `MONITORING_FOLDER_ID` = ID folder Drive Anda
    - `API_SECRET` (opsional) = string acak sembarang, kalau mau proteksi tambahan
@@ -89,6 +90,28 @@ Kalau sebuah file di folder Anda masih `.xlsx`, ada dua pilihan:
 2. Convert file itu ke Google Sheets native sekali saja (klik kanan file di Drive → **Open with → Google Sheets**, lalu hapus/arsipkan file `.xlsx` aslinya)
 
 `DATA_PROVIDER` adalah pengaturan global (semua source pakai provider yang sama) — kalau sebagian file Anda `.xlsx` dan sebagian native, untuk saat ini pilih `google-api` (mendukung keduanya) sampai semua file sudah dikonversi ke native, baru pindah ke `apps-script`.
+
+## Riwayat Pengujian AHI
+
+Sheet Input AHI (`Input LA`, `Input PMS`, `Input PT`, `Input PMT`, `Input CT`) hanya menyimpan **hasil uji terakhir** per peralatan — begitu diuji ulang, hasil lama tertimpa begitu saja, tidak ada riwayatnya. `ahi-history.gs` menambahkan satu spreadsheet terpisah ("AHI UPT Palangkaraya - Riwayat Pengujian", di folder monitoring yang sama) yang bertambah setiap ada hasil uji baru, tanpa menghapus yang lama.
+
+Ini **bukan** bagian dari web app (`doPost`/`doGet`) — dua fungsi di `ahi-history.gs` dipanggil langsung dari trigger terjadwal Apps Script, jalan sendiri di Google tanpa bergantung ada yang membuka dashboard. Cara kerjanya murni mekanis: tiap baris di sheet Input dibandingkan kolom TANGGAL PEMELIHARAAN TERAKHIR-nya dengan yang terakhir tercatat untuk pasangan (BAY, TECHIDENT) yang sama — kalau beda, baris itu disalin apa adanya ke sheet Riwayat yang sesuai. Tidak ada skoring/klasifikasi di sini (itu tetap di `src/services/ahi-bay-line-report.ts`), jadi tanggal pertama kali dijalankan otomatis jadi baseline (titik data pertama = hasil uji yang berlaku saat itu), dan data yang sudah tertimpa sebelum trigger ini pernah berjalan tidak bisa dipulihkan.
+
+**Setup (sekali saja):**
+
+1. Pastikan `ahi-history.gs` sudah di-copy ke project Apps Script Anda (langkah 2 di atas)
+2. Di editor Apps Script, pilih fungsi **`setupAhiHistoryFile`** dari dropdown di sebelah tombol Run, lalu klik **Run**
+   - Kalau ini pertama kali, Apps Script akan minta izin akses — setujui (izin ini sama dengan yang sudah dipakai gateway untuk baca Drive Anda)
+   - Fungsi ini membuat file "AHI UPT Palangkaraya - Riwayat Pengujian" (kalau belum ada) di folder monitoring yang sama, dengan 5 tab (`Riwayat LA`, `Riwayat PMS`, `Riwayat PT`, `Riwayat PMT`, `Riwayat CT`) yang header-nya disalin persis dari sheet Input masing-masing
+   - Cek log run (ikon jam di sisi kiri bawah) untuk link ke file yang baru dibuat
+3. Buka panel **Triggers** (ikon jam di sidebar kiri editor) → **Add Trigger**:
+   - Function to run: `syncAhiHistorySnapshot`
+   - Event source: **Time-driven**
+   - Pilih tipe (disarankan **Day timer**, jam berapa saja yang nyaman — mis. dini hari)
+   - Save
+4. Selesai — trigger ini akan jalan sendiri sesuai jadwal, tidak perlu redeploy web app (dua fungsi ini tidak melalui `doPost`/`doGet`)
+
+Setelah beberapa siklus pengujian berjalan, sheet Riwayat ini yang akan dibaca dashboard untuk menampilkan tren hasil uji per peralatan dari waktu ke waktu.
 
 ## Keamanan
 

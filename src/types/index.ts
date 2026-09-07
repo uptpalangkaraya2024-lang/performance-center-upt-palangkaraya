@@ -384,12 +384,40 @@ export interface BayEquipmentParameter {
   mandatoryPengujian: boolean;
   pengujianUlang: boolean;
   rawReadings: BayEquipmentRawReading[];
+  /** This specific parameter's own score + raw readings over time, oldest
+   *  first — same Riwayat source as BayEquipmentUnit.history, just scoped
+   *  to one parameter instead of the unit's overall Skor AHI. Empty when
+   *  history isn't available/hasn't run yet. */
+  history: EquipmentParameterHistoryPoint[];
+}
+
+/** One past test event for one specific parameter within one equipment
+ *  unit — score/classification plus that date's own raw readings, so both
+ *  the classification trend and the underlying measured values can be
+ *  reviewed together. */
+export interface EquipmentParameterHistoryPoint {
+  tanggal: string;
+  skorAhi: number | null;
+  klasifikasi: AhiKlasifikasi;
+  rawReadings: BayEquipmentRawReading[];
 }
 
 /** One physical equipment unit within a bay line — e.g. the LA, or one of
  *  the bay's disconnecting switches (role distinguishes DS LINE / DS BUS A /
  *  DS BUS B, since a bay can legitimately have 2 or 3 of these depending on
  *  the GI's busbar configuration — never assumed to always be 3). */
+/** One past test event for one equipment unit, sourced from the "Riwayat
+ *  Pengujian" history spreadsheet (apps-script/ahi-history.gs) rather than
+ *  the Input sheet's own single latest-result row — see
+ *  src/services/ahi-bay-line-report.ts for how these get built. Overall
+ *  Skor AHI/Klasifikasi only (not a per-parameter breakdown), same as
+ *  what a unit's own header already summarizes. */
+export interface EquipmentHistoryPoint {
+  tanggal: string;
+  skorAhi: number | null;
+  klasifikasi: AhiKlasifikasi;
+}
+
 export interface BayEquipmentUnit {
   /** Section title — "Lightning Arrester" / "Disconnecting Switch Line" / "Disconnecting Switch Bus A" / "Capacitive Voltage Transformer" / "Circuit Breaker" / "Current Transformer" / etc. */
   role: string;
@@ -405,6 +433,12 @@ export interface BayEquipmentUnit {
   keterangan: string | null;
   sourceLink: string | null;
   parameters: BayEquipmentParameter[];
+  /** Past test events oldest-first, sourced from the Riwayat history file —
+   *  empty when that file/sheet isn't available or hasn't run yet. Always
+   *  includes at least today's own reading once history starts being
+   *  fetched (getAllBayLineReportsWithHistory), since the very first sync
+   *  logs the current state as its baseline. */
+  history: EquipmentHistoryPoint[];
 }
 
 export interface BayLineOption {

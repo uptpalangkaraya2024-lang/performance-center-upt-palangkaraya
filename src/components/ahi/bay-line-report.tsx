@@ -12,8 +12,9 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EquipmentTrendChart } from "@/components/ahi/equipment-trend-chart";
 import { cn } from "@/lib/utils";
-import type { AhiKlasifikasi, BayEquipmentUnit, BayLineReport } from "@/types";
+import type { AhiKlasifikasi, BayEquipmentUnit, BayLineReport, EquipmentParameterHistoryPoint } from "@/types";
 
 const ALL_VALUE = "__all__";
 
@@ -232,6 +233,144 @@ function SectionBanner({ id, role, accent }: { id: string; role: string; accent:
         <span className="size-2 shrink-0 rounded-full print:hidden" style={{ backgroundColor: accent }} />
         <h3 className="text-base font-bold tracking-tight text-foreground">{role}</h3>
       </div>
+    </div>
+  );
+}
+
+const OVERALL_VALUE = "__overall__";
+
+function unitKey(unit: BayEquipmentUnit): string {
+  return `${unit.role}-${unit.techident ?? unit.nomorSeri}`;
+}
+
+/** One consolidated Riwayat Pengujian block for the whole bay, placed at the
+ *  very bottom of the report rather than repeated inside every equipment
+ *  card — with 5-7 pieces of equipment each getting their own trend section
+ *  the page piled up fast, so this replaces all of them with one section
+ *  that filters by BOTH equipment and item pengujian (Skor AHI Keseluruhan
+ *  or one specific parameter, which also switches the raw-readings table
+ *  below the chart to that parameter's history). */
+function BayHistorySection({ units }: { units: BayEquipmentUnit[] }) {
+  const [selectedUnitKey, setSelectedUnitKey] = useState(() => unitKey(units[0]));
+  const [selectedParam, setSelectedParam] = useState<string>(OVERALL_VALUE);
+
+  const unit = units.find((u) => unitKey(u) === selectedUnitKey) ?? units[0];
+  const param = selectedParam === OVERALL_VALUE ? null : unit.parameters.find((p) => p.label === selectedParam);
+  const history = param ? param.history : unit.history;
+
+  return (
+    <Card className="print:break-inside-avoid print:border print:shadow-none">
+      <CardHeader>
+        <CardTitle className="text-base">Riwayat Pengujian</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Trend Skor AHI dari waktu ke waktu — pilih peralatan dan item pengujian untuk melihat riwayatnya.
+        </p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <Select
+            value={selectedUnitKey}
+            onValueChange={(v) => {
+              setSelectedUnitKey(v ?? unitKey(units[0]));
+              setSelectedParam(OVERALL_VALUE);
+            }}
+          >
+            <SelectTrigger size="sm" className="w-[220px]">
+              <SelectValue placeholder="Peralatan">{unit.role}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {units.map((u) => (
+                <SelectItem key={unitKey(u)} value={unitKey(u)}>
+                  {u.role}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedParam} onValueChange={(v) => setSelectedParam(v ?? OVERALL_VALUE)}>
+            <SelectTrigger size="sm" className="w-[220px]">
+              <SelectValue placeholder="Item">
+                {selectedParam === OVERALL_VALUE ? "Skor AHI Keseluruhan" : selectedParam}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={OVERALL_VALUE}>Skor AHI Keseluruhan</SelectItem>
+              {unit.parameters.map((p) => (
+                <SelectItem key={p.label} value={p.label}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {history.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Belum ada data riwayat untuk {unit.role}
+            {param ? ` · ${param.label}` : ""} — pastikan sinkronisasi riwayat AHI sudah berjalan.
+          </p>
+        ) : (
+          <>
+            <EquipmentTrendChart history={history} />
+            {history.length === 1 ? (
+              <p className="text-xs text-muted-foreground">
+                Baru 1 titik data (hasil uji saat ini). Riwayat bertambah otomatis setiap kali ada pengujian baru.
+              </p>
+            ) : null}
+          </>
+        )}
+
+        {param ? <ParameterRawHistoryTable history={param.history} /> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Riwayat nilai mentah (hasil uji) for one parameter — one row per
+ *  (tanggal, titik ukur) pair, since a parameter can fan out into several
+ *  raw readings (e.g. Tahanan Isolasi: Atas-Bawah/Atas-Tanah/Bawah-Tanah). */
+interface ParameterRawHistoryRow {
+  tanggal: string;
+  klasifikasi: AhiKlasifikasi;
+  reading: EquipmentParameterHistoryPoint["rawReadings"][number] | null;
+}
+
+function ParameterRawHistoryTable({ history }: { history: EquipmentParameterHistoryPoint[] }) {
+  const rows: ParameterRawHistoryRow[] = history.flatMap((point): ParameterRawHistoryRow[] =>
+    point.rawReadings.length > 0
+      ? point.rawReadings.map((reading) => ({ tanggal: point.tanggal, klasifikasi: point.klasifikasi, reading }))
+      : [{ tanggal: point.tanggal, klasifikasi: point.klasifikasi, reading: null }],
+  );
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b bg-muted/40 text-left text-muted-foreground">
+            <th className="px-2 py-1.5 font-medium">Tanggal</th>
+            <th className="px-2 py-1.5 font-medium">Titik Ukur</th>
+            <th className="px-2 py-1.5 font-medium">R</th>
+            <th className="px-2 py-1.5 font-medium">S</th>
+            <th className="px-2 py-1.5 font-medium">T</th>
+            <th className="px-2 py-1.5 font-medium">Klasifikasi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, idx) => (
+            <tr key={`${row.tanggal}-${idx}`} className="border-b last:border-0">
+              <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">{row.tanggal}</td>
+              <td className="px-2 py-1.5 text-foreground">{row.reading?.label ?? "—"}</td>
+              <td className="px-2 py-1.5 text-muted-foreground">{formatValue(row.reading?.r ?? null)}</td>
+              <td className="px-2 py-1.5 text-muted-foreground">{formatValue(row.reading?.s ?? null)}</td>
+              <td className="px-2 py-1.5 text-muted-foreground">{formatValue(row.reading?.t ?? null)}</td>
+              <td className="px-2 py-1.5">
+                <KlasifikasiPill value={row.klasifikasi} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -456,6 +595,8 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
                   <UnitCard unit={unit} />
                 </Fragment>
               ))}
+
+              <BayHistorySection units={selected.units} />
             </>
           )}
         </div>

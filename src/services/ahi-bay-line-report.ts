@@ -2,10 +2,31 @@ import "server-only";
 
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSourceRaw } from "@/lib/data-connector";
-import type { AhiKlasifikasi, BayEquipmentParameter, BayEquipmentUnit, BayLineOption, BayLineReport } from "@/types";
+import type {
+  AhiKlasifikasi,
+  BayEquipmentParameter,
+  BayEquipmentUnit,
+  BayLineOption,
+  BayLineReport,
+  EquipmentHistoryPoint,
+  EquipmentParameterHistoryPoint,
+} from "@/types";
 
 const SOURCE = dataSources.ahiPerformance;
 const FILE = SOURCE.sources[0].file;
+
+const HISTORY_SOURCE = dataSources.ahiHistory;
+const HISTORY_FILE = HISTORY_SOURCE.sources[0].file;
+
+// Input sheet name -> its matching Riwayat sheet name — mirrors
+// AHI_HISTORY_SHEET_MAP in apps-script/ahi-history.gs exactly.
+const HISTORY_SHEET_MAP: Record<string, string> = {
+  "Input LA": "Riwayat LA",
+  "Input PMS": "Riwayat PMS",
+  "Input PT": "Riwayat PT",
+  "Input PMT": "Riwayat PMT",
+  "Input CT": "Riwayat CT",
+};
 
 // Every Input sheet has a 2-row header (row 1 = group label spanning several
 // sub-columns, row 2 = the actual per-parameter/per-phase sub-label) — same
@@ -268,7 +289,113 @@ function roleSortKey(role: string): number {
   return idx === -1 ? ROLE_ORDER.length : idx;
 }
 
-function parseUnitsForBay(grid: SheetGrid, bay: string, config: EquipmentTypeConfig, todayISO: string): BayEquipmentUnit[] {
+/** This unit's own Riwayat rows, grouped by exact TANGGAL PEMELIHARAAN
+ *  TERAKHIR (every row sharing that date is one test event, e.g. all R/S/T
+ *  phases tested together), oldest first. Shared by both the unit-level
+ *  and per-parameter history builders below so the bay/role/techident
+ *  filtering only happens once per unit. */
+function groupHistoryRowsByDate(
+  historyGrid: SheetGrid,
+  bay: string,
+  config: EquipmentTypeConfig,
+  unit: { role: string; techident: string | null },
+): { tanggal: string; rows: unknown[][] }[] {
+  const { row1, dataRows } = historyGrid;
+  const bayCol = findCol(row1, "BAY");
+  const techCol = findColStartsWith(row1, "TECHIDENT");
+  const tglCol = findCol(row1, "TANGGAL PEMELIHARAAN TERAKHIR");
+  const keteranganCol = config.roleColumnLabel ? findCol(row1, config.roleColumnLabel) : findColStartsWith(row1, "KETERANGAN");
+  if (bayCol === -1 || tglCol === -1) return [];
+
+  let rowsForUnit = dataRows.filter((r) => textAt(r, bayCol) === bay);
+  if (config.roleColumnLabel) {
+    // PMS: several roles (DS LINE / DS BUS A / DS BUS B) can share one bay —
+    // narrow to this specific unit's own role.
+    rowsForUnit = rowsForUnit.filter((r) => textAt(r, keteranganCol) === unit.role);
+  } else if (!config.phasePivot && unit.techident) {
+    // PMT: not phase-pivoted, so more than one breaker per bay is possible —
+    // techident disambiguates which one this history belongs to. Phase-
+    // pivoted equipment (LA/PT/CT) skips this: every phase row for the bay
+    // already belongs to the one merged unit, and each phase has its own
+    // distinct techident so filtering by it would drop the other phases.
+    rowsForUnit = rowsForUnit.filter((r) => textAt(r, techCol) === unit.techident);
+  }
+
+  const byDate = new Map<string, unknown[][]>();
+  for (const row of rowsForUnit) {
+    const tanggal = extractDateOnly(row[tglCol]);
+    if (!tanggal) continue;
+    const list = byDate.get(tanggal) ?? [];
+    list.push(row);
+    byDate.set(tanggal, list);
+  }
+  return [...byDate.entries()].map(([tanggal, rows]) => ({ tanggal, rows })).sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+}
+
+/** Past test events for one already-resolved unit — worst overall Skor AHI
+ *  across each date's rows, reusing the sheet's own already-computed
+ *  "Skor AHI" column rather than re-deriving it from individual parameter
+ *  scores. Unit-level trend, same granularity its own header summarizes. */
+function buildHistoryForUnit(
+  historyGrid: SheetGrid | undefined,
+  bay: string,
+  config: EquipmentTypeConfig,
+  unit: { role: string; techident: string | null },
+): EquipmentHistoryPoint[] {
+  if (!historyGrid) return [];
+  const skorAhiCol = findCol(historyGrid.row1, "Skor AHI");
+  if (skorAhiCol === -1) return [];
+
+  return groupHistoryRowsByDate(historyGrid, bay, config, unit).map(({ tanggal, rows }) => {
+    let worst: number | null = null;
+    for (const row of rows) {
+      const score = parseScore(row[skorAhiCol]);
+      if (score !== null && (worst === null || score > worst)) worst = score;
+    }
+    return { tanggal, skorAhi: worst, klasifikasi: classify(worst) };
+  });
+}
+
+/** Past test events for one specific parameter (e.g. "Tahanan Isolasi")
+ *  within one unit — that parameter's own score/classification plus its
+ *  raw readings at each date, using the exact same evalCols/RAW_MAPPINGS
+ *  logic parseUnitsForBay already uses for the live row. */
+function buildParameterHistoryForUnit(
+  historyGrid: SheetGrid | undefined,
+  bay: string,
+  config: EquipmentTypeConfig,
+  unit: { role: string; techident: string | null },
+  evalLabel: string,
+  rawSources: RawSource[],
+): EquipmentParameterHistoryPoint[] {
+  if (!historyGrid) return [];
+  const { row1, row2 } = historyGrid;
+  const phasaCol = findCol(row1, "PHASA");
+  const evalStart = findCol(row1, "Evaluasi AHI");
+  const evalCols = groupCols(row1, evalStart);
+  const evalLabels = evalCols.map((c) => textAt(row2, c) || textAt(row1, c));
+  const targetIdx = evalLabels.indexOf(evalLabel);
+  if (targetIdx === -1) return [];
+  const col = evalCols[targetIdx];
+
+  return groupHistoryRowsByDate(historyGrid, bay, config, unit).map(({ tanggal, rows }) => {
+    let worst: number | null = null;
+    for (const row of rows) {
+      const score = parseScore(row[col]);
+      if (score !== null && (worst === null || score > worst)) worst = score;
+    }
+    const rawReadings = extractRawReadings(rows, row1, row2, phasaCol, config.phasePivot, rawSources);
+    return { tanggal, skorAhi: worst, klasifikasi: classify(worst), rawReadings };
+  });
+}
+
+function parseUnitsForBay(
+  grid: SheetGrid,
+  bay: string,
+  config: EquipmentTypeConfig,
+  todayISO: string,
+  historyGrid?: SheetGrid,
+): BayEquipmentUnit[] {
   const { row1, row2, dataRows } = grid;
   const bayCol = findCol(row1, "BAY");
   const techCol = findColStartsWith(row1, "TECHIDENT");
@@ -310,6 +437,8 @@ function parseUnitsForBay(grid: SheetGrid, bay: string, config: EquipmentTypeCon
   for (const groupRows of groups.values()) {
     const first = groupRows[0];
     const role = config.roleColumnLabel ? textAt(first, keteranganCol) || "—" : (config.roleFixed ?? "—");
+    const techident = textAt(first, techCol) || null;
+    const unitIdentity = { role, techident };
     const tanggal = extractDateOnly(first[tglCol]);
     const ageYears = yearsSince(tanggal, todayISO);
 
@@ -331,8 +460,9 @@ function parseUnitsForBay(grid: SheetGrid, bay: string, config: EquipmentTypeCon
       };
       const rawSources = RAW_MAPPINGS[config.sheetName]?.[label] ?? [];
       const rawReadings = extractRawReadings(groupRows, row1, row2, phasaCol, config.phasePivot, rawSources);
+      const paramLabel = label || `Parameter ${i + 1}`;
       return {
-        label: label || `Parameter ${i + 1}`,
+        label: paramLabel,
         r: config.phasePivot ? byPhase("R") : (first[col] as string | number | null),
         s: config.phasePivot ? byPhase("S") : null,
         t: config.phasePivot ? byPhase("T") : null,
@@ -341,6 +471,7 @@ function parseUnitsForBay(grid: SheetGrid, bay: string, config: EquipmentTypeCon
         mandatoryPengujian: mandatory,
         pengujianUlang: retest,
         rawReadings,
+        history: buildParameterHistoryForUnit(historyGrid, bay, config, unitIdentity, label, rawSources),
       };
     });
 
@@ -350,7 +481,7 @@ function parseUnitsForBay(grid: SheetGrid, bay: string, config: EquipmentTypeCon
       merk: textAt(first, merkCol) || null,
       type: textAt(first, typeCol) || null,
       nomorSeri: textAt(first, nomorSeriCol) || null,
-      techident: textAt(first, techCol) || null,
+      techident,
       tanggalPemeliharaanTerakhir: tanggal,
       skorAhi: skorAhiOverall,
       klasifikasi: classify(skorAhiOverall),
@@ -359,6 +490,7 @@ function parseUnitsForBay(grid: SheetGrid, bay: string, config: EquipmentTypeCon
       keterangan: textAt(first, keteranganCol) || null,
       sourceLink: textAt(first, sourceLinkCol) || null,
       parameters,
+      history: buildHistoryForUnit(historyGrid, bay, config, unitIdentity),
     });
   }
 
@@ -388,6 +520,18 @@ async function loadGrids(): Promise<Map<string, SheetGrid>> {
   return grids;
 }
 
+/** Keyed by Input sheet name (not Riwayat sheet name) so callers can look
+ *  a unit's history up the same way they look up its live grid. */
+async function loadHistoryGrids(): Promise<Map<string, SheetGrid>> {
+  const results = await readConfiguredSourceRaw(HISTORY_SOURCE);
+  const grids = new Map<string, SheetGrid>();
+  for (const [inputSheetName, historySheetName] of Object.entries(HISTORY_SHEET_MAP)) {
+    const sheetResult = results.find((r) => r.file === HISTORY_FILE && r.sheet === historySheetName);
+    if (sheetResult) grids.set(inputSheetName, toGrid(sheetResult.rows));
+  }
+  return grids;
+}
+
 function bayOptionsFromGrids(grids: Map<string, SheetGrid>): BayLineOption[] {
   const seen = new Map<string, BayLineOption>();
   for (const config of EQUIPMENT_TYPES) {
@@ -407,12 +551,17 @@ function bayOptionsFromGrids(grids: Map<string, SheetGrid>): BayLineOption[] {
   return [...seen.values()].sort((a, b) => a.bay.localeCompare(b.bay));
 }
 
-function buildReportFromGrids(grids: Map<string, SheetGrid>, option: BayLineOption, todayISO: string): BayLineReport {
+function buildReportFromGrids(
+  grids: Map<string, SheetGrid>,
+  option: BayLineOption,
+  todayISO: string,
+  historyGrids?: Map<string, SheetGrid>,
+): BayLineReport {
   const units: BayEquipmentUnit[] = [];
   for (const config of EQUIPMENT_TYPES) {
     const grid = grids.get(config.sheetName);
     if (!grid) continue;
-    units.push(...parseUnitsForBay(grid, option.bay, config, todayISO));
+    units.push(...parseUnitsForBay(grid, option.bay, config, todayISO, historyGrids?.get(config.sheetName)));
   }
   return { gi: option.gi, bay: option.bay, ultg: option.ultg, units: units.sort((a, b) => roleSortKey(a.role) - roleSortKey(b.role)) };
 }
@@ -443,4 +592,16 @@ export async function getAllBayLineReports(): Promise<BayLineReport[]> {
   const grids = await loadGrids();
   const todayISO = getJakartaTodayISO();
   return bayOptionsFromGrids(grids).map((option) => buildReportFromGrids(grids, option, todayISO));
+}
+
+/** Same as getAllBayLineReports(), but each unit's `history` is also filled
+ *  in from the separate "AHI UPT Palangkaraya - Riwayat Pengujian" file
+ *  (ahiHistory source, apps-script/ahi-history.gs keeps it updated). Kept
+ *  as its own function rather than folded into getAllBayLineReports() so
+ *  callers that don't need trend data (the dashboard's Management
+ *  Attention aggregation) never pay for reading these 5 extra sheets. */
+export async function getAllBayLineReportsWithHistory(): Promise<BayLineReport[]> {
+  const [grids, historyGrids] = await Promise.all([loadGrids(), loadHistoryGrids()]);
+  const todayISO = getJakartaTodayISO();
+  return bayOptionsFromGrids(grids).map((option) => buildReportFromGrids(grids, option, todayISO, historyGrids));
 }

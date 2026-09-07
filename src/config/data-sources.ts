@@ -119,6 +119,28 @@ export const dataSources = {
       },
     ],
   },
+  // Separate from ahiPerformance (not another entry in its sources[]) so
+  // that a plain getAllBayLineReports() call — used by the Bay Line
+  // selector list and by the dashboard's Management Attention aggregation —
+  // never has to pay for reading these 5 extra sheets too. Only
+  // getAllBayLineReportsWithHistory() (the Report tab's own trend view)
+  // reads this source. See apps-script/ahi-history.gs for how it's filled.
+  ahiHistory: {
+    id: "ahi-history",
+    label: "AHI Riwayat Pengujian",
+    sources: [
+      {
+        file: "AHI UPT Palangkaraya - Riwayat Pengujian",
+        sheets: [
+          { name: "Riwayat LA", required: false, purpose: "Append-only history of Input LA rows — one snapshot per test event, oldest kept." },
+          { name: "Riwayat PMS", required: false, purpose: "Append-only history of Input PMS rows." },
+          { name: "Riwayat PT", required: false, purpose: "Append-only history of Input PT rows." },
+          { name: "Riwayat PMT", required: false, purpose: "Append-only history of Input PMT rows." },
+          { name: "Riwayat CT", required: false, purpose: "Append-only history of Input CT rows." },
+        ],
+      },
+    ],
+  },
   disturbances: {
     id: "disturbances",
     label: "Gangguan",

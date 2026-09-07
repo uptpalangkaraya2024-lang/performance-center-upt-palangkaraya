@@ -10,7 +10,7 @@ import { AhiCategoryDetail } from "@/components/ahi/ahi-category-detail";
 import { CollapsibleDataDetail } from "@/components/ahi/collapsible-data-detail";
 import { BayLineReportView } from "@/components/ahi/bay-line-report";
 import { getAhiPerformance } from "@/services/ahi-performance";
-import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
+import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export default async function AhiPage() {
   }
 
   const { sections, anomalies, lastUpdate } = result.data;
-  const bayLineReports = await getAllBayLineReports();
+  const bayLineReports = await getAllBayLineReportsWithHistory();
 
   return (
     <div className="flex flex-col gap-6">
