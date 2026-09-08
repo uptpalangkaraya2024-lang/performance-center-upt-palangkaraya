@@ -559,3 +559,92 @@ export interface RenusData {
   reminders: AiInsight[];
   error: string | null;
 }
+
+// 4DX (WIG/Lead Measure) monitoring — replaces a manual weekly WhatsApp
+// update that a human currently writes by cross-referencing three things in
+// the source spreadsheet: the TARGET WIG * rotation/target matrix (which
+// asset is due this week and how many), the ULTG/K3 realization logs (what
+// was actually completed), and a chosen calendar week. See
+// src/services/four-dx.ts for the server-side parse (produces the *Raw
+// shapes below) and src/lib/four-dx-compute.ts for the pure, period-specific
+// computation (shared by the server's default view and the client's month/
+// week filter, so switching the filter never needs a server round-trip).
+
+/** One asset's full-year target schedule (a specific Bay/GI for WIG 1 & 3, or
+ *  a whole ULTG for WIG 2 & 4) — every week label ("SEP-M1") it has a target
+ *  for, not just the currently-selected one, so the client can recompute any
+ *  period without re-fetching. */
+export interface FourDxAssetTargetRaw {
+  asset: string;
+  weeklyTargets: Record<string, number>;
+}
+
+/** One Lead Measure's raw target schedule, before picking a period. */
+export interface FourDxLmRaw {
+  code: string;
+  description: string;
+  assets: FourDxAssetTargetRaw[];
+}
+
+export interface FourDxWigRaw {
+  number: number;
+  title: string;
+  lms: FourDxLmRaw[];
+}
+
+/** One completed action from a realization log (ULTG or K3 sheets). */
+export interface FourDxRealization {
+  lmCode: string;
+  asset: string;
+  ultg: string;
+  /** yyyy-MM-dd */
+  tanggal: string;
+}
+
+/** What src/services/four-dx.ts hands to the client — the full year's
+ *  schedule + every realization, plus today's own computed period (the
+ *  page's default filter selection) and every week label actually present
+ *  in the source sheets (so the filter dropdowns only ever offer real
+ *  options). */
+export interface FourDxSnapshot {
+  currentMonthAbbr: string;
+  currentWeekOfMonth: number;
+  currentYear: number;
+  availableWeekLabels: string[];
+  wigs: FourDxWigRaw[];
+  realizations: FourDxRealization[];
+  error: string | null;
+}
+
+/** One asset scheduled for a specific (already-chosen) period, and whether
+ *  enough matching realization rows were found for it. */
+export interface FourDxAssetStatus {
+  asset: string;
+  targetThisWeek: number;
+  realizedCount: number;
+  done: boolean;
+  realizedAt: string | null;
+}
+
+/** One Lead Measure's numbers for one specific (already-chosen) period —
+ *  the WhatsApp-update-equivalent view. */
+export interface FourDxLm {
+  code: string;
+  description: string;
+  targetMingguan: number;
+  targetBulanan: number;
+  realisasiMingguan: number;
+  /** null when targetMingguan is 0 (nothing to divide by) — never fabricated as 0% or 100%. */
+  percentRealisasiMingguan: number | null;
+  /** Confirmed against the source sheet's own Status formula:
+   *  IF(%RealisasiMingguan >= 1, "tercapai", "belum") — binary on the
+   *  *weekly* percentage, not cumulative. */
+  status: "tercapai" | "belum";
+  assets: FourDxAssetStatus[];
+}
+
+export interface FourDxWig {
+  number: number;
+  title: string;
+  lms: FourDxLm[];
+}

@@ -141,6 +141,31 @@ export const dataSources = {
       },
     ],
   },
+  // TARGET WIG * sheets are read raw (readConfiguredSourceRaw) — each is a
+  // sequence of per-LM blocks (title row, own header row, asset rows), not
+  // one clean header at row 1, so the header-keyed reader can't apply here.
+  // The 4 realization-log sheets (ULTG */K3) have one ordinary header row
+  // each and use the normal header-keyed reader instead. See
+  // src/services/four-dx.ts for how both shapes get parsed.
+  fourDx: {
+    id: "four-dx",
+    label: "4DX Transmisi",
+    sources: [
+      {
+        file: "[02] Monitoring 4DX Transmisi UPT Palangkaraya 2026",
+        sheets: [
+          { name: "TARGET WIG 1", required: false, purpose: "Per-LM weekly target/rotation matrix for WIG 1 (Trafo). Read raw — headers repeat per LM block, not just at row 1." },
+          { name: "TARGET WIG 2", required: false, purpose: "Per-LM weekly target matrix for WIG 2 (Transmisi) — rows are ULTG-level targets, with extra non-numbered reference rows listing individual towers/spans that carry no weekly numbers and must be skipped." },
+          { name: "TARGET WIG 3", required: false, purpose: "Per-LM weekly target/rotation matrix for WIG 3 (Emergency Response Time) — per-GI rotation." },
+          { name: "TARGET WIG 4", required: false, purpose: "Per-LM weekly target matrix for WIG 4 (K3/Zero Accident) — rows are ULTG-level targets." },
+          { name: "ULTG PALANGKARAYA", required: false, purpose: "Realization log (one row per completed action) for ULTG Palangkaraya — LM code, action plan, asset, date." },
+          { name: "ULTG PANGKALAN BUN", required: false, purpose: "Realization log for ULTG Pangkalan Bun." },
+          { name: "ULTG MUARA TEWEH", required: false, purpose: "Realization log for ULTG Muara Teweh." },
+          { name: "K3 UPT PALANGKARAYA", required: false, purpose: "Realization log for WIG 4 (K3/Zero Accident) actions, UPT-wide rather than per-ULTG." },
+        ],
+      },
+    ],
+  },
   disturbances: {
     id: "disturbances",
     label: "Gangguan",

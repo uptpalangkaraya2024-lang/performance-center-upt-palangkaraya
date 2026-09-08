@@ -51,7 +51,7 @@ export const navGroups: NavGroup[] = [
         icon: Gauge,
         children: [
           { title: "ABO", href: "/dashboard/kpi/abo", comingSoon: true },
-          { title: "4DX", href: "/dashboard/kpi/4dx", comingSoon: true },
+          { title: "4DX", href: "/dashboard/kpi/4dx" },
           { title: "CE", href: "/dashboard/kpi/ce", comingSoon: true },
           { title: "AHI", href: "/dashboard/kpi/ahi" },
         ],
