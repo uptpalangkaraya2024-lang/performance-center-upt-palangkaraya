@@ -143,15 +143,25 @@ export function buildFourDxLm(
   // Realisasi Mingguan comes from the "Monitoring" sheet (a manually-
   // reconciled weekly count, confirmed with the user to be more complete
   // than the raw ULTG/K3 logs — some realizations are only ever entered
-  // there). Matched by normalized LM description, summed across every ULTG
-  // (TARGET WIG's own target for WIG 1 & 3 isn't split by ULTG either).
-  // Falls back to counting matching raw log rows if this LM has no
-  // Monitoring rows at all (sheet temporarily unavailable, etc).
+  // there). Matched by normalized LM description.
+  //
+  // Monitoring carries a 4th row per LM with a BLANK ULTG — the UPT-level
+  // total, confirmed directly with the user: individual ULTGs sometimes
+  // fall short of their own target, so the team tops the shortfall up
+  // manually at the UPT level (not attributed to any one ULTG) so the
+  // overall figure still hits target. That UPT-level row is therefore the
+  // authoritative realisasi — preferred over summing the per-ULTG rows,
+  // which would undercount whenever a top-up exists. Falls back to summing
+  // per-ULTG rows (then to counting matching raw log rows) only when no
+  // UPT-level row exists for this LM at all.
   const monitoringRows = monitoring.filter((m) => normalize(m.description) === normalize(lm.description));
+  const uptLevelRows = monitoringRows.filter((m) => !m.ultg);
   const realisasiMingguan =
-    monitoringRows.length > 0
-      ? monitoringRows.reduce((sum, m) => sum + (m.weeklyRealisasi[period.lookupLabel] ?? 0), 0)
-      : matchingThisLm.length;
+    uptLevelRows.length > 0
+      ? uptLevelRows.reduce((sum, m) => sum + (m.weeklyRealisasi[period.lookupLabel] ?? 0), 0)
+      : monitoringRows.length > 0
+        ? monitoringRows.reduce((sum, m) => sum + (m.weeklyRealisasi[period.lookupLabel] ?? 0), 0)
+        : matchingThisLm.length;
   const percentRealisasiMingguan = targetMingguan > 0 ? realisasiMingguan / targetMingguan : null;
   const status: FourDxLm["status"] =
     percentRealisasiMingguan !== null && percentRealisasiMingguan >= 1 ? "tercapai" : "belum";
@@ -186,7 +196,13 @@ export function buildFourDxWigs(
  *  per-asset LMs get a plain "- <asset> ✅" line, ULTG-level LMs (WIG 2 & 4)
  *  get "- <ULTG> (R:n/T:n) ✅" since their target is a quantity, not a single
  *  yes/no per asset. The header date range is looked up from DATASET (see
- *  resolvePeriodRange), matching the source sheet exactly. */
+ *  resolvePeriodRange), matching the source sheet exactly.
+ *
+ *  Order per LM, confirmed with the user: UPT-level target/realisasi total
+ *  first ("Total UPT: R:x/T:y"), THEN the per-ULTG/ruas breakdown — the UPT
+ *  total already accounts for manual top-ups between ULTGs (see
+ *  buildFourDxLm), so it's the number that decides tercapai/belum; the
+ *  breakdown below it is detail, not a second pass/fail gate. */
 export function formatFourDxWaRecap(period: FourDxPeriodRange, year: number, wigs: FourDxWig[]): string {
   const monthIndex = monthAbbrIndex(period.monthAbbr);
   const monthFull = MONTH_FULL_ID[monthIndex];
@@ -204,7 +220,9 @@ export function formatFourDxWaRecap(period: FourDxPeriodRange, year: number, wig
     lines.push(`*WIG ${wig.number}. ${wig.title.replace(/^WIG\s*\d+\.\s*/i, "")}*`);
     lines.push(`✅ ${tercapaiCount} tercapai · ⏳ ${belumCount} belum`);
     for (const lm of wig.lms) {
+      const lmMark = lm.status === "tercapai" ? "✅" : "⏳";
       lines.push(`LM ${lm.code} ${lm.description}`);
+      lines.push(`Total UPT: R:${lm.realisasiMingguan}/T:${lm.targetMingguan} ${lmMark}`);
       if (lm.assets.length === 0) {
         lines.push("- Tidak ada aset dijadwalkan pada periode ini");
       }

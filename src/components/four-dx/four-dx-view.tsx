@@ -142,24 +142,32 @@ function LmCard({ lm }: { lm: FourDxLm }) {
         <p className="text-xs text-muted-foreground">{lm.description}</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-lg border p-3">
-            <div className="text-lg font-semibold tabular-nums text-foreground">{lm.targetBulanan}</div>
-            <div className="text-xs text-muted-foreground">Target Bulanan</div>
-          </div>
-          <div className="rounded-lg border p-3">
-            <div className="text-lg font-semibold tabular-nums text-foreground">{lm.targetMingguan}</div>
-            <div className="text-xs text-muted-foreground">Target Mingguan</div>
-          </div>
-          <div className="rounded-lg border p-3">
-            <div className="text-lg font-semibold tabular-nums text-foreground">{lm.realisasiMingguan}</div>
-            <div className="text-xs text-muted-foreground">Realisasi Mingguan</div>
-          </div>
-          <div className="rounded-lg border p-3">
-            <div className="text-lg font-semibold tabular-nums text-foreground">
-              {formatPercent(lm.percentRealisasiMingguan)}
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-foreground">
+            Target &amp; Realisasi UPT
+            <span className="ml-1 font-normal text-muted-foreground">
+              — menentukan status tercapai/belum, walau breakdown di bawah masih ada yang kurang
+            </span>
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border p-3">
+              <div className="text-lg font-semibold tabular-nums text-foreground">{lm.targetBulanan}</div>
+              <div className="text-xs text-muted-foreground">Target Bulanan</div>
             </div>
-            <div className="text-xs text-muted-foreground">% Realisasi Mingguan</div>
+            <div className="rounded-lg border p-3">
+              <div className="text-lg font-semibold tabular-nums text-foreground">{lm.targetMingguan}</div>
+              <div className="text-xs text-muted-foreground">Target Mingguan</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-lg font-semibold tabular-nums text-foreground">{lm.realisasiMingguan}</div>
+              <div className="text-xs text-muted-foreground">Realisasi Mingguan</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-lg font-semibold tabular-nums text-foreground">
+                {formatPercent(lm.percentRealisasiMingguan)}
+              </div>
+              <div className="text-xs text-muted-foreground">% Realisasi Mingguan</div>
+            </div>
           </div>
         </div>
 
@@ -167,7 +175,7 @@ function LmCard({ lm }: { lm: FourDxLm }) {
           <p className="text-xs text-muted-foreground">Tidak ada aset yang dijadwalkan pada periode ini.</p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-medium text-foreground">Checklist Aset Periode Ini</p>
+            <p className="text-xs font-medium text-foreground">Breakdown per ULTG / Ruas</p>
             <ul className="flex flex-col gap-1">
               {lm.assets.map((asset) => (
                 <li key={asset.asset} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
