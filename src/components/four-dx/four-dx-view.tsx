@@ -24,9 +24,9 @@ import {
   MONTH_ABBR_ID,
   MONTH_FULL_ID,
   buildFourDxWigs,
-  computeFourDxPeriodRange,
   formatFourDxWaRecap,
   monthAbbrIndex,
+  resolvePeriodRange,
 } from "@/lib/four-dx-compute";
 import { cn } from "@/lib/utils";
 import type { FourDxLm, FourDxSnapshot, FourDxWig } from "@/types";
@@ -245,31 +245,31 @@ function WaRecapSheet({ text }: { text: string }) {
 }
 
 export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
+  // Month/week options come from DATASET's own boundaries (periodBoundaries)
+  // rather than TARGET WIG's columns — a month can legitimately have 5 weeks
+  // (e.g. a 31-day month), and which weeks exist varies per month, so this
+  // can't be a fixed 1-4 list.
   const monthOptions = useMemo(() => {
     const present = new Set<string>();
-    for (const label of snapshot.availableWeekLabels) {
-      const abbr = label.split("-")[0];
-      if (abbr) present.add(abbr);
-    }
+    for (const b of snapshot.periodBoundaries) present.add(b.monthAbbr);
     return MONTH_ABBR_ID.filter((m) => present.has(m));
-  }, [snapshot.availableWeekLabels]);
+  }, [snapshot.periodBoundaries]);
+
+  const [monthAbbr, setMonthAbbr] = useState(() => snapshot.currentPeriodLabel.split("-M")[0]);
+  const [weekOfMonth, setWeekOfMonth] = useState(() =>
+    Number(/-M(\d+)$/.exec(snapshot.currentPeriodLabel)?.[1] ?? "1"),
+  );
 
   const weekOptions = useMemo(() => {
-    const weeks = new Set<number>();
-    for (const label of snapshot.availableWeekLabels) {
-      const m = /-M(\d+)$/.exec(label);
-      if (m) weeks.add(Number(m[1]));
-    }
-    if (snapshot.currentWeekOfMonth > Math.max(0, ...weeks)) weeks.add(snapshot.currentWeekOfMonth);
-    return [...weeks].sort((a, b) => a - b);
-  }, [snapshot.availableWeekLabels, snapshot.currentWeekOfMonth]);
-
-  const [monthAbbr, setMonthAbbr] = useState(snapshot.currentMonthAbbr);
-  const [weekOfMonth, setWeekOfMonth] = useState(snapshot.currentWeekOfMonth);
+    return snapshot.periodBoundaries
+      .filter((b) => b.monthAbbr === monthAbbr)
+      .map((b) => b.weekOfMonth)
+      .sort((a, b) => a - b);
+  }, [snapshot.periodBoundaries, monthAbbr]);
 
   const period = useMemo(
-    () => computeFourDxPeriodRange(monthAbbr, weekOfMonth, snapshot.currentYear),
-    [monthAbbr, weekOfMonth, snapshot.currentYear],
+    () => resolvePeriodRange(`${monthAbbr}-M${weekOfMonth}`, snapshot.periodBoundaries, snapshot.currentYear),
+    [monthAbbr, weekOfMonth, snapshot.periodBoundaries, snapshot.currentYear],
   );
 
   const wigs = useMemo(
@@ -293,7 +293,18 @@ export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <Select value={monthAbbr} onValueChange={(v) => v && setMonthAbbr(v)}>
+        <Select
+          value={monthAbbr}
+          onValueChange={(v) => {
+            if (!v) return;
+            setMonthAbbr(v);
+            // Week count varies per month (a 31-day month can have a 5th
+            // week) — clamp to that month's first available week rather
+            // than keep a week number that might not exist there.
+            const firstWeek = snapshot.periodBoundaries.find((b) => b.monthAbbr === v)?.weekOfMonth ?? 1;
+            setWeekOfMonth(firstWeek);
+          }}
+        >
           <SelectTrigger size="sm" className="w-[160px]">
             <SelectValue placeholder="Bulan">{MONTH_FULL_ID[monthAbbrIndex(monthAbbr)]}</SelectValue>
           </SelectTrigger>

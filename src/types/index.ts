@@ -615,16 +615,28 @@ export interface FourDxMonitoringRow {
   weeklyRealisasi: Record<string, number>;
 }
 
+/** The real date range one week-of-month label ("SEP-M1") covers, read
+ *  directly from the DATASET sheet's own per-day WEEK NUMBER (4 WEEKS)
+ *  column rather than computed — confirmed NOT a fixed ceil(day/7) rule
+ *  (e.g. September's M1 is only 6 days, M4 is 10 days), so every label's
+ *  boundaries are looked up, never derived. */
+export interface FourDxPeriodBoundary {
+  label: string;
+  monthAbbr: string;
+  weekOfMonth: number;
+  startISO: string;
+  endISO: string;
+}
+
 /** What src/services/four-dx.ts hands to the client — the full year's
- *  schedule + every realization, plus today's own computed period (the
- *  page's default filter selection) and every week label actually present
- *  in the source sheets (so the filter dropdowns only ever offer real
- *  options). */
+ *  schedule + every realization, plus today's own period label and the real
+ *  date boundaries for every label DATASET defines (so the client can
+ *  resolve any selected month/week to its actual dates without needing a
+ *  server round-trip or a — proven unreliable — formula). */
 export interface FourDxSnapshot {
-  currentMonthAbbr: string;
-  currentWeekOfMonth: number;
+  currentPeriodLabel: string;
   currentYear: number;
-  availableWeekLabels: string[];
+  periodBoundaries: FourDxPeriodBoundary[];
   wigs: FourDxWigRaw[];
   realizations: FourDxRealization[];
   monitoring: FourDxMonitoringRow[];

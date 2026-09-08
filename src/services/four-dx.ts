@@ -2,11 +2,11 @@ import "server-only";
 
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSourceRaw } from "@/lib/data-connector";
-import { dayOfMonthToWeek, MONTH_ABBR_ID } from "@/lib/four-dx-compute";
 import type {
   FourDxAssetTargetRaw,
   FourDxLmRaw,
   FourDxMonitoringRow,
+  FourDxPeriodBoundary,
   FourDxRealization,
   FourDxSnapshot,
   FourDxWigRaw,
@@ -83,7 +83,7 @@ function getJakartaTodayISO(): string {
  *  with no "No" and no weekly numbers — confirmed against the live sheet,
  *  not guessed) — only a row whose own "No" cell is a real number is an
  *  actual per-week target row. */
-function parseTargetWigSheet(grid: unknown[][], wigNumber: number, weekLabels: Set<string>): FourDxLmRaw[] {
+function parseTargetWigSheet(grid: unknown[][]): FourDxLmRaw[] {
   const lms: FourDxLmRaw[] = [];
   let i = 0;
   while (i < grid.length) {
@@ -101,10 +101,7 @@ function parseTargetWigSheet(grid: unknown[][], wigNumber: number, weekLabels: S
     const weekCols: { col: number; label: string }[] = [];
     for (let c = 2; c < headerRow.length; c++) {
       const label = textAt(headerRow, c);
-      if (label) {
-        weekCols.push({ col: c, label });
-        weekLabels.add(label);
-      }
+      if (label) weekCols.push({ col: c, label });
     }
     i += 1; // move to first asset row
 
@@ -176,6 +173,40 @@ function parseMonitoringSheet(grid: unknown[][]): FourDxMonitoringRow[] {
   return rows;
 }
 
+/** Parses the "DATASET" sheet's DATETIME + "WEEK NUMBER (4 WEEKS)" columns
+ *  into the real date range each week-of-month label covers — the
+ *  authoritative source, since that label's boundaries are NOT a fixed
+ *  ceil(day/7) rule (confirmed against the live sheet: September's M1 is
+ *  only 6 days, M4 absorbs 10 — every month has to be looked up, not
+ *  computed). One row per calendar day; grouped by label, taking the
+ *  min/max date seen for each. */
+function parseDatasetSheet(grid: unknown[][]): FourDxPeriodBoundary[] {
+  const row1 = grid[0] ?? [];
+  const dataRows = grid.slice(1);
+  const dateCol = findCol(row1, "DATETIME");
+  const labelCol = findCol(row1, "WEEK NUMBER (4 WEEKS)");
+  if (dateCol === -1 || labelCol === -1) return [];
+
+  const byLabel = new Map<string, { min: string; max: string }>();
+  for (const row of dataRows) {
+    const dateISO = extractDateOnly(row[dateCol]);
+    const label = textAt(row, labelCol);
+    if (!dateISO || !/^[A-Z]{3}-M\d$/.test(label)) continue;
+    const existing = byLabel.get(label);
+    if (!existing) {
+      byLabel.set(label, { min: dateISO, max: dateISO });
+    } else {
+      if (dateISO < existing.min) existing.min = dateISO;
+      if (dateISO > existing.max) existing.max = dateISO;
+    }
+  }
+
+  return [...byLabel.entries()].map(([label, { min, max }]) => {
+    const [monthAbbr, weekPart] = label.split("-M");
+    return { label, monthAbbr, weekOfMonth: Number(weekPart), startISO: min, endISO: max };
+  });
+}
+
 /** Parses one realization-log sheet's raw grid (single ordinary header row,
  *  unlike TARGET WIG's repeating blocks) into a flat list of completed
  *  actions. */
@@ -200,14 +231,13 @@ function parseRealizationSheet(grid: unknown[][]): FourDxRealization[] {
 
 export async function getFourDxSnapshot(): Promise<FourDxSnapshot> {
   const results = await readConfiguredSourceRaw(SOURCE);
-  const weekLabels = new Set<string>();
 
   const wigs: FourDxWigRaw[] = [];
   for (const { name, wigNumber } of TARGET_SHEETS) {
     const found = results.find((r) => r.file === FILE && r.sheet === name);
     if (!found || found.rows.length === 0) continue;
     const title = textAt(found.rows[0], 0);
-    const lms = parseTargetWigSheet(found.rows, wigNumber, weekLabels);
+    const lms = parseTargetWigSheet(found.rows);
     if (lms.length > 0) wigs.push({ number: wigNumber, title, lms });
   }
 
@@ -220,14 +250,25 @@ export async function getFourDxSnapshot(): Promise<FourDxSnapshot> {
   const monitoringSheet = results.find((r) => r.file === FILE && r.sheet === "Monitoring");
   const monitoring = monitoringSheet ? parseMonitoringSheet(monitoringSheet.rows) : [];
 
+  const datasetSheet = results.find((r) => r.file === FILE && r.sheet === "DATASET");
+  const periodBoundaries = datasetSheet ? parseDatasetSheet(datasetSheet.rows) : [];
+
   const todayISO = getJakartaTodayISO();
-  const [year, month, day] = todayISO.split("-").map(Number);
+  const [year] = todayISO.split("-").map(Number);
+  const todayBoundary = periodBoundaries.find((b) => todayISO >= b.startISO && todayISO <= b.endISO);
+  // Fallback only fires if DATASET is unavailable — a plain ceil(day/7)
+  // estimate, since a wrong-but-present period beats no period at all.
+  const currentPeriodLabel =
+    todayBoundary?.label ?? (() => {
+      const [, month, day] = todayISO.split("-").map(Number);
+      const MONTH_ABBR_ID = ["JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"];
+      return `${MONTH_ABBR_ID[month - 1]}-M${Math.ceil(day / 7)}`;
+    })();
 
   return {
-    currentMonthAbbr: MONTH_ABBR_ID[month - 1],
-    currentWeekOfMonth: dayOfMonthToWeek(day),
+    currentPeriodLabel,
     currentYear: year,
-    availableWeekLabels: [...weekLabels],
+    periodBoundaries,
     wigs,
     realizations,
     monitoring,

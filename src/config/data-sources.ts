@@ -163,6 +163,7 @@ export const dataSources = {
           { name: "ULTG MUARA TEWEH", required: false, purpose: "Realization log for ULTG Muara Teweh." },
           { name: "K3 UPT PALANGKARAYA", required: false, purpose: "Realization log for WIG 4 (K3/Zero Accident) actions, UPT-wide rather than per-ULTG." },
           { name: "Monitoring", required: false, purpose: "Reconciled weekly realisasi count per (ULTG, LM) across the whole year — the authoritative realisasi number (some realizations are entered here manually rather than in the ULTG/K3 logs). Used for the Target/Realisasi/% numbers; the ULTG/K3 logs are still used for the per-asset checklist, since this sheet has no per-bay detail." },
+          { name: "DATASET", required: false, purpose: "One row per calendar day of the year with that day's own WEEK NUMBER (4 WEEKS) label (e.g. \"SEP-M1\") — the authoritative source for which real dates each week-of-month label actually covers. Confirmed NOT a fixed ceil(day/7) rule (September's M1 is only 6 days, M4 is 10) — every month must be looked up here rather than computed, per user correction." },
         ],
       },
     ],

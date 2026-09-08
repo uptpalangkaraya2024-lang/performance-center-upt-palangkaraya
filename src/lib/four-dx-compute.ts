@@ -11,6 +11,7 @@ import type {
   FourDxLm,
   FourDxLmRaw,
   FourDxMonitoringRow,
+  FourDxPeriodBoundary,
   FourDxRealization,
   FourDxWig,
   FourDxWigRaw,
@@ -28,14 +29,6 @@ export function monthAbbrIndex(abbr: string): number {
   return MONTH_ABBR_ID.indexOf(abbr.toUpperCase());
 }
 
-function daysInMonth(year: number, monthIndex: number): number {
-  return new Date(year, monthIndex + 1, 0).getDate();
-}
-
-export function dayOfMonthToWeek(day: number): number {
-  return Math.ceil(day / 7);
-}
-
 function normalize(s: string): string {
   return s.replace(/\s+/g, " ").trim().toUpperCase();
 }
@@ -45,7 +38,7 @@ function isUltgLevelAsset(asset: string): boolean {
 }
 
 export interface FourDxPeriodRange {
-  /** Uncapped — can be "M5" for the trailing 1-3 days of a long month. */
+  /** Uncapped — can be "M5" for the trailing days of a long month. */
   label: string;
   /** Capped at M4 — TARGET WIG sheets never define an M5 column, so the
    *  trailing days of a long month piggyback on M4's own weekly target. */
@@ -58,19 +51,50 @@ export interface FourDxPeriodRange {
   weekEndDay: number;
 }
 
-export function computeFourDxPeriodRange(monthAbbr: string, weekOfMonth: number, year: number): FourDxPeriodRange {
+/** Resolves a week-of-month label to its real date range by LOOKING IT UP in
+ *  the boundaries read from the DATASET sheet — never computed. A per-month
+ *  ceil(day/7) formula was tried and disproven by the user against the live
+ *  sheet: September's M1 is only 6 days (Sep 1-6) and M4 absorbs 10 days
+ *  (Sep 21-30), not the clean 7-day blocks January happens to have. Falls
+ *  back to a plain ceil(day/7) estimate only if this exact label is missing
+ *  from `boundaries` (DATASET sheet unavailable) — better than showing
+ *  nothing, but callers should prefer the looked-up value whenever present. */
+export function resolvePeriodRange(
+  label: string,
+  boundaries: FourDxPeriodBoundary[],
+  fallbackYear: number,
+): FourDxPeriodRange {
+  const found = boundaries.find((b) => b.label === label);
+  const monthAbbr = label.split("-M")[0];
+  const weekOfMonth = Number(/-M(\d+)$/.exec(label)?.[1] ?? "1");
+  const lookupLabel = `${monthAbbr}-M${Math.min(weekOfMonth, 4)}`;
+
+  if (found) {
+    return {
+      label,
+      lookupLabel,
+      monthAbbr,
+      weekOfMonth,
+      weekStartISO: found.startISO,
+      weekEndISO: found.endISO,
+      weekStartDay: Number(found.startISO.split("-")[2]),
+      weekEndDay: Number(found.endISO.split("-")[2]),
+    };
+  }
+
+  // Fallback estimate — only reached if DATASET has no row for this label.
   const monthIndex = monthAbbrIndex(monthAbbr);
-  const lookupWeek = Math.min(weekOfMonth, 4);
+  const daysInMonth = new Date(fallbackYear, monthIndex + 1, 0).getDate();
   const weekStartDay = (weekOfMonth - 1) * 7 + 1;
-  const weekEndDay = Math.min(weekStartDay + 6, daysInMonth(year, monthIndex));
+  const weekEndDay = Math.min(weekStartDay + 6, daysInMonth);
   const pad = (n: number) => String(n).padStart(2, "0");
   return {
-    label: `${monthAbbr}-M${weekOfMonth}`,
-    lookupLabel: `${monthAbbr}-M${lookupWeek}`,
+    label,
+    lookupLabel,
     monthAbbr,
     weekOfMonth,
-    weekStartISO: `${year}-${pad(monthIndex + 1)}-${pad(weekStartDay)}`,
-    weekEndISO: `${year}-${pad(monthIndex + 1)}-${pad(weekEndDay)}`,
+    weekStartISO: `${fallbackYear}-${pad(monthIndex + 1)}-${pad(weekStartDay)}`,
+    weekEndISO: `${fallbackYear}-${pad(monthIndex + 1)}-${pad(weekEndDay)}`,
     weekStartDay,
     weekEndDay,
   };
@@ -161,9 +185,8 @@ export function buildFourDxWigs(
  *  weekly update format (confirmed against a real example the user pasted):
  *  per-asset LMs get a plain "- <asset> ✅" line, ULTG-level LMs (WIG 2 & 4)
  *  get "- <ULTG> (R:n/T:n) ✅" since their target is a quantity, not a single
- *  yes/no per asset. The header date range follows this dashboard's own
- *  ceil(day/7) week rule, which may differ by a day or two from a manually
- *  hand-typed range — worth eyeballing against the spreadsheet once. */
+ *  yes/no per asset. The header date range is looked up from DATASET (see
+ *  resolvePeriodRange), matching the source sheet exactly. */
 export function formatFourDxWaRecap(period: FourDxPeriodRange, year: number, wigs: FourDxWig[]): string {
   const monthIndex = monthAbbrIndex(period.monthAbbr);
   const monthFull = MONTH_FULL_ID[monthIndex];
