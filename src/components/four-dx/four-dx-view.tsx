@@ -273,8 +273,8 @@ export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
   );
 
   const wigs = useMemo(
-    () => buildFourDxWigs(snapshot.wigs, period, snapshot.realizations),
-    [snapshot.wigs, snapshot.realizations, period],
+    () => buildFourDxWigs(snapshot.wigs, period, snapshot.realizations, snapshot.monitoring),
+    [snapshot.wigs, snapshot.realizations, snapshot.monitoring, period],
   );
 
   const waRecap = useMemo(

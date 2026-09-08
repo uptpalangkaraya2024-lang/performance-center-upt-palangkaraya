@@ -6,7 +6,15 @@
 // default view AND the client's month/week filter, so changing the filter
 // never needs a server round-trip (same "load once, derive many things"
 // shape as src/services/ahi-bay-line-report.ts).
-import type { FourDxAssetStatus, FourDxLm, FourDxLmRaw, FourDxRealization, FourDxWig, FourDxWigRaw } from "@/types";
+import type {
+  FourDxAssetStatus,
+  FourDxLm,
+  FourDxLmRaw,
+  FourDxMonitoringRow,
+  FourDxRealization,
+  FourDxWig,
+  FourDxWigRaw,
+} from "@/types";
 
 export const MONTH_ABBR_ID = ["JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"];
 export const MONTH_FULL_ID = [
@@ -68,7 +76,12 @@ export function computeFourDxPeriodRange(monthAbbr: string, weekOfMonth: number,
   };
 }
 
-export function buildFourDxLm(lm: FourDxLmRaw, period: FourDxPeriodRange, realizations: FourDxRealization[]): FourDxLm {
+export function buildFourDxLm(
+  lm: FourDxLmRaw,
+  period: FourDxPeriodRange,
+  realizations: FourDxRealization[],
+  monitoring: FourDxMonitoringRow[],
+): FourDxLm {
   let targetMingguan = 0;
   let targetBulanan = 0;
   const scheduled: FourDxLmRaw["assets"] = [];
@@ -103,7 +116,18 @@ export function buildFourDxLm(lm: FourDxLmRaw, period: FourDxPeriodRange, realiz
     };
   });
 
-  const realisasiMingguan = matchingThisLm.length;
+  // Realisasi Mingguan comes from the "Monitoring" sheet (a manually-
+  // reconciled weekly count, confirmed with the user to be more complete
+  // than the raw ULTG/K3 logs — some realizations are only ever entered
+  // there). Matched by normalized LM description, summed across every ULTG
+  // (TARGET WIG's own target for WIG 1 & 3 isn't split by ULTG either).
+  // Falls back to counting matching raw log rows if this LM has no
+  // Monitoring rows at all (sheet temporarily unavailable, etc).
+  const monitoringRows = monitoring.filter((m) => normalize(m.description) === normalize(lm.description));
+  const realisasiMingguan =
+    monitoringRows.length > 0
+      ? monitoringRows.reduce((sum, m) => sum + (m.weeklyRealisasi[period.lookupLabel] ?? 0), 0)
+      : matchingThisLm.length;
   const percentRealisasiMingguan = targetMingguan > 0 ? realisasiMingguan / targetMingguan : null;
   const status: FourDxLm["status"] =
     percentRealisasiMingguan !== null && percentRealisasiMingguan >= 1 ? "tercapai" : "belum";
@@ -124,11 +148,12 @@ export function buildFourDxWigs(
   wigsRaw: FourDxWigRaw[],
   period: FourDxPeriodRange,
   realizations: FourDxRealization[],
+  monitoring: FourDxMonitoringRow[],
 ): FourDxWig[] {
   return wigsRaw.map((wig) => ({
     number: wig.number,
     title: wig.title,
-    lms: wig.lms.map((lm) => buildFourDxLm(lm, period, realizations)),
+    lms: wig.lms.map((lm) => buildFourDxLm(lm, period, realizations, monitoring)),
   }));
 }
 

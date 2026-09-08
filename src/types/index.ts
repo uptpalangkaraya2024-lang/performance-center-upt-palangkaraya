@@ -601,6 +601,20 @@ export interface FourDxRealization {
   tanggal: string;
 }
 
+/** One (ULTG, LM) row from the "Monitoring" sheet — a manually-reconciled
+ *  weekly realisasi count across the whole year. Confirmed with the user to
+ *  be the more authoritative realisasi source (some realizations are only
+ *  ever entered here, not in the ULTG/K3 logs), used for the Target/
+ *  Realisasi/% numbers. Has no per-bay detail, so the per-asset checklist
+ *  still comes from FourDxRealization. */
+export interface FourDxMonitoringRow {
+  ultg: string;
+  /** Matches a FourDxLmRaw's own `description` text (normalized) — this
+   *  sheet has no LM code column. */
+  description: string;
+  weeklyRealisasi: Record<string, number>;
+}
+
 /** What src/services/four-dx.ts hands to the client — the full year's
  *  schedule + every realization, plus today's own computed period (the
  *  page's default filter selection) and every week label actually present
@@ -613,6 +627,7 @@ export interface FourDxSnapshot {
   availableWeekLabels: string[];
   wigs: FourDxWigRaw[];
   realizations: FourDxRealization[];
+  monitoring: FourDxMonitoringRow[];
   error: string | null;
 }
 

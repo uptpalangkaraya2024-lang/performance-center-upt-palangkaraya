@@ -3,7 +3,14 @@ import "server-only";
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSourceRaw } from "@/lib/data-connector";
 import { dayOfMonthToWeek, MONTH_ABBR_ID } from "@/lib/four-dx-compute";
-import type { FourDxAssetTargetRaw, FourDxLmRaw, FourDxRealization, FourDxSnapshot, FourDxWigRaw } from "@/types";
+import type {
+  FourDxAssetTargetRaw,
+  FourDxLmRaw,
+  FourDxMonitoringRow,
+  FourDxRealization,
+  FourDxSnapshot,
+  FourDxWigRaw,
+} from "@/types";
 
 const SOURCE = dataSources.fourDx;
 const FILE = SOURCE.sources[0].file;
@@ -110,7 +117,12 @@ function parseTargetWigSheet(grid: unknown[][], wigNumber: number, weekLabels: S
         i += 1;
         break; // blank separator row ends the block
       }
-      if (noCell.toLowerCase().startsWith("target") || !Number.isFinite(Number(noCell))) {
+      // Blank "No" covers both the non-numbered reference rows (WIG 2 lists
+      // individual towers under a ULTG's own target row) and the
+      // "TOTAL REALISASI" rows some blocks end with — Number("") is 0 (a
+      // finite number), so this must be checked before Number.isFinite,
+      // not folded into it, or both get misparsed as a valid asset #0.
+      if (!noCell || noCell.toLowerCase().startsWith("target") || !Number.isFinite(Number(noCell))) {
         i += 1;
         continue; // aggregate total row or non-numbered reference row — skip, block continues
       }
@@ -122,9 +134,46 @@ function parseTargetWigSheet(grid: unknown[][], wigNumber: number, weekLabels: S
       assets.push({ asset: assetName, weeklyTargets });
       i += 1;
     }
-    lms.push({ code: lmCode, description: lmDescription, assets });
+    // An LM with no target anywhere in the whole year (e.g. WIG 2's LM 2.5,
+    // confirmed with the user to be a completed/no-longer-tracked LM) is
+    // dropped entirely rather than shown as a permanently-empty, always-
+    // "belum" card — a data-driven rule, not a hardcoded LM code, so any
+    // future LM in the same state gets the same treatment automatically.
+    const hasAnyTarget = assets.some((a) => Object.keys(a.weeklyTargets).length > 0);
+    if (hasAnyTarget) lms.push({ code: lmCode, description: lmDescription, assets });
   }
   return lms;
+}
+
+/** Parses the "Monitoring" sheet — one row per (ULTG, LM), a manually-
+ *  reconciled weekly realisasi count across the whole year (JAN-M1..DES-M4,
+ *  unlike TARGET WIG's MEI-DES-only range). No LM code column, so matching
+ *  back to a FourDxLmRaw happens by normalized description text. */
+function parseMonitoringSheet(grid: unknown[][]): FourDxMonitoringRow[] {
+  const row1 = grid[0] ?? [];
+  const dataRows = grid.slice(1);
+  const ultgCol = findCol(row1, "ULTG");
+  const detailCol = findCol(row1, "Detail");
+  if (ultgCol === -1 || detailCol === -1) return [];
+
+  const weekCols: { col: number; label: string }[] = [];
+  for (let c = detailCol + 1; c < row1.length; c++) {
+    const label = textAt(row1, c);
+    if (/^[A-Z]{3}-M\d$/.test(label)) weekCols.push({ col: c, label });
+  }
+
+  const rows: FourDxMonitoringRow[] = [];
+  for (const row of dataRows) {
+    const description = textAt(row, detailCol);
+    if (!description) continue;
+    const weeklyRealisasi: Record<string, number> = {};
+    for (const wc of weekCols) {
+      const value = parseNumber(row[wc.col]);
+      if (value !== null) weeklyRealisasi[wc.label] = value;
+    }
+    rows.push({ ultg: textAt(row, ultgCol), description, weeklyRealisasi });
+  }
+  return rows;
 }
 
 /** Parses one realization-log sheet's raw grid (single ordinary header row,
@@ -168,6 +217,9 @@ export async function getFourDxSnapshot(): Promise<FourDxSnapshot> {
     if (found) realizations.push(...parseRealizationSheet(found.rows));
   }
 
+  const monitoringSheet = results.find((r) => r.file === FILE && r.sheet === "Monitoring");
+  const monitoring = monitoringSheet ? parseMonitoringSheet(monitoringSheet.rows) : [];
+
   const todayISO = getJakartaTodayISO();
   const [year, month, day] = todayISO.split("-").map(Number);
 
@@ -178,6 +230,7 @@ export async function getFourDxSnapshot(): Promise<FourDxSnapshot> {
     availableWeekLabels: [...weekLabels],
     wigs,
     realizations,
+    monitoring,
     error: wigs.length === 0 ? "Data 4DX belum tersedia." : null,
   };
 }
