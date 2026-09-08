@@ -177,6 +177,27 @@ function LmCard({ lm }: { lm: FourDxLm }) {
           <div className="flex flex-col gap-1.5">
             <p className="text-xs font-medium text-foreground">Breakdown per ULTG / Ruas</p>
             <ul className="flex flex-col gap-1">
+              {/* Same "Total UPT" line the WA recap leads with — placed here
+                  too so the Tercapai/Belum badge above is never a mystery
+                  next to a breakdown where every individual ULTG still
+                  looks short (the UPT total can already meet target via a
+                  manual top-up between ULTGs — see buildFourDxLm). */}
+              <li
+                className={cn(
+                  "flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm font-medium",
+                  lm.status === "tercapai" ? "border-success/40 bg-success/10" : "border-warning/40 bg-warning/15",
+                )}
+              >
+                {lm.status === "tercapai" ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-success" />
+                ) : (
+                  <Circle className="size-4 shrink-0 text-muted-foreground" />
+                )}
+                <span className="flex-1 text-foreground">Total UPT</span>
+                <span className="text-xs text-muted-foreground">
+                  R:{lm.realisasiMingguan}/T:{lm.targetMingguan}
+                </span>
+              </li>
               {lm.assets.map((asset) => (
                 <li key={asset.asset} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
                   {asset.done ? (
