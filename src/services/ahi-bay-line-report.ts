@@ -141,6 +141,19 @@ interface EquipmentTypeConfig {
   /** true: one row per phase (R/S/T) that must be grouped by equipment and
    *  pivoted. false: already wide — one row is the whole equipment (Input PMT). */
   phasePivot: boolean;
+  /** Evaluasi AHI labels dropped entirely for this equipment type — never
+   *  built into a parameter, so absent from the table, the Resume
+   *  breakdown, and the trend filter dropdown. Confirmed with the user for
+   *  Input PMT's Kevakuman/BDV Minyak ("dianggap tidak ada"). */
+  excludeParameterLabels?: string[];
+  /** Merges several independently-scored Evaluasi AHI columns into one
+   *  displayed parameter (worst score of the group wins, same worst-case
+   *  rule used everywhere else in this file) — confirmed with the user:
+   *  Input PMT's Purity/Dew Point/SO2 are 3 separate score columns in the
+   *  sheet but should read as one "Pengujian SF6" parameter, with the 3
+   *  originals surfacing as that parameter's own raw readings (already
+   *  true of RAW_MAPPINGS's "Pengujian SF6" entry). */
+  mergeParameterLabels?: { into: string; from: string[] }[];
 }
 
 const EQUIPMENT_TYPES: EquipmentTypeConfig[] = [
@@ -154,16 +167,19 @@ const EQUIPMENT_TYPES: EquipmentTypeConfig[] = [
   // bay into one logical unit, not split further by techident.
   { sheetName: "Input LA", roleFixed: "Lightning Arrester", phasePivot: true },
   { sheetName: "Input PT", roleFixed: "Capacitive Voltage Transformer", phasePivot: true },
-  { sheetName: "Input PMT", roleFixed: "Circuit Breaker", phasePivot: false },
+  {
+    sheetName: "Input PMT",
+    roleFixed: "Circuit Breaker",
+    phasePivot: false,
+    excludeParameterLabels: ["Kevakuman", "BDV Minyak"],
+    mergeParameterLabels: [{ into: "Pengujian SF6", from: ["Purity", "Dew Point", "SO2"] }],
+  },
   { sheetName: "Input CT", roleFixed: "Current Transformer", phasePivot: true },
 ];
 
 // One Evaluasi AHI parameter (e.g. "Tahanan Isolasi") is derived from one or
 // more raw measurement columns elsewhere in the same sheet — mapped
-// explicitly per equipment type below rather than guessed, since a single
-// row 1 group sometimes fans out into several distinct Evaluasi AHI
-// parameters (Input PMT's one "Pengujian SF6" group covers Purity, Dew
-// Point, and SO2 separately).
+// explicitly per equipment type below rather than guessed.
 type RawSource =
   | { kind: "group"; label: string } // row 1 group label — use every one of its sub-columns
   | { kind: "single"; label: string }; // one exact row 1 or row 2 label — use just that column
@@ -206,11 +222,14 @@ const RAW_MAPPINGS: Record<string, Record<string, RawSource[]>> = {
     // No distinct raw column exists for Keserempakan (SKDIR/Evaluasi AHI
     // computes it) — left empty rather than guessed.
     Keserempakan: [],
-    Purity: [{ kind: "single", label: "Purity (%)" }],
-    "Dew Point": [{ kind: "single", label: "Dew Point (deg Celcius)" }],
-    SO2: [{ kind: "single", label: "SO2 (ppmv)" }],
-    Kevakuman: [{ kind: "group", label: "Pengujian Kevakuman" }],
-    "BDV Minyak": [{ kind: "group", label: "Pengujian BDV Minyak Main Tank (kV/mm)" }],
+    // Purity/Dew Point/SO2 are merged into this one parameter (see
+    // EQUIPMENT_TYPES's mergeParameterLabels for "Input PMT") — all 3 raw
+    // sources surface as "Pengujian SF6"'s own raw readings.
+    "Pengujian SF6": [
+      { kind: "single", label: "Purity (%)" },
+      { kind: "single", label: "Dew Point (deg Celcius)" },
+      { kind: "single", label: "SO2 (ppmv)" },
+    ],
     "Thermovisi Body PMT": [{ kind: "group", label: "Thermovisi Body Insulator" }],
     "Kondisi Visual": [
       { kind: "single", label: "Inspeksi Visual #2 - Kebocoran PMT" },
@@ -365,7 +384,7 @@ function buildParameterHistoryForUnit(
   bay: string,
   config: EquipmentTypeConfig,
   unit: { role: string; techident: string | null },
-  evalLabel: string,
+  sourceLabels: string[],
   rawSources: RawSource[],
 ): EquipmentParameterHistoryPoint[] {
   if (!historyGrid) return [];
@@ -374,19 +393,55 @@ function buildParameterHistoryForUnit(
   const evalStart = findCol(row1, "Evaluasi AHI");
   const evalCols = groupCols(row1, evalStart);
   const evalLabels = evalCols.map((c) => textAt(row2, c) || textAt(row1, c));
-  const targetIdx = evalLabels.indexOf(evalLabel);
-  if (targetIdx === -1) return [];
-  const col = evalCols[targetIdx];
+  // sourceLabels covers every original Evaluasi AHI label this displayed
+  // parameter is built from — 1 for a standalone parameter, several for a
+  // merged one (e.g. "Pengujian SF6" <- Purity/Dew Point/SO2) — the worst
+  // score across all of them, same rule as the live row.
+  const targetCols = sourceLabels
+    .map((label) => evalCols[evalLabels.indexOf(label)])
+    .filter((c): c is number => c !== undefined && c !== -1);
+  if (targetCols.length === 0) return [];
 
   return groupHistoryRowsByDate(historyGrid, bay, config, unit).map(({ tanggal, rows }) => {
     let worst: number | null = null;
     for (const row of rows) {
-      const score = parseScore(row[col]);
-      if (score !== null && (worst === null || score > worst)) worst = score;
+      for (const col of targetCols) {
+        const score = parseScore(row[col]);
+        if (score !== null && (worst === null || score > worst)) worst = score;
+      }
     }
     const rawReadings = extractRawReadings(rows, row1, row2, phasaCol, config.phasePivot, rawSources);
     return { tanggal, skorAhi: worst, klasifikasi: classify(worst), rawReadings };
   });
+}
+
+/** Resolves the sheet's raw Evaluasi AHI columns into the parameters that
+ *  actually get displayed for this equipment type — most labels pass
+ *  through 1:1, but config.excludeParameterLabels drops some entirely and
+ *  config.mergeParameterLabels folds several into one (see
+ *  EquipmentTypeConfig for why, confirmed with the user for Input PMT). */
+function resolveParameterGroups(
+  evalLabels: string[],
+  evalCols: number[],
+  config: EquipmentTypeConfig,
+): { label: string; cols: number[]; sourceLabels: string[] }[] {
+  const exclude = new Set(config.excludeParameterLabels ?? []);
+  const mergeTarget = new Map<string, string>();
+  for (const m of config.mergeParameterLabels ?? []) {
+    for (const from of m.from) mergeTarget.set(from, m.into);
+  }
+
+  const groups = new Map<string, { cols: number[]; sourceLabels: string[] }>();
+  for (let i = 0; i < evalLabels.length; i++) {
+    const label = evalLabels[i];
+    if (exclude.has(label)) continue;
+    const outputLabel = mergeTarget.get(label) ?? label;
+    const group = groups.get(outputLabel) ?? { cols: [], sourceLabels: [] };
+    group.cols.push(evalCols[i]);
+    group.sourceLabels.push(label);
+    groups.set(outputLabel, group);
+  }
+  return [...groups.entries()].map(([label, g]) => ({ label, cols: g.cols, sourceLabels: g.sourceLabels }));
 }
 
 function parseUnitsForBay(
@@ -442,28 +497,33 @@ function parseUnitsForBay(
     const tanggal = extractDateOnly(first[tglCol]);
     const ageYears = yearsSince(tanggal, todayISO);
 
-    const parameters: BayEquipmentParameter[] = evalLabels.map((label, i) => {
-      const col = evalCols[i];
-      // Worst (max) score across every row in the group — for a
-      // phase-pivoted unit this is the worst of R/S/T; for a non-pivoted
-      // unit the group has exactly one row.
+    const parameterGroups = resolveParameterGroups(evalLabels, evalCols, config);
+    const parameters: BayEquipmentParameter[] = parameterGroups.map(({ label, cols, sourceLabels }, i) => {
+      // Worst (max) score across every row in the group AND every column
+      // this parameter is built from — for a phase-pivoted unit with a
+      // single column this is the worst of R/S/T; for a merged parameter
+      // (e.g. "Pengujian SF6" <- Purity/Dew Point/SO2) it's also the worst
+      // across those originally-separate score columns.
+      const primaryCol = cols[0];
       let worst: number | null = null;
       for (const row of groupRows) {
-        const score = parseScore(row[col]);
-        if (score !== null && (worst === null || score > worst)) worst = score;
+        for (const col of cols) {
+          const score = parseScore(row[col]);
+          if (score !== null && (worst === null || score > worst)) worst = score;
+        }
       }
       const klasifikasi = classify(worst);
       const { mandatory, retest } = computeFlags(klasifikasi, ageYears);
       const byPhase = (phasaValue: string) => {
         const row = groupRows.find((r) => textAt(r, phasaCol) === phasaValue);
-        return row ? (row[col] as string | number | null) : null;
+        return row ? (row[primaryCol] as string | number | null) : null;
       };
       const rawSources = RAW_MAPPINGS[config.sheetName]?.[label] ?? [];
       const rawReadings = extractRawReadings(groupRows, row1, row2, phasaCol, config.phasePivot, rawSources);
       const paramLabel = label || `Parameter ${i + 1}`;
       return {
         label: paramLabel,
-        r: config.phasePivot ? byPhase("R") : (first[col] as string | number | null),
+        r: config.phasePivot ? byPhase("R") : worst,
         s: config.phasePivot ? byPhase("S") : null,
         t: config.phasePivot ? byPhase("T") : null,
         skorAhi: worst,
@@ -471,7 +531,7 @@ function parseUnitsForBay(
         mandatoryPengujian: mandatory,
         pengujianUlang: retest,
         rawReadings,
-        history: buildParameterHistoryForUnit(historyGrid, bay, config, unitIdentity, label, rawSources),
+        history: buildParameterHistoryForUnit(historyGrid, bay, config, unitIdentity, sourceLabels, rawSources),
       };
     });
 
