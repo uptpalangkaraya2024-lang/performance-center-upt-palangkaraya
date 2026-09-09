@@ -299,6 +299,7 @@ export function formatFourDxWaRecap(period: FourDxPeriodRange, year: number, wig
     const belumCount = wig.lms.length - tercapaiCount;
 
     lines.push("");
+    lines.push("═══════════════════");
     lines.push(`*WIG ${wig.number}. ${wig.title.replace(/^WIG\s*\d+\.\s*/i, "")}*`);
     lines.push(`✅ ${tercapaiCount} tercapai · ⏳ ${belumCount} belum`);
     for (const lm of wig.lms) {
