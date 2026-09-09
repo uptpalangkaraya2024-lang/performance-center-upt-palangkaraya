@@ -303,7 +303,8 @@ export function formatFourDxWaRecap(period: FourDxPeriodRange, year: number, wig
     lines.push(`✅ ${tercapaiCount} tercapai · ⏳ ${belumCount} belum`);
     for (const lm of wig.lms) {
       const lmMark = lm.status === "tercapai" ? "✅" : "⏳";
-      lines.push(`LM ${lm.code} ${lm.description}`);
+      lines.push("");
+      lines.push(`*LM ${lm.code} ${lm.description}*`);
       lines.push(`Total UPT: R:${lm.realisasiMingguan}/T:${lm.targetMingguan} ${lmMark}`);
       if (lm.assets.length === 0) {
         lines.push("- Tidak ada aset dijadwalkan pada periode ini");
