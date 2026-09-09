@@ -584,6 +584,12 @@ export interface FourDxLmRaw {
   code: string;
   description: string;
   assets: FourDxAssetTargetRaw[];
+  /** The sheet's own "Target N ... tiap Minggu" aggregate row for this LM,
+   *  when present — week label -> total. Confirmed with the user to be WIG
+   *  4's authoritative target (its per-ULTG values shift with timing and
+   *  can't be treated as real per-ULTG targets), used instead of summing
+   *  the per-ULTG rows for that WIG specifically. */
+  targetTotalRow: Record<string, number> | null;
 }
 
 export interface FourDxWigRaw {

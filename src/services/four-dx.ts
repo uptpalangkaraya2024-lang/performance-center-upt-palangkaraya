@@ -106,6 +106,7 @@ function parseTargetWigSheet(grid: unknown[][]): FourDxLmRaw[] {
     i += 1; // move to first asset row
 
     const assets: FourDxAssetTargetRaw[] = [];
+    let targetTotalRow: Record<string, number> | null = null;
     while (i < grid.length) {
       const row = grid[i];
       const noCell = textAt(row, 0);
@@ -114,14 +115,29 @@ function parseTargetWigSheet(grid: unknown[][]): FourDxLmRaw[] {
         i += 1;
         break; // blank separator row ends the block
       }
+      // A "Target N ... tiap Minggu" row aggregates the whole LM (its own
+      // weekly totals, one per week column) — captured separately from
+      // per-asset rows, not treated as an asset. Confirmed with the user:
+      // WIG 4's per-ULTG target values are essentially arbitrary (they
+      // shift with timing), so this row is WIG 4's authoritative target
+      // instead of summing the per-ULTG rows (see buildFourDxWigs).
+      if (noCell.toLowerCase().startsWith("target")) {
+        targetTotalRow = {};
+        for (const wc of weekCols) {
+          const value = parseNumber(row[wc.col]);
+          if (value !== null) targetTotalRow[wc.label] = value;
+        }
+        i += 1;
+        continue;
+      }
       // Blank "No" covers both the non-numbered reference rows (WIG 2 lists
       // individual towers under a ULTG's own target row) and the
       // "TOTAL REALISASI" rows some blocks end with — Number("") is 0 (a
       // finite number), so this must be checked before Number.isFinite,
       // not folded into it, or both get misparsed as a valid asset #0.
-      if (!noCell || noCell.toLowerCase().startsWith("target") || !Number.isFinite(Number(noCell))) {
+      if (!noCell || !Number.isFinite(Number(noCell))) {
         i += 1;
-        continue; // aggregate total row or non-numbered reference row — skip, block continues
+        continue; // non-numbered reference row — skip, block continues
       }
       const weeklyTargets: Record<string, number> = {};
       for (const wc of weekCols) {
@@ -136,8 +152,10 @@ function parseTargetWigSheet(grid: unknown[][]): FourDxLmRaw[] {
     // dropped entirely rather than shown as a permanently-empty, always-
     // "belum" card — a data-driven rule, not a hardcoded LM code, so any
     // future LM in the same state gets the same treatment automatically.
-    const hasAnyTarget = assets.some((a) => Object.keys(a.weeklyTargets).length > 0);
-    if (hasAnyTarget) lms.push({ code: lmCode, description: lmDescription, assets });
+    const hasAnyTarget =
+      assets.some((a) => Object.keys(a.weeklyTargets).length > 0) ||
+      Object.values(targetTotalRow ?? {}).some((v) => v > 0);
+    if (hasAnyTarget) lms.push({ code: lmCode, description: lmDescription, assets, targetTotalRow });
   }
   return lms;
 }

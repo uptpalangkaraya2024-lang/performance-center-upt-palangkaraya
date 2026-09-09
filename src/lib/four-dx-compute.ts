@@ -105,21 +105,35 @@ export function buildFourDxLm(
   period: FourDxPeriodRange,
   realizations: FourDxRealization[],
   monitoring: FourDxMonitoringRow[],
+  useTargetTotalRow = false,
 ): FourDxLm {
-  let targetMingguan = 0;
-  let targetBulanan = 0;
+  let targetMingguanFromAssets = 0;
+  let targetBulananFromAssets = 0;
   const scheduled: FourDxLmRaw["assets"] = [];
 
   for (const asset of lm.assets) {
     const weekTarget = asset.weeklyTargets[period.lookupLabel] ?? 0;
     if (weekTarget > 0) {
-      targetMingguan += weekTarget;
+      targetMingguanFromAssets += weekTarget;
       scheduled.push(asset);
     }
     for (const [weekLabel, qty] of Object.entries(asset.weeklyTargets)) {
-      if (weekLabel.startsWith(`${period.monthAbbr}-M`)) targetBulanan += qty;
+      if (weekLabel.startsWith(`${period.monthAbbr}-M`)) targetBulananFromAssets += qty;
     }
   }
+
+  // WIG 4: per-ULTG target values are confirmed arbitrary (they shift with
+  // timing), so its own "Target N ... tiap Minggu" row is the authoritative
+  // target instead of summing the per-ULTG rows above. The per-asset
+  // breakdown (`scheduled`, built from assets regardless) stays as detail —
+  // still shown, just not what decides the numbers below.
+  const useTotalRow = useTargetTotalRow && lm.targetTotalRow;
+  const targetMingguan = useTotalRow ? (lm.targetTotalRow![period.lookupLabel] ?? 0) : targetMingguanFromAssets;
+  const targetBulanan = useTotalRow
+    ? Object.entries(lm.targetTotalRow!)
+        .filter(([weekLabel]) => weekLabel.startsWith(`${period.monthAbbr}-M`))
+        .reduce((sum, [, qty]) => sum + qty, 0)
+    : targetBulananFromAssets;
 
   const matchingThisLm = realizations.filter(
     (r) => r.lmCode === lm.code && r.tanggal >= period.weekStartISO && r.tanggal <= period.weekEndISO,
@@ -187,7 +201,7 @@ export function buildFourDxWigs(
   return wigsRaw.map((wig) => ({
     number: wig.number,
     title: wig.title,
-    lms: wig.lms.map((lm) => buildFourDxLm(lm, period, realizations, monitoring)),
+    lms: wig.lms.map((lm) => buildFourDxLm(lm, period, realizations, monitoring, wig.number === 4)),
   }));
 }
 
