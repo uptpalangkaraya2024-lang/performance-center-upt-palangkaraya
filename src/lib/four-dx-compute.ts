@@ -106,6 +106,8 @@ export function buildFourDxLm(
   realizations: FourDxRealization[],
   monitoring: FourDxMonitoringRow[],
   useTargetTotalRow = false,
+  isUltgLevelLm = false,
+  fallbackMonitoringDescription: string | null = null,
 ): FourDxLm {
   let targetMingguanFromAssets = 0;
   let targetBulananFromAssets = 0;
@@ -124,9 +126,9 @@ export function buildFourDxLm(
 
   // WIG 4: per-ULTG target values are confirmed arbitrary (they shift with
   // timing), so its own "Target N ... tiap Minggu" row is the authoritative
-  // target instead of summing the per-ULTG rows above. The per-asset
-  // breakdown (`scheduled`, built from assets regardless) stays as detail —
-  // still shown, just not what decides the numbers below.
+  // target instead of summing the per-ULTG rows above. The breakdown below
+  // is unaffected by this — it's built from Monitoring for ULTG-level LMs
+  // regardless, not from these per-asset targets.
   const useTotalRow = useTargetTotalRow && lm.targetTotalRow;
   const targetMingguan = useTotalRow ? (lm.targetTotalRow![period.lookupLabel] ?? 0) : targetMingguanFromAssets;
   const targetBulanan = useTotalRow
@@ -134,25 +136,6 @@ export function buildFourDxLm(
         .filter(([weekLabel]) => weekLabel.startsWith(`${period.monthAbbr}-M`))
         .reduce((sum, [, qty]) => sum + qty, 0)
     : targetBulananFromAssets;
-
-  const matchingThisLm = realizations.filter(
-    (r) => r.lmCode === lm.code && r.tanggal >= period.weekStartISO && r.tanggal <= period.weekEndISO,
-  );
-
-  const assets: FourDxAssetStatus[] = scheduled.map((asset) => {
-    const ultgLevel = isUltgLevelAsset(asset.asset);
-    const matches = matchingThisLm.filter((r) =>
-      ultgLevel ? normalize(r.ultg) === normalize(asset.asset) : normalize(r.asset) === normalize(asset.asset),
-    );
-    const targetThisWeek = asset.weeklyTargets[period.lookupLabel] ?? 0;
-    return {
-      asset: asset.asset,
-      targetThisWeek,
-      realizedCount: matches.length,
-      done: matches.length >= targetThisWeek,
-      realizedAt: matches[0]?.tanggal ?? null,
-    };
-  });
 
   // Realisasi Mingguan comes from the "Monitoring" sheet (a manually-
   // reconciled weekly count, confirmed with the user to be more complete
@@ -165,20 +148,73 @@ export function buildFourDxLm(
   // manually at the UPT level (not attributed to any one ULTG) so the
   // overall figure still hits target. That UPT-level row is therefore the
   // authoritative realisasi — preferred over summing the per-ULTG rows,
-  // which would undercount whenever a top-up exists. Falls back to summing
-  // per-ULTG rows (then to counting matching raw log rows) only when no
-  // UPT-level row exists for this LM at all.
-  const monitoringRows = monitoring.filter((m) => normalize(m.description) === normalize(lm.description));
+  // which would undercount whenever a top-up exists.
+  // WIG 4: Monitoring's own wording (and even stated quantities) for its LMs
+  // don't match TARGET WIG 4's descriptions at all — confirmed directly
+  // against the live sheet. Falls back to matching by ordinal position
+  // within the same WIG goal-statement (`fallbackMonitoringDescription`,
+  // computed by buildFourDxWigs) whenever the direct description match
+  // finds nothing.
+  const directMonitoringRows = monitoring.filter((m) => normalize(m.description) === normalize(lm.description));
+  const monitoringRows =
+    directMonitoringRows.length > 0
+      ? directMonitoringRows
+      : fallbackMonitoringDescription
+        ? monitoring.filter((m) => normalize(m.description) === normalize(fallbackMonitoringDescription))
+        : directMonitoringRows;
   const uptLevelRows = monitoringRows.filter((m) => !m.ultg);
+  const perUltgMonitoringRows = monitoringRows.filter((m) => m.ultg);
+
+  const matchingThisLm = realizations.filter(
+    (r) => r.lmCode === lm.code && r.tanggal >= period.weekStartISO && r.tanggal <= period.weekEndISO,
+  );
+
   const realisasiMingguan =
     uptLevelRows.length > 0
       ? uptLevelRows.reduce((sum, m) => sum + (m.weeklyRealisasi[period.lookupLabel] ?? 0), 0)
-      : monitoringRows.length > 0
-        ? monitoringRows.reduce((sum, m) => sum + (m.weeklyRealisasi[period.lookupLabel] ?? 0), 0)
+      : perUltgMonitoringRows.length > 0
+        ? perUltgMonitoringRows.reduce((sum, m) => sum + (m.weeklyRealisasi[period.lookupLabel] ?? 0), 0)
         : matchingThisLm.length;
   const percentRealisasiMingguan = targetMingguan > 0 ? realisasiMingguan / targetMingguan : null;
   const status: FourDxLm["status"] =
     percentRealisasiMingguan !== null && percentRealisasiMingguan >= 1 ? "tercapai" : "belum";
+
+  // Breakdown: for a ULTG-level LM (WIG 2 & 4), built from Monitoring's own
+  // per-ULTG rows rather than TARGET WIG's asset list — confirmed with the
+  // user this must hold even when TARGET WIG defines no per-ULTG rows at
+  // all for a given LM (e.g. LM 4.3, whose target only ever exists at the
+  // UPT level), so the breakdown still reflects Monitoring's real per-ULTG
+  // realisasi instead of going empty. TARGET WIG's own per-ULTG target
+  // (when it exists) is shown alongside purely as context — WIG 4's is
+  // already known to be unreliable, so it never gates `done` on its own.
+  //
+  // For a per-ruas/bay LM (WIG 1 & 3), Monitoring has no per-bay detail, so
+  // the breakdown stays sourced from TARGET WIG's own asset list with
+  // realisasi matched against the raw ULTG/K3 logs, unchanged from before.
+  const assets: FourDxAssetStatus[] = isUltgLevelLm
+    ? perUltgMonitoringRows.map((m) => {
+        const matchingTargetAsset = lm.assets.find((a) => normalize(a.asset) === normalize(m.ultg));
+        const targetThisWeek = matchingTargetAsset?.weeklyTargets[period.lookupLabel] ?? 0;
+        const realizedCount = m.weeklyRealisasi[period.lookupLabel] ?? 0;
+        return {
+          asset: m.ultg,
+          targetThisWeek,
+          realizedCount,
+          done: targetThisWeek > 0 ? realizedCount >= targetThisWeek : realizedCount > 0,
+          realizedAt: null, // Monitoring only carries a weekly count, not a specific date
+        };
+      })
+    : scheduled.map((asset) => {
+        const matches = matchingThisLm.filter((r) => normalize(r.asset) === normalize(asset.asset));
+        const targetThisWeek = asset.weeklyTargets[period.lookupLabel] ?? 0;
+        return {
+          asset: asset.asset,
+          targetThisWeek,
+          realizedCount: matches.length,
+          done: matches.length >= targetThisWeek,
+          realizedAt: matches[0]?.tanggal ?? null,
+        };
+      });
 
   return {
     code: lm.code,
@@ -198,11 +234,43 @@ export function buildFourDxWigs(
   realizations: FourDxRealization[],
   monitoring: FourDxMonitoringRow[],
 ): FourDxWig[] {
-  return wigsRaw.map((wig) => ({
-    number: wig.number,
-    title: wig.title,
-    lms: wig.lms.map((lm) => buildFourDxLm(lm, period, realizations, monitoring, wig.number === 4)),
-  }));
+  return wigsRaw.map((wig) => {
+    // Monitoring's own "Wildly Important Goals (WIG)" column holds the same
+    // goal statement as this WIG's title (minus the "WIG N. " prefix) —
+    // confirmed directly against the live sheet. Used only as a fallback
+    // join for WIG 4, whose per-LM description text doesn't match TARGET
+    // WIG 4 at all: within that goal-statement's rows, the distinct
+    // descriptions appear in the same order as this WIG's own LMs
+    // (confirmed: WIG 4's 4 descriptions line up 1:1 with LM 4.1-4.4).
+    const wigGoalStatement = normalize(wig.title.replace(/^WIG\s*\d+\.\s*/i, ""));
+    const orderedMonitoringDescriptions: string[] = [];
+    for (const m of monitoring) {
+      if (normalize(m.wigTitle) !== wigGoalStatement) continue;
+      if (!orderedMonitoringDescriptions.some((d) => normalize(d) === normalize(m.description))) {
+        orderedMonitoringDescriptions.push(m.description);
+      }
+    }
+
+    return {
+      number: wig.number,
+      title: wig.title,
+      // Confirmed with the user: WIG 2 & 4 are ULTG-level (breakdown sourced
+      // from Monitoring's own per-ULTG rows), WIG 1 & 3 are per-ruas/bay
+      // (breakdown sourced from TARGET WIG's own asset list) — see
+      // buildFourDxLm's isUltgLevelLm param.
+      lms: wig.lms.map((lm, index) =>
+        buildFourDxLm(
+          lm,
+          period,
+          realizations,
+          monitoring,
+          wig.number === 4,
+          wig.number === 2 || wig.number === 4,
+          orderedMonitoringDescriptions[index] ?? null,
+        ),
+      ),
+    };
+  });
 }
 
 /** WhatsApp-style recap text for one chosen period — mirrors the manual

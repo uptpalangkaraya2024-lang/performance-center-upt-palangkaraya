@@ -616,8 +616,15 @@ export interface FourDxRealization {
 export interface FourDxMonitoringRow {
   ultg: string;
   /** Matches a FourDxLmRaw's own `description` text (normalized) — this
-   *  sheet has no LM code column. */
+   *  sheet has no LM code column. Confirmed this match fails outright for
+   *  WIG 4 (Monitoring's own wording/quantities differ from TARGET WIG 4's),
+   *  so `wigTitle` below is kept as a fallback join key: same WIG + same
+   *  ordinal position among that WIG's LMs. */
   description: string;
+  /** This row's own "Wildly Important Goals (WIG)" column, e.g.
+   *  "WIG 4. Membangun Budaya Keselamatan Kerja..." — used only as a
+   *  fallback join when `description` doesn't match any LM directly. */
+  wigTitle: string;
   weeklyRealisasi: Record<string, number>;
 }
 

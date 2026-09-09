@@ -169,6 +169,7 @@ function parseMonitoringSheet(grid: unknown[][]): FourDxMonitoringRow[] {
   const dataRows = grid.slice(1);
   const ultgCol = findCol(row1, "ULTG");
   const detailCol = findCol(row1, "Detail");
+  const wigCol = findCol(row1, "Wildly Important Goals (WIG)");
   if (ultgCol === -1 || detailCol === -1) return [];
 
   const weekCols: { col: number; label: string }[] = [];
@@ -186,7 +187,8 @@ function parseMonitoringSheet(grid: unknown[][]): FourDxMonitoringRow[] {
       const value = parseNumber(row[wc.col]);
       if (value !== null) weeklyRealisasi[wc.label] = value;
     }
-    rows.push({ ultg: textAt(row, ultgCol), description, weeklyRealisasi });
+    const wigTitle = wigCol === -1 ? "" : textAt(row, wigCol);
+    rows.push({ ultg: textAt(row, ultgCol), description, wigTitle, weeklyRealisasi });
   }
   return rows;
 }
