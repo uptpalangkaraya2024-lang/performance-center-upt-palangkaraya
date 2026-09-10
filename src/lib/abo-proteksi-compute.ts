@@ -78,10 +78,12 @@ export function buildAboProgram(raw: AboProgramBlockRaw, selectedWeekLabel: stri
     ...computeStats(u, selectedIndex),
   }));
 
-  // Only items due by the selected week — consistent with the cumulative
-  // to-date numbers above (confirmed with the user).
+  // Only items whose target week is exactly the selected week — per user
+  // feedback, the cumulative-to-date list grew too long to be useful, so
+  // this now mirrors the "this week's plan" view instead (both realized
+  // and not-yet-realized items for that one week).
   const ruasItems: AboRuasComputed[] = raw.ruasItems
-    .filter((item) => item.targetWeekLabel !== null && weekLabelIndex(item.targetWeekLabel) !== -1 && weekLabelIndex(item.targetWeekLabel) <= selectedIndex)
+    .filter((item) => item.targetWeekLabel === selectedWeekLabel)
     .map((item) => ({
       ultg: item.ultg,
       asset: item.asset,

@@ -793,8 +793,9 @@ export interface AboProgramComputed extends AboStatFields {
   satuan: string;
   master: number;
   ultgBreakdown: AboUltgComputed[];
-  /** Only items due by the selected week (targetWeekLabel's chronological
-   *  index <= selected week's index) — confirmed with the user, consistent
-   *  with the cumulative to-date numbers above it. */
+  /** Only items whose targetWeekLabel is exactly the selected week — a
+   *  "this week's plan" view (both done and not-yet-done), not cumulative.
+   *  Changed from a cumulative-to-date filter per user feedback: the list
+   *  grew too long to be useful once several months had passed. */
   ruasItems: AboRuasComputed[];
 }
