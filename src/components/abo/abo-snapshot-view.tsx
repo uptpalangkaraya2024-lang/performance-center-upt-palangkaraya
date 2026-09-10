@@ -171,22 +171,29 @@ function RuasChecklist({
             {items.map((item, i) => {
               const overdue = !item.done && item.targetWeekLabel !== selectedWeekLabel;
               return (
-                <li key={`${item.asset}-${i}`} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
-                  {item.done ? (
-                    <CheckCircle2 className="size-4 shrink-0 text-success" />
-                  ) : (
-                    <Circle className="size-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className={cn("flex-1", item.done ? "text-foreground" : "text-muted-foreground")}>
-                    {item.asset}
-                  </span>
-                  {overdue ? (
-                    <span className="inline-flex rounded-full border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground">
-                      Terlambat
+                <li key={`${item.asset}-${i}`} className="flex flex-col gap-1 rounded-md border px-2.5 py-1.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    {item.done ? (
+                      <CheckCircle2 className="size-4 shrink-0 text-success" />
+                    ) : (
+                      <Circle className="size-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className={cn("flex-1", item.done ? "text-foreground" : "text-muted-foreground")}>
+                      {item.asset}
                     </span>
-                  ) : null}
-                  {item.targetWeekLabel ? (
-                    <span className="text-xs text-muted-foreground">{item.targetWeekLabel}</span>
+                    {overdue ? (
+                      <span className="inline-flex rounded-full border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground">
+                        Terlambat
+                      </span>
+                    ) : null}
+                    {item.targetWeekLabel ? (
+                      <span className="text-xs text-muted-foreground">{item.targetWeekLabel}</span>
+                    ) : null}
+                  </div>
+                  {item.baMissing ? (
+                    <p className="pl-6 text-[11px] text-warning-foreground">
+                      Sudah direalisasi — BA belum diupload/belum ada
+                    </p>
                   ) : null}
                 </li>
               );

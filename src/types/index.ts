@@ -728,8 +728,19 @@ export interface AboRuasItem {
   asset: string;
   targetWeekLabel: string | null;
   realisasiWeekLabel: string | null;
-  /** CLS/OPN column: CLOSE = done, OPEN/blank = not done — confirmed with the user. */
+  /** TANGGAL REALISASI column, raw (yyyy-MM-dd ...) — the source of truth
+   *  for `done`, NOT the CLS/OPN column. Confirmed with the user: CLS/OPN
+   *  can still read OPEN even after the date is filled in, whenever the
+   *  Berita Acara (HASIL/BA) hasn't been uploaded yet — that's a
+   *  documentation gap, not evidence the work itself is unrealized. */
+  realisasiDate: string | null;
+  /** realisasiDate is filled — this is the actual completion signal. */
   done: boolean;
+  /** HASIL/BA column empty despite `done` — the work is realized but its
+   *  Berita Acara hasn't been uploaded. Surfaced as a standing reminder
+   *  (kept in the breakdown regardless of period) rather than silently
+   *  counted as fully closed. */
+  baMissing: boolean;
   kondisi: string;
 }
 
@@ -754,7 +765,9 @@ export interface AboRuasComputed {
   asset: string;
   targetWeekLabel: string | null;
   realisasiWeekLabel: string | null;
+  realisasiDate: string | null;
   done: boolean;
+  baMissing: boolean;
   kondisi: string;
 }
 

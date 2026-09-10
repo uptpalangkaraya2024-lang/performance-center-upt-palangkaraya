@@ -176,7 +176,16 @@ function parseInputPkySheet(rows: unknown[][], programDescriptions: string[]): A
   const normalizedDescriptions = programDescriptions.map(normalize);
 
   let blockIndex = -1;
-  let cols: { id: number; ultg: number; asset: number; targetWeek: number; realisasiWeek: number; clsOpn: number; kondisi: number } | null = null;
+  let cols: {
+    id: number;
+    ultg: number;
+    asset: number;
+    targetWeek: number;
+    realisasiWeek: number;
+    tanggalRealisasi: number;
+    hasilBa: number;
+    kondisi: number;
+  } | null = null;
 
   for (const row of rows) {
     const nextIndex = blockIndex + 1;
@@ -201,7 +210,8 @@ function parseInputPkySheet(rows: unknown[][], programDescriptions: string[]): A
         asset: ultgCol + 1,
         targetWeek: targetMingguCol,
         realisasiWeek: findCol(row, "REALISASI MINGGU"),
-        clsOpn: findCol(row, "CLS/OPN"),
+        tanggalRealisasi: findCol(row, "TANGGAL REALISASI"),
+        hasilBa: findCol(row, "HASIL / BA"),
         kondisi: findCol(row, "KONDISI"),
       };
       continue;
@@ -213,12 +223,23 @@ function parseInputPkySheet(rows: unknown[][], programDescriptions: string[]): A
     const ultg = textAt(row, cols.ultg);
     if (!ultg) continue;
 
+    // `done` is driven by TANGGAL REALISASI (a real date filled in), NOT
+    // CLS/OPN — confirmed with the user: CLS/OPN can still read OPEN after
+    // the date is filled in, whenever the Berita Acara (HASIL/BA) simply
+    // hasn't been uploaded yet. That's a documentation gap, not evidence
+    // the work is unrealized, so it's surfaced separately as `baMissing`.
+    const realisasiDate = cols.tanggalRealisasi === -1 ? "" : textAt(row, cols.tanggalRealisasi);
+    const done = realisasiDate.length > 0;
+    const hasilBa = cols.hasilBa === -1 ? "" : textAt(row, cols.hasilBa);
+
     blocks[blockIndex].push({
       ultg,
       asset: textAt(row, cols.asset),
       targetWeekLabel: extractWeekLabel(textAt(row, cols.targetWeek)),
       realisasiWeekLabel: cols.realisasiWeek === -1 ? null : extractWeekLabel(textAt(row, cols.realisasiWeek)),
-      done: cols.clsOpn === -1 ? false : textAt(row, cols.clsOpn).toUpperCase() === "CLOSE",
+      realisasiDate: realisasiDate || null,
+      done,
+      baMissing: done && !hasilBa,
       kondisi: cols.kondisi === -1 ? "" : textAt(row, cols.kondisi),
     });
   }

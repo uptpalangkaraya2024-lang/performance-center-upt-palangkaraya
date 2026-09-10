@@ -79,14 +79,16 @@ export function buildAboProgram(raw: AboProgramBlockRaw, selectedWeekLabel: stri
   }));
 
   // Items whose target week is exactly the selected week (both done and
-  // not-yet-done), PLUS any earlier-scheduled item that's still not done —
-  // an overdue item never silently drops off the list just because its
-  // week has passed; it keeps showing (against its own original target
-  // week) until it's actually realized, so it stays monitorable. Per user
-  // feedback, applies to both ABO Proteksi and Hargi (shared here).
+  // not-yet-done), PLUS any earlier-scheduled item that's still not done
+  // (overdue — never silently drops off just because its week has passed),
+  // PLUS any item whose Berita Acara (HASIL/BA) hasn't been uploaded yet
+  // even though it's otherwise done — that one's kept visible regardless
+  // of period, as a standing reminder, per user feedback. `done` itself is
+  // driven by TANGGAL REALISASI (see AboRuasItem), not CLS/OPN.
   const ruasItems: AboRuasComputed[] = raw.ruasItems
     .filter((item) => {
       if (item.targetWeekLabel === selectedWeekLabel) return true;
+      if (item.baMissing) return true;
       const itemIndex = item.targetWeekLabel ? weekLabelIndex(item.targetWeekLabel) : -1;
       return itemIndex !== -1 && itemIndex < selectedIndex && !item.done;
     })
@@ -95,7 +97,9 @@ export function buildAboProgram(raw: AboProgramBlockRaw, selectedWeekLabel: stri
       asset: item.asset,
       targetWeekLabel: item.targetWeekLabel,
       realisasiWeekLabel: item.realisasiWeekLabel,
+      realisasiDate: item.realisasiDate,
       done: item.done,
+      baMissing: item.baMissing,
       kondisi: item.kondisi,
     }));
 
