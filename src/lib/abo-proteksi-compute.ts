@@ -78,12 +78,18 @@ export function buildAboProgram(raw: AboProgramBlockRaw, selectedWeekLabel: stri
     ...computeStats(u, selectedIndex),
   }));
 
-  // Only items whose target week is exactly the selected week — per user
-  // feedback, the cumulative-to-date list grew too long to be useful, so
-  // this now mirrors the "this week's plan" view instead (both realized
-  // and not-yet-realized items for that one week).
+  // Items whose target week is exactly the selected week (both done and
+  // not-yet-done), PLUS any earlier-scheduled item that's still not done —
+  // an overdue item never silently drops off the list just because its
+  // week has passed; it keeps showing (against its own original target
+  // week) until it's actually realized, so it stays monitorable. Per user
+  // feedback, applies to both ABO Proteksi and Hargi (shared here).
   const ruasItems: AboRuasComputed[] = raw.ruasItems
-    .filter((item) => item.targetWeekLabel === selectedWeekLabel)
+    .filter((item) => {
+      if (item.targetWeekLabel === selectedWeekLabel) return true;
+      const itemIndex = item.targetWeekLabel ? weekLabelIndex(item.targetWeekLabel) : -1;
+      return itemIndex !== -1 && itemIndex < selectedIndex && !item.done;
+    })
     .map((item) => ({
       ultg: item.ultg,
       asset: item.asset,

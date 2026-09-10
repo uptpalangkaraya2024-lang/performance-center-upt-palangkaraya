@@ -793,9 +793,11 @@ export interface AboProgramComputed extends AboStatFields {
   satuan: string;
   master: number;
   ultgBreakdown: AboUltgComputed[];
-  /** Only items whose targetWeekLabel is exactly the selected week — a
-   *  "this week's plan" view (both done and not-yet-done), not cumulative.
-   *  Changed from a cumulative-to-date filter per user feedback: the list
-   *  grew too long to be useful once several months had passed. */
+  /** Items whose targetWeekLabel is exactly the selected week (a "this
+   *  week's plan" view, both done and not-yet-done), PLUS any earlier item
+   *  that's still not done — an overdue item keeps showing against its own
+   *  original week until it's actually realized, so it stays monitorable
+   *  instead of silently dropping off once its week passes. Per user
+   *  feedback. */
   ruasItems: AboRuasComputed[];
 }

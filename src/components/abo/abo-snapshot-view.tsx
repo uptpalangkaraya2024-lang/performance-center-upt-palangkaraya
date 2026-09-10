@@ -135,7 +135,13 @@ function UltgBreakdown({ ultgBreakdown }: { ultgBreakdown: AboUltgComputed[] }) 
   );
 }
 
-function RuasChecklist({ ruasItems }: { ruasItems: AboProgramComputed["ruasItems"] }) {
+function RuasChecklist({
+  ruasItems,
+  selectedWeekLabel,
+}: {
+  ruasItems: AboProgramComputed["ruasItems"];
+  selectedWeekLabel: string;
+}) {
   const grouped = useMemo(() => {
     const map = new Map<string, typeof ruasItems>();
     for (const item of ruasItems) {
@@ -152,26 +158,39 @@ function RuasChecklist({ ruasItems }: { ruasItems: AboProgramComputed["ruasItems
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-medium text-foreground">Breakdown per Ruas</p>
+      <p className="text-xs font-medium text-foreground">
+        Breakdown per Ruas
+        <span className="ml-1 font-normal text-muted-foreground">
+          — termasuk ruas dari periode sebelumnya yang belum direalisasi
+        </span>
+      </p>
       {grouped.map(([ultg, items]) => (
         <div key={ultg} className="flex flex-col gap-1.5">
           <p className="text-xs font-semibold text-muted-foreground">{ultg}</p>
           <ul className="flex flex-col gap-1">
-            {items.map((item, i) => (
-              <li key={`${item.asset}-${i}`} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
-                {item.done ? (
-                  <CheckCircle2 className="size-4 shrink-0 text-success" />
-                ) : (
-                  <Circle className="size-4 shrink-0 text-muted-foreground" />
-                )}
-                <span className={cn("flex-1", item.done ? "text-foreground" : "text-muted-foreground")}>
-                  {item.asset}
-                </span>
-                {item.targetWeekLabel ? (
-                  <span className="text-xs text-muted-foreground">{item.targetWeekLabel}</span>
-                ) : null}
-              </li>
-            ))}
+            {items.map((item, i) => {
+              const overdue = !item.done && item.targetWeekLabel !== selectedWeekLabel;
+              return (
+                <li key={`${item.asset}-${i}`} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
+                  {item.done ? (
+                    <CheckCircle2 className="size-4 shrink-0 text-success" />
+                  ) : (
+                    <Circle className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className={cn("flex-1", item.done ? "text-foreground" : "text-muted-foreground")}>
+                    {item.asset}
+                  </span>
+                  {overdue ? (
+                    <span className="inline-flex rounded-full border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground">
+                      Terlambat
+                    </span>
+                  ) : null}
+                  {item.targetWeekLabel ? (
+                    <span className="text-xs text-muted-foreground">{item.targetWeekLabel}</span>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}
@@ -179,7 +198,7 @@ function RuasChecklist({ ruasItems }: { ruasItems: AboProgramComputed["ruasItems
   );
 }
 
-function ProgramCard({ program }: { program: AboProgramComputed }) {
+function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComputed; selectedWeekLabel: string }) {
   return (
     <Card id={programAnchorId(program.code)} className="scroll-mt-16 print:break-inside-avoid print:border print:shadow-none">
       <CardHeader>
@@ -195,7 +214,7 @@ function ProgramCard({ program }: { program: AboProgramComputed }) {
           <StatGrid stats={program} />
         </div>
         <UltgBreakdown ultgBreakdown={program.ultgBreakdown} />
-        <RuasChecklist ruasItems={program.ruasItems} />
+        <RuasChecklist ruasItems={program.ruasItems} selectedWeekLabel={selectedWeekLabel} />
       </CardContent>
     </Card>
   );
@@ -262,7 +281,7 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
       <div className="flex flex-col gap-3">
         {programs.map((p) => (
           <Fragment key={p.code}>
-            <ProgramCard program={p} />
+            <ProgramCard program={p} selectedWeekLabel={weekLabel} />
           </Fragment>
         ))}
       </div>
