@@ -1,14 +1,44 @@
-import { ShieldCheck } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataUnavailable } from "@/components/dashboard/data-unavailable";
+import { PageHero } from "@/components/dashboard/page-hero";
+import { AboProteksiView } from "@/components/abo/abo-proteksi-view";
+import { getAboProteksiSnapshot } from "@/services/abo-proteksi";
 
-import { ComingSoon } from "@/components/dashboard/coming-soon";
+export const dynamic = "force-dynamic";
 
-export default function Page() {
+export default async function AboProteksiPage() {
+  const snapshot = await getAboProteksiSnapshot();
+
   return (
-    <ComingSoon
-      title="ABO Performance"
-      heroDescription="Target, actual, achievement, tren bulanan, dan YTD performance ABO."
-      message="Performance ABO akan tersedia setelah sumber data ABO terintegrasi."
-      icon={ShieldCheck}
-    />
+    <div className="flex flex-col gap-6">
+      <div className="print:hidden">
+        <PageHero
+          title="ABO Proteksi UPT Palangkaraya"
+          description="Target dan realisasi kumulatif tiap program Anti Blackout (Proteksi) per UPT/ULTG/ruas — dihitung otomatis untuk periode yang dipilih."
+          status={
+            !snapshot.error ? (
+              <>
+                <span className="size-1.5 rounded-full bg-success" />
+                Data synchronized
+              </>
+            ) : null
+          }
+        />
+      </div>
+
+      {snapshot.error ? (
+        <Card>
+          <CardContent className="py-8">
+            <DataUnavailable message="Sinkronisasi ABO Proteksi belum berhasil. Lihat halaman Data & Sync untuk detail." />
+          </CardContent>
+        </Card>
+      ) : (
+        <AboProteksiView snapshot={snapshot} />
+      )}
+
+      <p className="text-[11px] text-muted-foreground print:hidden">
+        Source: ABO 2026 SUB BID. PROTEKSI UIP3B KAL · Sheet: 🖥️ PKY, 📝 INPUT PKY · Provider: Apps Script
+      </p>
+    </div>
   );
 }

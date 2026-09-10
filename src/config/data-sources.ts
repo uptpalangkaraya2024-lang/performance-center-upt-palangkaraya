@@ -202,4 +202,32 @@ export const dataSources = {
       },
     ],
   },
+  // Sheet names carry real emoji characters — confirmed via the gateway's
+  // listSheets action (a plain terminal/JSON viewer can make them look
+  // garbled, but the bytes are correct UTF-8 emoji). Both read raw
+  // (readConfiguredSourceRaw) — headers repeat mid-sheet per block, not just
+  // at row 1, same reason as 4DX's TARGET WIG sheets.
+  aboProteksi: {
+    id: "abo-proteksi",
+    label: "ABO Proteksi",
+    sources: [
+      {
+        file: "ABO 2026 SUB BID. PROTEKSI UIP3B KAL",
+        sheets: [
+          {
+            name: "🖥️ PKY",
+            required: false,
+            purpose:
+              "4 stacked blocks: one UPT-level block + 3 per-ULTG blocks (PALANGKARAYA/MUARA TEWEH/PANGKALANBUN — no space in this sheet's own ULTG label), each with the same 14 programs (PRO_01..14) and full-year weekly target+realisasi columns (T/R <Mon>-M<n>). ULTG blocks carry their own Realisasi columns too, not just Target — this sheet alone gives UPT and per-ULTG target/realisasi/% at every week.",
+          },
+          {
+            name: "📝 INPUT PKY",
+            required: false,
+            purpose:
+              "14 blocks in the same order as PKY's PRO_01..14 (confirmed by title-row match) — one row per ruas/GI/Bay action item, with its own target/realisasi week label and a CLS/OPN completion flag (CLOSE=done, OPEN/blank=not done). Feeds the per-ruas checklist only; UPT/ULTG-level numbers come from PKY.",
+          },
+        ],
+      },
+    ],
+  },
 } satisfies Record<string, DataSourceConfig>;

@@ -688,3 +688,113 @@ export interface FourDxWig {
   title: string;
   lms: FourDxLm[];
 }
+
+// ABO Proteksi — week label (e.g. "Sep-M2") -> value. Unlike 4DX, ABO's own
+// week labels are the ground truth for period matching (confirmed with the
+// user) — no DATASET-style real-date lookup is needed, so there's no
+// AboPeriodBoundary equivalent.
+export type AboWeeklyValues = Record<string, number>;
+
+/** One program's raw weekly target/realisasi series, at whatever level
+ *  (UPT or one ULTG) the sheet block it was read from represents. */
+export interface AboProgramRaw {
+  code: string;
+  subInitiative: string;
+  description: string;
+  satuan: string;
+  /** Full-year target — the denominator for this program's cumulative %,
+   *  confirmed via the sheet's own TARGET/% REALISASI column formulas. */
+  master: number;
+  /** The sheet's own "Target Rencana" column — a literal full-year total
+   *  that can differ slightly from MASTER (confirmed live: PRO_10 MASTER=65
+   *  but Target Rencana=65 vs its own weekly-column sum of 64; PRO_11
+   *  MASTER=25 vs Target Rencana=25 vs weekly-sum=21). GAP is computed
+   *  against this value, not a re-derived sum, so it matches the sheet
+   *  exactly — confirmed against several live programs. */
+  targetRencana: number;
+  status: string;
+  targetWeekly: AboWeeklyValues;
+  realisasiWeekly: AboWeeklyValues;
+}
+
+export interface AboUltgProgramRaw extends AboProgramRaw {
+  ultg: string;
+}
+
+/** One ruas/GI/Bay action item from "📝 INPUT PKY" — a one-off checklist
+ *  entry, not a recurring weekly quota like 4DX's assets. */
+export interface AboRuasItem {
+  ultg: string;
+  asset: string;
+  targetWeekLabel: string | null;
+  realisasiWeekLabel: string | null;
+  /** CLS/OPN column: CLOSE = done, OPEN/blank = not done — confirmed with the user. */
+  done: boolean;
+  kondisi: string;
+}
+
+/** One program (PRO_01..14), joining "🖥️ PKY"'s UPT + per-ULTG blocks with
+ *  "📝 INPUT PKY"'s per-ruas checklist for that same program — confirmed
+ *  live that both sheets list all 14 programs in the same order. */
+export interface AboProgramBlockRaw {
+  code: string;
+  description: string;
+  upt: AboProgramRaw;
+  ultgBreakdown: AboUltgProgramRaw[];
+  ruasItems: AboRuasItem[];
+}
+
+export interface AboSnapshot {
+  programs: AboProgramBlockRaw[];
+  error: string | null;
+}
+
+export interface AboRuasComputed {
+  ultg: string;
+  asset: string;
+  targetWeekLabel: string | null;
+  realisasiWeekLabel: string | null;
+  done: boolean;
+  kondisi: string;
+}
+
+/** Shared stat shape for a chosen week — "to-date" sums every week from
+ *  Jan-M1 through the chosen week inclusive, mirroring the sheet's own
+ *  TARGET/% REALISASI/GAP formulas generalized to any selected period
+ *  instead of hardcoded "today" (confirmed with the user). */
+export interface AboStatFields {
+  targetThisWeek: number;
+  realisasiThisWeek: number;
+  targetToDate: number;
+  realisasiToDate: number;
+  /** targetToDate/master and realisasiToDate/master — deliberately
+   *  uncapped at 100%, matching the sheet's own TARGET/% REALISASI
+   *  formulas (confirmed live: several programs show >100%, e.g. 122%).
+   *  Falls back to 1 when master is 0, mirroring the sheet's own
+   *  IFERROR(...,1) — not null, so a zero-target program still reads as
+   *  "complete" rather than showing a dash. */
+  percentTarget: number;
+  percentRealisasi: number;
+  /** Target Rencana (the program's own literal full-year total, see
+   *  AboProgramRaw) minus realisasiToDate — confirmed live against several
+   *  programs, e.g. PRO_10: 65 - 60 = 5. Not targetToDate - realisasiToDate
+   *  (a subtly different, smaller number for programs still mid-year). */
+  gap: number;
+  status: "tercapai" | "belum";
+}
+
+export interface AboUltgComputed extends AboStatFields {
+  ultg: string;
+}
+
+export interface AboProgramComputed extends AboStatFields {
+  code: string;
+  description: string;
+  satuan: string;
+  master: number;
+  ultgBreakdown: AboUltgComputed[];
+  /** Only items due by the selected week (targetWeekLabel's chronological
+   *  index <= selected week's index) — confirmed with the user, consistent
+   *  with the cumulative to-date numbers above it. */
+  ruasItems: AboRuasComputed[];
+}
