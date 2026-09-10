@@ -55,7 +55,14 @@ interface AboColumnMap {
  *  "Target UPT"/"Target ULTG" itself is the master value; STATUS/Target
  *  Rencana also sit at different positions between the two files). */
 function buildColumnMap(headerRow: unknown[]): AboColumnMap {
-  const masterCol = findCol(headerRow, "MASTER") !== -1 ? findCol(headerRow, "MASTER") : findColStartsWith(headerRow, "Target U");
+  // "Target UPT"/"Target ULTG" preferred over a literal "MASTER" column
+  // when both exist — confirmed live (ABO Proteksi) that MASTER is only
+  // ever populated on the UPT block's own rows; every ULTG block's MASTER
+  // cell is blank, while "Target ULTG" (the same column position, just a
+  // different header label per block) holds the real per-ULTG value. Using
+  // MASTER first was silently reading 0 for every ULTG breakdown.
+  const targetUCol = findColStartsWith(headerRow, "Target U");
+  const masterCol = targetUCol !== -1 ? targetUCol : findCol(headerRow, "MASTER");
 
   const targetCols: { label: string; col: number }[] = [];
   const realisasiCols: { label: string; col: number }[] = [];

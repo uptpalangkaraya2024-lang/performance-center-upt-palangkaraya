@@ -780,12 +780,18 @@ export interface AboStatFields {
   realisasiThisWeek: number;
   targetToDate: number;
   realisasiToDate: number;
-  /** targetToDate/master and realisasiToDate/master — deliberately
-   *  uncapped at 100%, matching the sheet's own TARGET/% REALISASI
-   *  formulas (confirmed live: several programs show >100%, e.g. 122%).
-   *  Falls back to 1 when master is 0, mirroring the sheet's own
-   *  IFERROR(...,1) — not null, so a zero-target program still reads as
-   *  "complete" rather than showing a dash. */
+  /** The sheet's own "Target Rencana" column (see AboProgramRaw) — the
+   *  currently-planned target, which can be equal to or greater than the
+   *  MASTER/Target UPT-ULTG value (confirmed with the user). Shown
+   *  alongside master so the two are never conflated. */
+  targetRencana: number;
+  /** percentTarget = targetRencana/master (the plan vs. the full-year
+   *  total — NOT period-dependent, since targetRencana itself already is
+   *  the sheet's own current planned figure); percentRealisasi =
+   *  realisasiToDate/master (period-dependent, changes with the selected
+   *  week). Both deliberately uncapped at 100% — confirmed live several
+   *  programs show >100% — and default to 1 when master is 0, mirroring
+   *  the sheet's own IFERROR(...,1) rather than showing a dash. */
   percentTarget: number;
   percentRealisasi: number;
   /** Target Rencana (the program's own literal full-year total, see

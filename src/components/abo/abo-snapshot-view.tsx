@@ -83,12 +83,20 @@ function ResumeTable({ programs }: { programs: AboProgramComputed[] }) {
   );
 }
 
-function StatGrid({ stats }: { stats: { master: number; targetToDate: number; realisasiToDate: number; percentTarget: number; percentRealisasi: number; gap: number } }) {
+function StatGrid({
+  stats,
+}: {
+  stats: { master: number; targetRencana: number; targetToDate: number; realisasiToDate: number; percentTarget: number; percentRealisasi: number; gap: number };
+}) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <div className="rounded-lg border p-3">
         <div className="text-lg font-semibold tabular-nums text-foreground">{stats.master}</div>
-        <div className="text-xs text-muted-foreground">Target Tahunan (Master)</div>
+        <div className="text-xs text-muted-foreground">Target UPT</div>
+      </div>
+      <div className="rounded-lg border p-3">
+        <div className="text-lg font-semibold tabular-nums text-foreground">{stats.targetRencana}</div>
+        <div className="text-xs text-muted-foreground">Target Rencana</div>
       </div>
       <div className="rounded-lg border p-3">
         <div className="text-lg font-semibold tabular-nums text-foreground">{stats.targetToDate}</div>
@@ -100,11 +108,11 @@ function StatGrid({ stats }: { stats: { master: number; targetToDate: number; re
       </div>
       <div className="rounded-lg border p-3">
         <div className="text-lg font-semibold tabular-nums text-foreground">{formatPercent(stats.percentTarget)}</div>
-        <div className="text-xs text-muted-foreground">% Target</div>
+        <div className="text-xs text-muted-foreground">% Target (Rencana/Total)</div>
       </div>
       <div className="rounded-lg border p-3">
         <div className="text-lg font-semibold tabular-nums text-foreground">{formatPercent(stats.percentRealisasi)}</div>
-        <div className="text-xs text-muted-foreground">% Realisasi</div>
+        <div className="text-xs text-muted-foreground">% Realisasi (thd Total)</div>
       </div>
       <div className="rounded-lg border p-3">
         <div className="text-lg font-semibold tabular-nums text-foreground">{stats.gap}</div>
@@ -128,7 +136,9 @@ function UltgBreakdown({ ultgBreakdown }: { ultgBreakdown: AboUltgComputed[] }) 
             <p className="text-xs text-muted-foreground">
               R:{u.realisasiToDate}/T:{u.targetToDate} s.d. periode · {formatPercent(u.percentRealisasi)}
             </p>
-            <p className="text-[11px] text-muted-foreground">dari total target tahunan: {u.master}</p>
+            <p className="text-[11px] text-muted-foreground">
+              Target ULTG: {u.master} · Target Rencana: {u.targetRencana}
+            </p>
           </div>
         ))}
       </div>
