@@ -126,8 +126,9 @@ function UltgBreakdown({ ultgBreakdown }: { ultgBreakdown: AboUltgComputed[] }) 
               <StatusPill status={u.status} />
             </div>
             <p className="text-xs text-muted-foreground">
-              R:{u.realisasiToDate}/T:{u.targetToDate} · {formatPercent(u.percentRealisasi)}
+              R:{u.realisasiToDate}/T:{u.targetToDate} s.d. periode · {formatPercent(u.percentRealisasi)}
             </p>
+            <p className="text-[11px] text-muted-foreground">dari total target tahunan: {u.master}</p>
           </div>
         ))}
       </div>

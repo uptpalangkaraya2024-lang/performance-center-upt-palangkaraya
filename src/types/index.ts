@@ -798,6 +798,12 @@ export interface AboStatFields {
 
 export interface AboUltgComputed extends AboStatFields {
   ultg: string;
+  /** This ULTG's own full-year target (its own MASTER value) — shown
+   *  alongside targetToDate/realisasiToDate so "R/T s.d. periode" doesn't
+   *  read as if it were the whole year's target. Per user feedback: the
+   *  cumulative-to-date R/T alone was ambiguous about how much of the
+   *  full year that fraction represents. */
+  master: number;
 }
 
 export interface AboProgramComputed extends AboStatFields {

@@ -75,6 +75,7 @@ export function buildAboProgram(raw: AboProgramBlockRaw, selectedWeekLabel: stri
   const selectedIndex = weekLabelIndex(selectedWeekLabel);
   const ultgBreakdown: AboUltgComputed[] = raw.ultgBreakdown.map((u) => ({
     ultg: u.ultg,
+    master: u.master,
     ...computeStats(u, selectedIndex),
   }));
 
