@@ -152,33 +152,44 @@ function extractWeekLabel(raw: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-/** Parses "📝 INPUT PKY" into one array of ruas items per program block, in
- *  the same order the blocks appear in the sheet — confirmed live to match
- *  "🖥️ PKY"'s program order exactly for both ABO Proteksi and ABO Hargi
- *  (matched by title text during the audit). A block starts at a title row
- *  (col 0/1/2 blank, col 3 = the program's description) and ends at the
- *  next title row or end of sheet. Columns resolved by header NAME per
- *  block (not fixed index) — confirmed live that Proteksi and Hargi use
- *  different column layouts here too (Hargi has an extra leading "CODE"
- *  column shifting everything over one, plus no "KERAWANAN" column). */
-function parseInputPkySheet(rows: unknown[][]): AboRuasItem[][] {
-  const blocks: AboRuasItem[][] = [];
-  let current: AboRuasItem[] | null = null;
+/** Parses "📝 INPUT PKY" into one array of ruas items per program, aligned
+ *  to `programDescriptions` (🖥️ PKY's own UPT-block program order) —
+ *  confirmed live that both sheets list programs in the same order.
+ *
+ *  Block boundaries are found by CONTENT, not position: a row starting the
+ *  Nth program's block is one containing that program's exact description
+ *  text (normalized) in any cell — not by assuming it always lands in a
+ *  fixed column. This was tightened after a live discrepancy: an earlier
+ *  version assumed the title always sits at column 3 (true when this was
+ *  first audited), but a later re-check found ABO Hargi's own sheet had
+ *  since been edited (a row inserted, shifting the title to column 4) and
+ *  the position-based version silently produced zero ruas items for every
+ *  program as a result — content-matching survives that kind of live
+ *  editing instead of breaking silently. Per-block columns are still
+ *  resolved by header NAME once a block's own header row is found (ULTG +
+ *  TARGET MINGGU both present in that row) — already position-independent,
+ *  confirmed live that Proteksi and Hargi use different column layouts
+ *  here too (Hargi has an extra leading "CODE" column shifting everything
+ *  over one, plus no "KERAWANAN" column). */
+function parseInputPkySheet(rows: unknown[][], programDescriptions: string[]): AboRuasItem[][] {
+  const blocks: AboRuasItem[][] = programDescriptions.map(() => []);
+  const normalizedDescriptions = programDescriptions.map(normalize);
+
+  let blockIndex = -1;
   let cols: { id: number; ultg: number; asset: number; targetWeek: number; realisasiWeek: number; clsOpn: number; kondisi: number } | null = null;
 
   for (const row of rows) {
-    const col0 = textAt(row, 0);
-    const col1 = textAt(row, 1);
-    const col2 = textAt(row, 2);
-    const col3 = textAt(row, 3);
-    const isTitleRow = !col0 && !col1 && !col2 && !!col3;
-
-    if (isTitleRow) {
-      if (current) blocks.push(current);
-      current = [];
-      cols = null;
-      continue;
+    const nextIndex = blockIndex + 1;
+    if (nextIndex < normalizedDescriptions.length) {
+      const nextDescription = normalizedDescriptions[nextIndex];
+      const isNextTitleRow = row.some((c) => normalize(String(c ?? "")) === nextDescription);
+      if (isNextTitleRow) {
+        blockIndex = nextIndex;
+        cols = null;
+        continue;
+      }
     }
+    if (blockIndex === -1) continue; // before the first recognized block
 
     const ultgCol = findCol(row, "ULTG");
     const targetMingguCol = findCol(row, "TARGET MINGGU");
@@ -196,13 +207,13 @@ function parseInputPkySheet(rows: unknown[][]): AboRuasItem[][] {
       continue;
     }
 
-    if (!current || !cols) continue;
+    if (!cols) continue;
     const idCell = textAt(row, cols.id);
     if (!/^\d+$/.test(idCell)) continue;
     const ultg = textAt(row, cols.ultg);
     if (!ultg) continue;
 
-    current.push({
+    blocks[blockIndex].push({
       ultg,
       asset: textAt(row, cols.asset),
       targetWeekLabel: extractWeekLabel(textAt(row, cols.targetWeek)),
@@ -211,7 +222,6 @@ function parseInputPkySheet(rows: unknown[][]): AboRuasItem[][] {
       kondisi: cols.kondisi === -1 ? "" : textAt(row, cols.kondisi),
     });
   }
-  if (current) blocks.push(current);
   return blocks;
 }
 
@@ -229,7 +239,7 @@ export async function getAboSnapshot(
   const inputSheet = results.find((r) => r.file === file && r.sheet === inputSheetName);
 
   const { upt, ultgBlocks } = pkySheet ? parsePkySheet(pkySheet.rows, options?.fixedUltgOrder) : { upt: [], ultgBlocks: [] };
-  const ruasBlocks = inputSheet ? parseInputPkySheet(inputSheet.rows) : [];
+  const ruasBlocks = inputSheet ? parseInputPkySheet(inputSheet.rows, upt.map((p) => p.description)) : [];
 
   const programs: AboProgramBlockRaw[] = upt.map((uptProgram, index) => {
     const ultgBreakdown: AboUltgProgramRaw[] = ultgBlocks
