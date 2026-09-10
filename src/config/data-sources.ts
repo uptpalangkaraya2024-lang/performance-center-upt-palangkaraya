@@ -230,4 +230,34 @@ export const dataSources = {
       },
     ],
   },
+  // Same block shapes as aboProteksi (see src/services/abo-shared.ts), but
+  // NOT identical column layouts — confirmed live: no separate "MASTER"
+  // column (Target UPT/ULTG itself is the master value), different STATUS
+  // column position, and no ULTG label row before its 3 per-ULTG blocks at
+  // all (confirmed with the user: always UPT, then PALANGKARAYA, MUARA
+  // TEWEH, PANGKALAN BUN in that fixed order — cross-checked against INPUT
+  // PKY's own per-ULTG row counts before asking).
+  aboHargi: {
+    id: "abo-hargi",
+    label: "ABO Hargi",
+    sources: [
+      {
+        file: "ABO 2026 SUB BID. HARGI UIP3B KAL",
+        sheets: [
+          {
+            name: "🖥️ PKY",
+            required: false,
+            purpose:
+              "4 stacked blocks: one UPT-level block + 3 per-ULTG blocks (label-less — order confirmed with the user as PALANGKARAYA/MUARA TEWEH/PANGKALAN BUN), each with the same 16 programs (GI_01..16) and full-year weekly target+realisasi columns. No separate MASTER column — Target UPT/ULTG is the master value directly.",
+          },
+          {
+            name: "📝 INPUT PKY",
+            required: false,
+            purpose:
+              "16 blocks in the same order as PKY's GI_01..16 — one row per ruas/GI action item. Column layout differs from ABO Proteksi's INPUT PKY (extra leading CODE column, no KERAWANAN column), parsed by header name, not fixed index.",
+          },
+        ],
+      },
+    ],
+  },
 } satisfies Record<string, DataSourceConfig>;

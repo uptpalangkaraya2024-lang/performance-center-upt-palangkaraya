@@ -201,18 +201,14 @@ function ProgramCard({ program }: { program: AboProgramComputed }) {
   );
 }
 
-export function AboProteksiView({ snapshot }: { snapshot: AboSnapshot }) {
+export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnapshot; emptyMessage: string }) {
   const [weekLabel, setWeekLabel] = useState(() => defaultAboWeekLabel());
   const [monthAbbr, weekOfMonth] = weekLabel.split("-M");
 
   const programs = buildAboSnapshotComputed(snapshot, weekLabel);
 
   if (snapshot.programs.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        Data ABO Proteksi belum tersedia — lihat halaman Data &amp; Sync untuk detail.
-      </p>
-    );
+    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
   return (
