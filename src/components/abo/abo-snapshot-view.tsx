@@ -108,7 +108,7 @@ function StatGrid({
       </div>
       <div className="rounded-lg border p-3">
         <div className="text-lg font-semibold tabular-nums text-foreground">{formatPercent(stats.percentTarget)}</div>
-        <div className="text-xs text-muted-foreground">% Target (Rencana/Total)</div>
+        <div className="text-xs text-muted-foreground">% Target (s.d. Periode/Total)</div>
       </div>
       <div className="rounded-lg border p-3">
         <div className="text-lg font-semibold tabular-nums text-foreground">{formatPercent(stats.percentRealisasi)}</div>

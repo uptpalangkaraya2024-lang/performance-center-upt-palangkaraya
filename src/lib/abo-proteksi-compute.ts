@@ -50,13 +50,17 @@ function computeStats(program: AboProgramRaw, selectedIndex: number): AboStatFie
   const realisasiThisWeek = program.realisasiWeekly[selectedLabel] ?? 0;
   const targetToDate = sumToDate(program.targetWeekly, selectedIndex);
   const realisasiToDate = sumToDate(program.realisasiWeekly, selectedIndex);
-  // percentTarget is Target Rencana (the plan) against the full-year
-  // total — not period-dependent, per user feedback. percentRealisasi
-  // stays period-dependent (realisasiToDate/master). Both deliberately
-  // uncapped (and defaulting to 1, not 0/null, when master is 0) — matches
-  // the sheet's own IFERROR(...,1) behavior, confirmed live against
-  // several programs showing >100%.
-  const percentTarget = program.master > 0 ? program.targetRencana / program.master : 1;
+  // Both against the full-year total (master): percentTarget is how much
+  // of the year's target is due as of the selected period (targetToDate/
+  // master), percentRealisasi is how much has actually been realized
+  // (realisasiToDate/master) — corrected per user feedback (an earlier
+  // version used targetRencana as the numerator, which was wrong: Target
+  // Rencana is a separate, currently-planned figure, not "target due so
+  // far"). Both period-dependent, both deliberately uncapped (and default
+  // to 1, not 0/null, when master is 0) — matches the sheet's own
+  // IFERROR(...,1) behavior, confirmed live against several programs
+  // showing >100%.
+  const percentTarget = program.master > 0 ? targetToDate / program.master : 1;
   const percentRealisasi = program.master > 0 ? realisasiToDate / program.master : 1;
   return {
     targetThisWeek,
