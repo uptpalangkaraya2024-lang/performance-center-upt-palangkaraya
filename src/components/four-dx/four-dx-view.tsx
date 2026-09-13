@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { Check, CheckCircle2, Circle, Copy, MessageSquareText, Printer } from "lucide-react";
+import { Check, CheckCircle2, Circle, Copy, MessageSquareText, Printer, RotateCcw } from "lucide-react";
 
 import {
   Select,
@@ -263,10 +263,10 @@ export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
     return MONTH_ABBR_ID.filter((m) => present.has(m));
   }, [snapshot.periodBoundaries]);
 
-  const [monthAbbr, setMonthAbbr] = useState(() => snapshot.currentPeriodLabel.split("-M")[0]);
-  const [weekOfMonth, setWeekOfMonth] = useState(() =>
-    Number(/-M(\d+)$/.exec(snapshot.currentPeriodLabel)?.[1] ?? "1"),
-  );
+  const currentMonthAbbr = snapshot.currentPeriodLabel.split("-M")[0];
+  const currentWeekOfMonth = Number(/-M(\d+)$/.exec(snapshot.currentPeriodLabel)?.[1] ?? "1");
+  const [monthAbbr, setMonthAbbr] = useState(currentMonthAbbr);
+  const [weekOfMonth, setWeekOfMonth] = useState(currentWeekOfMonth);
 
   const weekOptions = useMemo(() => {
     return snapshot.periodBoundaries
@@ -337,6 +337,21 @@ export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
             ))}
           </SelectContent>
         </Select>
+
+        {monthAbbr !== currentMonthAbbr || weekOfMonth !== currentWeekOfMonth ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => {
+              setMonthAbbr(currentMonthAbbr);
+              setWeekOfMonth(currentWeekOfMonth);
+            }}
+          >
+            <RotateCcw className="size-3.5" />
+            Kembali ke Periode Ini
+          </Button>
+        ) : null}
 
         <div className="ml-auto flex items-center gap-2">
           <WaRecapSheet text={waRecap} />

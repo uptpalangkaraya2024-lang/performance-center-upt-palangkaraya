@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { navGroups } from "@/config/nav";
 import { cn } from "@/lib/utils";
@@ -21,8 +22,37 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 
+// A small "needs attention" count next to a nav entry — e.g. how many ABO
+// programs or 4DX Lead Measures are currently "belum" — so a user can tell
+// where to look without opening every module first. See src/lib/nav-badges.ts.
+function NavBadge({ count }: { count: number }) {
+  return (
+    <span className="ml-auto inline-flex min-w-4.5 items-center justify-center rounded-full bg-warning/25 px-1.5 py-0.5 text-[10px] font-semibold text-warning-foreground group-data-[collapsible=icon]:hidden">
+      {count}
+    </span>
+  );
+}
+
 export function AppSidebar() {
   const pathname = usePathname();
+  // Fetched client-side after mount, not passed down from the layout — see
+  // src/app/dashboard/layout.tsx for why. Starts empty so the sidebar
+  // renders instantly; badges pop in a moment later once this resolves.
+  const [badges, setBadges] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/nav-badges")
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((data) => {
+        if (!cancelled) setBadges(data ?? {});
+      })
+      .catch(() => {
+        // A badge count failing must never break the sidebar.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <Sidebar collapsible="icon" className="border-none">
@@ -82,6 +112,14 @@ export function AppSidebar() {
                 <SidebarMenu>
                   {group.items.map((item) => {
                     const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                    // A parent with children shows the SUM across its children
+                    // (each child also shows its own) — the parent's own href
+                    // usually duplicates its first child's, so summing avoids
+                    // double-counting that one entry while still surfacing the
+                    // others (e.g. KPI shows ABO + 4DX combined).
+                    const itemBadge = item.children
+                      ? item.children.reduce((sum, c) => sum + (badges[c.href] ?? 0), 0)
+                      : (badges[item.href] ?? 0);
                     return (
                       <SidebarMenuItem key={item.href}>
                         <SidebarMenuButton
@@ -98,6 +136,7 @@ export function AppSidebar() {
                             <Link href={item.href}>
                               <item.icon />
                               <span>{item.title}</span>
+                              {itemBadge > 0 ? <NavBadge count={itemBadge} /> : null}
                             </Link>
                           }
                         />
@@ -105,6 +144,7 @@ export function AppSidebar() {
                           <SidebarMenuSub className="border-sidebar-border">
                             {item.children.map((child) => {
                               const childActive = pathname === child.href;
+                              const childBadge = badges[child.href] ?? 0;
                               return (
                                 <SidebarMenuSubItem key={child.href}>
                                   <SidebarMenuSubButton
@@ -117,6 +157,7 @@ export function AppSidebar() {
                                     render={
                                       <Link href={child.href}>
                                         <span>{child.title}</span>
+                                        {childBadge > 0 ? <NavBadge count={childBadge} /> : null}
                                       </Link>
                                     }
                                   />

@@ -127,6 +127,60 @@ export function buildAboSnapshotComputed(snapshot: AboSnapshot, selectedWeekLabe
   return snapshot.programs.map((p) => buildAboProgram(p, selectedWeekLabel));
 }
 
+export interface AboAttentionItem {
+  programCode: string;
+  programDescription: string;
+  ultg: string;
+  asset: string | null;
+  issue: "ULTG belum tercapai s.d. periode" | "Terlambat" | "BA belum diupload";
+  detail: string;
+}
+
+/** Flat "needs attention" list across every program — the same 3 signals
+ *  already shown scattered across each program card (ULTG breakdown status,
+ *  overdue ruas, BA-missing ruas), gathered into one place so they don't
+ *  require opening every one of 14-16 program cards to spot. Per user
+ *  request. */
+export function collectAboAttentionItems(programs: AboProgramComputed[], selectedWeekLabel: string): AboAttentionItem[] {
+  const items: AboAttentionItem[] = [];
+  for (const p of programs) {
+    for (const u of p.ultgBreakdown) {
+      if (u.status === "belum") {
+        items.push({
+          programCode: p.code,
+          programDescription: p.description,
+          ultg: u.ultg,
+          asset: null,
+          issue: "ULTG belum tercapai s.d. periode",
+          detail: `R:${u.realisasiToDate}/T:${u.targetToDate}`,
+        });
+      }
+    }
+    for (const r of p.ruasItems) {
+      if (r.baMissing) {
+        items.push({
+          programCode: p.code,
+          programDescription: p.description,
+          ultg: r.ultg,
+          asset: r.asset,
+          issue: "BA belum diupload",
+          detail: r.targetWeekLabel ?? "",
+        });
+      } else if (!r.done && r.targetWeekLabel !== selectedWeekLabel) {
+        items.push({
+          programCode: p.code,
+          programDescription: p.description,
+          ultg: r.ultg,
+          asset: r.asset,
+          issue: "Terlambat",
+          detail: r.targetWeekLabel ?? "",
+        });
+      }
+    }
+  }
+  return items;
+}
+
 /** Today's week label via a plain ceil(day/7) estimate (capped at M4) — no
  *  DATASET-style real-date lookup needed here, since ABO's own week labels
  *  are matched by label alone, not real calendar boundaries (confirmed with

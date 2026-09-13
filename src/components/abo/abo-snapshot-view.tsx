@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { CheckCircle2, Circle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, RotateCcw, Search } from "lucide-react";
 
 import {
   Select,
@@ -10,13 +10,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ABO_MONTH_ABBR,
   ABO_MONTH_FULL,
   aboMonthAbbrIndex,
   buildAboSnapshotComputed,
+  collectAboAttentionItems,
   defaultAboWeekLabel,
+  type AboAttentionItem,
 } from "@/lib/abo-proteksi-compute";
 import { cn } from "@/lib/utils";
 import type { AboProgramComputed, AboSnapshot, AboUltgComputed } from "@/types";
@@ -42,6 +46,71 @@ function StatusPill({ status }: { status: AboProgramComputed["status"] }) {
     <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", cls)}>
       {status === "tercapai" ? "Tercapai" : "Belum"}
     </span>
+  );
+}
+
+// One place to see every "needs attention" signal that would otherwise
+// require opening each of 14-16 program cards to spot — ULTG-level
+// shortfalls, overdue ruas, and BA-missing ruas, gathered by
+// collectAboAttentionItems (src/lib/abo-proteksi-compute.ts). Per user
+// request.
+function AttentionCard({ items, onJump }: { items: AboAttentionItem[]; onJump: (programCode: string) => void }) {
+  if (items.length === 0) return null;
+
+  const issueClass: Record<AboAttentionItem["issue"], string> = {
+    "ULTG belum tercapai s.d. periode": "border-warning/40 bg-warning/15 text-warning-foreground",
+    Terlambat: "border-warning/40 bg-warning/15 text-warning-foreground",
+    "BA belum diupload": "border-destructive/40 bg-destructive/10 text-destructive",
+  };
+
+  return (
+    <Card className="print:break-inside-avoid">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="size-4 text-warning-foreground" />
+          <CardTitle className="text-base">Perlu Perhatian</CardTitle>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {items.length} hal yang perlu ditindaklanjuti — ULTG belum tercapai, ruas terlambat, atau BA belum diupload.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="max-h-80 overflow-y-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-card">
+              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                <th className="px-3 py-2 font-medium">Program</th>
+                <th className="px-3 py-2 font-medium">ULTG</th>
+                <th className="px-3 py-2 font-medium">Item</th>
+                <th className="px-3 py-2 font-medium">Masalah</th>
+                <th className="px-3 py-2 font-medium">Info</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, i) => (
+                <tr
+                  key={`${item.programCode}-${item.ultg}-${item.asset}-${i}`}
+                  onClick={() => onJump(item.programCode)}
+                  className="cursor-pointer border-b last:border-0 hover:bg-muted/10"
+                >
+                  <td className="px-3 py-2 text-foreground">
+                    <span className="font-medium">{item.programCode}</span>
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{item.ultg}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{item.asset ?? "—"}</td>
+                  <td className="px-3 py-2">
+                    <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", issueClass[item.issue])}>
+                      {item.issue}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{item.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -239,10 +308,19 @@ function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComput
 }
 
 export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnapshot; emptyMessage: string }) {
-  const [weekLabel, setWeekLabel] = useState(() => defaultAboWeekLabel());
+  const currentWeekLabel = useMemo(() => defaultAboWeekLabel(), []);
+  const [weekLabel, setWeekLabel] = useState(currentWeekLabel);
+  const [search, setSearch] = useState("");
   const [monthAbbr, weekOfMonth] = weekLabel.split("-M");
 
   const programs = buildAboSnapshotComputed(snapshot, weekLabel);
+  const attentionItems = useMemo(() => collectAboAttentionItems(programs, weekLabel), [programs, weekLabel]);
+
+  const filteredPrograms = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return programs;
+    return programs.filter((p) => p.code.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+  }, [programs, search]);
 
   if (snapshot.programs.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>;
@@ -282,6 +360,23 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
             ))}
           </SelectContent>
         </Select>
+
+        {weekLabel !== currentWeekLabel ? (
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setWeekLabel(currentWeekLabel)}>
+            <RotateCcw className="size-3.5" />
+            Kembali ke Periode Ini
+          </Button>
+        ) : null}
+
+        <div className="relative ml-auto w-full sm:w-64">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari kode/nama program..."
+            className="h-8 pl-8 text-sm"
+          />
+        </div>
       </div>
 
       <div className="rounded-lg border bg-muted/20 p-3 print:border-0 print:bg-transparent print:p-0">
@@ -291,13 +386,15 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
         <p className="text-xs text-muted-foreground">Target &amp; realisasi kumulatif sejak Jan-M1 s.d. periode ini.</p>
       </div>
 
+      <AttentionCard items={attentionItems} onJump={(code) => jumpTo(programAnchorId(code))} />
+
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold tracking-tight text-foreground">Resume Semua Program</h3>
-        <ResumeTable programs={programs} />
+        <ResumeTable programs={filteredPrograms} />
       </div>
 
       <div className="flex flex-col gap-3">
-        {programs.map((p) => (
+        {filteredPrograms.map((p) => (
           <Fragment key={p.code}>
             <ProgramCard program={p} selectedWeekLabel={weekLabel} />
           </Fragment>
