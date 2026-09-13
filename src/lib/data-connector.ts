@@ -42,74 +42,83 @@ function cacheKey(provider: string, file: string, sheet: string): string {
  */
 export async function readConfiguredSource(source: DataSourceConfig): Promise<SheetReadResult[]> {
   const provider = getDataProvider();
-  const results: SheetReadResult[] = [];
 
-  for (const fileSource of source.sources) {
-    if (fileSource.enabled === false) continue; // not a failure — deliberately not ready yet
+  // Every (file, sheet) pair is an independent network call to the same
+  // gateway — reading them one at a time via a sequential for-await loop
+  // was the dashboard's single biggest source of slow page loads on a
+  // cache miss (e.g. 4DX's 9 sheets took roughly 9x one call's latency
+  // instead of ~1x). Promise.all across both files and sheets lets them
+  // all fly at once; per-sheet cache/error/stale-fallback behavior is
+  // otherwise unchanged, just no longer blocking its neighbors.
+  const perFileSource = await Promise.all(
+    source.sources.map(async (fileSource): Promise<SheetReadResult[]> => {
+      if (fileSource.enabled === false) return []; // not a failure — deliberately not ready yet
 
-    let file;
-    try {
-      file = await provider.findFile(fileSource.file);
-    } catch (error) {
-      // A config/auth failure (missing GOOGLE_DRIVE_FOLDER_ID / GOOGLE_APPS_SCRIPT_URL,
-      // bad credentials, ...) is not the same problem as a genuinely missing
-      // file — surface its real message instead of a generic "not found", or
-      // an admin ends up hunting through Drive for a file that was never the
-      // actual issue.
-      const message = error instanceof Error ? error.message : String(error);
-      for (const sheetRef of fileSource.sheets) {
-        recordSyncError({
-          module: source.label,
-          file: fileSource.file,
-          sheet: sheetRef.name,
-          provider: provider.name,
-          error: message,
-        });
-      }
-      continue;
-    }
-
-    for (const sheetRef of fileSource.sheets) {
-      const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
-      const cached = rawCache.get(key);
-      if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
-        results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.records });
-        continue; // cache hit — no provider call, no sync-status touch (lastSync stays the real last fetch time)
-      }
-
+      let file;
       try {
-        const records = await provider.readSheet(file, sheetRef);
-        rawCache.set(key, { records, fetchedAt: Date.now() });
-        recordSyncSuccess({
-          module: source.label,
-          file: fileSource.file,
-          sheet: sheetRef.name,
-          provider: provider.name,
-          rows: records.length,
-        });
-        results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records });
+        file = await provider.findFile(fileSource.file);
       } catch (error) {
-        const message =
-          error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
-        recordSyncError({
-          module: source.label,
-          file: fileSource.file,
-          sheet: sheetRef.name,
-          provider: provider.name,
-          error: message,
-        });
-        // A transient failure shouldn't blank out a dashboard that had good
-        // data a moment ago — fall back to the stale (past-TTL) cache entry
-        // if one exists, even though the sync status above already recorded
-        // this as an error so an admin still sees it's failing.
-        if (cached) {
-          results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.records });
+        // A config/auth failure (missing GOOGLE_DRIVE_FOLDER_ID / GOOGLE_APPS_SCRIPT_URL,
+        // bad credentials, ...) is not the same problem as a genuinely missing
+        // file — surface its real message instead of a generic "not found", or
+        // an admin ends up hunting through Drive for a file that was never the
+        // actual issue.
+        const message = error instanceof Error ? error.message : String(error);
+        for (const sheetRef of fileSource.sheets) {
+          recordSyncError({
+            module: source.label,
+            file: fileSource.file,
+            sheet: sheetRef.name,
+            provider: provider.name,
+            error: message,
+          });
         }
+        return [];
       }
-    }
-  }
 
-  return results;
+      const perSheet = await Promise.all(
+        fileSource.sheets.map(async (sheetRef): Promise<SheetReadResult | null> => {
+          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+          const cached = rawCache.get(key);
+          if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
+            return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.records };
+          }
+
+          try {
+            const records = await provider.readSheet(file, sheetRef);
+            rawCache.set(key, { records, fetchedAt: Date.now() });
+            recordSyncSuccess({
+              module: source.label,
+              file: fileSource.file,
+              sheet: sheetRef.name,
+              provider: provider.name,
+              rows: records.length,
+            });
+            return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records };
+          } catch (error) {
+            const message =
+              error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
+            recordSyncError({
+              module: source.label,
+              file: fileSource.file,
+              sheet: sheetRef.name,
+              provider: provider.name,
+              error: message,
+            });
+            // A transient failure shouldn't blank out a dashboard that had good
+            // data a moment ago — fall back to the stale (past-TTL) cache entry
+            // if one exists, even though the sync status above already recorded
+            // this as an error so an admin still sees it's failing.
+            return cached ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.records } : null;
+          }
+        }),
+      );
+
+      return perSheet.filter((r): r is SheetReadResult => r !== null);
+    }),
+  );
+
+  return perFileSource.flat();
 }
 
 export interface RawSheetReadResult {
@@ -137,65 +146,71 @@ const rawRowsCache = new Map<string, RawCacheEntry>();
  */
 export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise<RawSheetReadResult[]> {
   const provider = getDataProvider();
-  const results: RawSheetReadResult[] = [];
 
-  for (const fileSource of source.sources) {
-    if (fileSource.enabled === false) continue;
+  // Same reasoning as readConfiguredSource above — every (file, sheet) read
+  // is independent, so they all run via Promise.all instead of a sequential
+  // for-await loop (which was the dominant source of slow page loads for
+  // the raw-grid modules, e.g. 4DX's 9 sheets).
+  const perFileSource = await Promise.all(
+    source.sources.map(async (fileSource): Promise<RawSheetReadResult[]> => {
+      if (fileSource.enabled === false) return [];
 
-    let file;
-    try {
-      file = await provider.findFile(fileSource.file);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      for (const sheetRef of fileSource.sheets) {
-        recordSyncError({
-          module: source.label,
-          file: fileSource.file,
-          sheet: sheetRef.name,
-          provider: provider.name,
-          error: message,
-        });
-      }
-      continue;
-    }
-
-    for (const sheetRef of fileSource.sheets) {
-      const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
-      const cached = rawRowsCache.get(key);
-      if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
-        results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows });
-        continue;
-      }
-
+      let file;
       try {
-        const rows = await provider.readSheetRaw(file, sheetRef);
-        rawRowsCache.set(key, { rows, fetchedAt: Date.now() });
-        recordSyncSuccess({
-          module: source.label,
-          file: fileSource.file,
-          sheet: sheetRef.name,
-          provider: provider.name,
-          rows: rows.length,
-        });
-        results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows });
+        file = await provider.findFile(fileSource.file);
       } catch (error) {
-        const message =
-          error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
-        recordSyncError({
-          module: source.label,
-          file: fileSource.file,
-          sheet: sheetRef.name,
-          provider: provider.name,
-          error: message,
-        });
-        if (cached) {
-          results.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows });
+        const message = error instanceof Error ? error.message : String(error);
+        for (const sheetRef of fileSource.sheets) {
+          recordSyncError({
+            module: source.label,
+            file: fileSource.file,
+            sheet: sheetRef.name,
+            provider: provider.name,
+            error: message,
+          });
         }
+        return [];
       }
-    }
-  }
 
-  return results;
+      const perSheet = await Promise.all(
+        fileSource.sheets.map(async (sheetRef): Promise<RawSheetReadResult | null> => {
+          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+          const cached = rawRowsCache.get(key);
+          if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
+            return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows };
+          }
+
+          try {
+            const rows = await provider.readSheetRaw(file, sheetRef);
+            rawRowsCache.set(key, { rows, fetchedAt: Date.now() });
+            recordSyncSuccess({
+              module: source.label,
+              file: fileSource.file,
+              sheet: sheetRef.name,
+              provider: provider.name,
+              rows: rows.length,
+            });
+            return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows };
+          } catch (error) {
+            const message =
+              error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
+            recordSyncError({
+              module: source.label,
+              file: fileSource.file,
+              sheet: sheetRef.name,
+              provider: provider.name,
+              error: message,
+            });
+            return cached ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows } : null;
+          }
+        }),
+      );
+
+      return perSheet.filter((r): r is RawSheetReadResult => r !== null);
+    }),
+  );
+
+  return perFileSource.flat();
 }
 
 /**
