@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
-import { ManagementAttentionList } from "@/components/dashboard/management-attention-list";
+import { AttentionCards } from "@/components/dashboard/attention-cards";
 import { AboFourDxInsights } from "@/components/dashboard/abo-four-dx-insights";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { GiCorrelationTable } from "@/components/dashboard/gi-correlation-table";
@@ -105,7 +105,7 @@ export default async function OverviewPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
         {upt.data ? (
           <UptPerformanceStatus
             overall={upt.data.overall}
@@ -121,14 +121,10 @@ export default async function OverviewPage() {
           </Card>
         )}
 
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Management Attention</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ManagementAttentionList data={managementAttention} />
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-2 xl:col-span-2">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">Management Attention</h3>
+          <AttentionCards data={managementAttention} />
+        </div>
       </div>
 
       <AboFourDxInsights />

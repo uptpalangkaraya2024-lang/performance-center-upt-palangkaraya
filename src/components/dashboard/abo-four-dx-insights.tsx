@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Gauge } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ManagementAttentionList } from "@/components/dashboard/management-attention-list";
+import { AttentionCards } from "@/components/dashboard/attention-cards";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import type { AiInsight } from "@/types";
 
@@ -43,22 +43,22 @@ export function AboFourDxInsights() {
   if (failed || (data && data.managementAttention.length === 0 && data.topIssues.length === 0)) return null;
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <Card className="xl:col-span-2">
-        <CardHeader>
-          <div className="flex items-center gap-1.5">
-            <Gauge className="size-4 text-muted-foreground" />
-            <CardTitle className="text-base">ABO &amp; 4DX</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {data ? (
-            <ManagementAttentionList data={data.managementAttention} emptyMessage="Tidak ada catatan ABO/4DX untuk periode ini." />
-          ) : (
-            <p className="text-sm text-muted-foreground">Memuat ABO &amp; 4DX...</p>
-          )}
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
+      <div className="flex flex-col gap-2 xl:col-span-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-foreground">
+          <Gauge className="size-4 text-muted-foreground" />
+          ABO &amp; 4DX
+        </h3>
+        {data ? (
+          <AttentionCards data={data.managementAttention} emptyMessage="Tidak ada catatan ABO/4DX untuk periode ini." />
+        ) : (
+          <Card>
+            <CardContent className="py-6">
+              <p className="text-sm text-muted-foreground">Memuat ABO &amp; 4DX...</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       <Card>
         <CardHeader>
