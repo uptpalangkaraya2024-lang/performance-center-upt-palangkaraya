@@ -93,11 +93,14 @@ export function buildAboProgram(raw: AboProgramBlockRaw, selectedWeekLabel: stri
   // PLUS any item whose Berita Acara (HASIL/BA) hasn't been uploaded yet
   // even though it's otherwise done — that one's kept visible regardless
   // of period, as a standing reminder, per user feedback. `done` itself is
-  // driven by TANGGAL REALISASI (see AboRuasItem), not CLS/OPN.
+  // driven by TANGGAL REALISASI (see AboRuasItem), not CLS/OPN. A NOT OK
+  // result is kept visible the same way as baMissing — a quality problem
+  // shouldn't disappear just because the work is otherwise "done".
   const ruasItems: AboRuasComputed[] = raw.ruasItems
     .filter((item) => {
       if (item.targetWeekLabel === selectedWeekLabel) return true;
       if (item.baMissing) return true;
+      if (item.kondisi.trim().toUpperCase() === "NOT OK") return true;
       const itemIndex = item.targetWeekLabel ? weekLabelIndex(item.targetWeekLabel) : -1;
       return itemIndex !== -1 && itemIndex < selectedIndex && !item.done;
     })
@@ -110,6 +113,7 @@ export function buildAboProgram(raw: AboProgramBlockRaw, selectedWeekLabel: stri
       done: item.done,
       baMissing: item.baMissing,
       kondisi: item.kondisi,
+      catatan: item.catatan,
     }));
 
   return {
@@ -132,15 +136,15 @@ export interface AboAttentionItem {
   programDescription: string;
   ultg: string;
   asset: string | null;
-  issue: "ULTG belum tercapai s.d. periode" | "Terlambat" | "BA belum diupload";
+  issue: "ULTG belum tercapai s.d. periode" | "Terlambat" | "BA belum diupload" | "Kondisi NOT OK";
   detail: string;
 }
 
-/** Flat "needs attention" list across every program — the same 3 signals
+/** Flat "needs attention" list across every program — the same signals
  *  already shown scattered across each program card (ULTG breakdown status,
- *  overdue ruas, BA-missing ruas), gathered into one place so they don't
- *  require opening every one of 14-16 program cards to spot. Per user
- *  request. */
+ *  overdue ruas, BA-missing ruas, NOT OK quality flag), gathered into one
+ *  place so they don't require opening every one of 14-16 program cards to
+ *  spot. Per user request. */
 export function collectAboAttentionItems(programs: AboProgramComputed[], selectedWeekLabel: string): AboAttentionItem[] {
   const items: AboAttentionItem[] = [];
   for (const p of programs) {
@@ -174,6 +178,16 @@ export function collectAboAttentionItems(programs: AboProgramComputed[], selecte
           asset: r.asset,
           issue: "Terlambat",
           detail: r.targetWeekLabel ?? "",
+        });
+      }
+      if (r.kondisi.trim().toUpperCase() === "NOT OK") {
+        items.push({
+          programCode: p.code,
+          programDescription: p.description,
+          ultg: r.ultg,
+          asset: r.asset,
+          issue: "Kondisi NOT OK",
+          detail: r.catatan || r.targetWeekLabel || "",
         });
       }
     }

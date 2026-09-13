@@ -12,9 +12,14 @@ import { getDisturbances } from "@/services/disturbances";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
 import { getRenusData } from "@/services/renus";
+import { getAboProteksiSnapshot } from "@/services/abo-proteksi";
+import { getAboHargiSnapshot } from "@/services/abo-hargi";
+import { getFourDxSnapshot } from "@/services/four-dx";
 import { buildManagementAttention, buildTopIssues } from "@/lib/executive-insights";
 import { buildGiCorrelation } from "@/lib/asset-correlation";
 import { listSyncStatus } from "@/lib/sync-status";
+import { buildAboSnapshotComputed, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
+import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
 import type { StatusLevel } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -25,13 +30,17 @@ function formatTime(date: Date | null): string | null {
 }
 
 export default async function OverviewPage() {
-  const [upt, disturbances, ahi, renus, bayLineReports] = await Promise.all([
-    getUptPerformance(),
-    getDisturbances(),
-    getAhiPerformance(),
-    getRenusData(),
-    getAllBayLineReports(),
-  ]);
+  const [upt, disturbances, ahi, renus, bayLineReports, aboProteksiSnapshot, aboHargiSnapshot, fourDxSnapshot] =
+    await Promise.all([
+      getUptPerformance(),
+      getDisturbances(),
+      getAhiPerformance(),
+      getRenusData(),
+      getAllBayLineReports(),
+      getAboProteksiSnapshot(),
+      getAboHargiSnapshot(),
+      getFourDxSnapshot(),
+    ]);
 
   const uptStatus: StatusLevel = !upt.data
     ? "none"
@@ -41,6 +50,24 @@ export default async function OverviewPage() {
         ? "warning"
         : "good";
 
+  // Both computed at "today"'s period — the homepage doesn't offer its own
+  // month/week filter, same convention as the sidebar badge counts (see
+  // src/lib/nav-badges.ts).
+  const aboWeekLabel = defaultAboWeekLabel();
+  const aboProteksiPrograms = aboProteksiSnapshot.error ? [] : buildAboSnapshotComputed(aboProteksiSnapshot, aboWeekLabel);
+  const aboHargiPrograms = aboHargiSnapshot.error ? [] : buildAboSnapshotComputed(aboHargiSnapshot, aboWeekLabel);
+  const abo =
+    aboProteksiPrograms.length > 0 || aboHargiPrograms.length > 0
+      ? { proteksiPrograms: aboProteksiPrograms, hargiPrograms: aboHargiPrograms, weekLabel: aboWeekLabel }
+      : null;
+
+  const fourDxPeriod = fourDxSnapshot.error
+    ? null
+    : resolvePeriodRange(fourDxSnapshot.currentPeriodLabel, fourDxSnapshot.periodBoundaries, fourDxSnapshot.currentYear);
+  const fourDxWigs = fourDxPeriod
+    ? buildFourDxWigs(fourDxSnapshot.wigs, fourDxPeriod, fourDxSnapshot.realizations, fourDxSnapshot.monitoring)
+    : null;
+
   const managementAttention = buildManagementAttention({
     upt: upt.data,
     transmisi: disturbances.error ? null : disturbances.transmisi,
@@ -49,11 +76,15 @@ export default async function OverviewPage() {
     ahi: ahi.data,
     bayLineReports: bayLineReports.length > 0 ? bayLineReports : null,
     renusReminders: renus.error ? null : renus.reminders,
+    abo,
+    fourDx: fourDxWigs,
   });
   const topIssues = buildTopIssues({
     upt: upt.data,
     transmisi: disturbances.error ? null : disturbances.transmisi,
     ahi: ahi.data,
+    abo,
+    fourDx: fourDxWigs,
   });
 
   const lastSyncOverall = listSyncStatus().reduce<Date | null>(

@@ -61,6 +61,7 @@ function AttentionCard({ items, onJump }: { items: AboAttentionItem[]; onJump: (
     "ULTG belum tercapai s.d. periode": "border-warning/40 bg-warning/15 text-warning-foreground",
     Terlambat: "border-warning/40 bg-warning/15 text-warning-foreground",
     "BA belum diupload": "border-destructive/40 bg-destructive/10 text-destructive",
+    "Kondisi NOT OK": "border-destructive/40 bg-destructive/10 text-destructive",
   };
 
   return (
@@ -250,6 +251,7 @@ function RuasChecklist({
           <ul className="flex flex-col gap-1">
             {items.map((item, i) => {
               const overdue = !item.done && item.targetWeekLabel !== selectedWeekLabel;
+              const notOk = item.kondisi.trim().toUpperCase() === "NOT OK";
               return (
                 <li key={`${item.asset}-${i}`} className="flex flex-col gap-1 rounded-md border px-2.5 py-1.5 text-sm">
                   <div className="flex items-center gap-2">
@@ -266,6 +268,11 @@ function RuasChecklist({
                         Terlambat
                       </span>
                     ) : null}
+                    {notOk ? (
+                      <span className="inline-flex rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                        NOT OK
+                      </span>
+                    ) : null}
                     {item.targetWeekLabel ? (
                       <span className="text-xs text-muted-foreground">{item.targetWeekLabel}</span>
                     ) : null}
@@ -274,6 +281,9 @@ function RuasChecklist({
                     <p className="pl-6 text-[11px] text-warning-foreground">
                       Sudah direalisasi — BA belum diupload/belum ada
                     </p>
+                  ) : null}
+                  {item.catatan ? (
+                    <p className="pl-6 text-[11px] text-muted-foreground">Catatan: {item.catatan}</p>
                   ) : null}
                 </li>
               );

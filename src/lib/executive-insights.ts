@@ -3,14 +3,26 @@
 // See AGENTS.md "AI ASSISTANT" section: rule-based insight is explicitly
 // permitted, an AI backend is not.
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
+import { collectAboAttentionItems } from "@/lib/abo-proteksi-compute";
 import type {
+  AboProgramComputed,
   AhiSnapshot,
   AiInsight,
   BayLineReport,
   DisturbanceCategoryResult,
+  FourDxWig,
   RenusData,
   UptPerformanceSnapshot,
 } from "@/types";
+
+/** Both ABO sub-modules (Proteksi + Hargi), already computed at "today"'s
+ *  period — the homepage doesn't offer a month/week filter, so this is
+ *  always the current period, same as the sidebar badge (src/lib/nav-badges.ts). */
+export interface AboExecutiveInput {
+  proteksiPrograms: AboProgramComputed[];
+  hargiPrograms: AboProgramComputed[];
+  weekLabel: string;
+}
 
 export function monthOverMonth(
   category: DisturbanceCategoryResult,
@@ -70,13 +82,15 @@ export function buildManagementAttention(params: {
   ahi: AhiSnapshot | null;
   bayLineReports: BayLineReport[] | null;
   renusReminders: AiInsight[] | null;
+  abo: AboExecutiveInput | null;
+  fourDx: FourDxWig[] | null;
 }): AiInsight[] {
   const insights: AiInsight[] = [];
   let nextId = 0;
   const push = (tone: AiInsight["tone"], text: string, href?: string) =>
     insights.push({ id: String(nextId++), tone, text, href });
 
-  const { upt, transmisi, trafoHv, trafoLv, ahi, bayLineReports, renusReminders } = params;
+  const { upt, transmisi, trafoHv, trafoLv, ahi, bayLineReports, renusReminders, abo, fourDx } = params;
 
   if (upt) {
     if (upt.overall.critical > 0) {
@@ -173,6 +187,53 @@ export function buildManagementAttention(params: {
     }
   }
 
+  if (abo) {
+    const allPrograms = [...abo.proteksiPrograms, ...abo.hargiPrograms];
+    const belum = allPrograms.filter((p) => p.status === "belum");
+    if (belum.length > 0) {
+      push(
+        "warning",
+        `${belum.length} program ABO belum tercapai target periode ini: ${belum
+          .slice(0, 3)
+          .map((p) => p.code)
+          .join(", ")}${belum.length > 3 ? ", dll." : "."}`,
+        "/dashboard/kpi/abo",
+      );
+    } else if (allPrograms.length > 0) {
+      push("good", "Seluruh program ABO (Proteksi & Hargi) tercapai target periode ini.", "/dashboard/kpi/abo");
+    }
+
+    const attentionItems = [
+      ...collectAboAttentionItems(abo.proteksiPrograms, abo.weekLabel),
+      ...collectAboAttentionItems(abo.hargiPrograms, abo.weekLabel),
+    ];
+    const baMissing = attentionItems.filter((i) => i.issue === "BA belum diupload").length;
+    if (baMissing > 0) {
+      push("warning", `${baMissing} ruas ABO sudah direalisasi namun Berita Acara belum diupload.`, "/dashboard/kpi/abo");
+    }
+    const notOk = attentionItems.filter((i) => i.issue === "Kondisi NOT OK").length;
+    if (notOk > 0) {
+      push("critical", `${notOk} ruas ABO terealisasi dengan kondisi NOT OK — perlu tindak lanjut.`, "/dashboard/kpi/abo");
+    }
+  }
+
+  if (fourDx) {
+    const lms = fourDx.flatMap((w) => w.lms);
+    const belum = lms.filter((lm) => lm.status === "belum");
+    if (belum.length > 0) {
+      push(
+        "warning",
+        `${belum.length} Lead Measure 4DX belum tercapai periode ini: ${belum
+          .slice(0, 3)
+          .map((lm) => `LM ${lm.code}`)
+          .join(", ")}${belum.length > 3 ? ", dll." : "."}`,
+        "/dashboard/kpi/4dx",
+      );
+    } else if (lms.length > 0) {
+      push("good", "Seluruh Lead Measure 4DX tercapai periode ini.", "/dashboard/kpi/4dx");
+    }
+  }
+
   return insights;
 }
 
@@ -231,9 +292,11 @@ export function buildTopIssues(params: {
   upt: UptPerformanceSnapshot | null;
   transmisi: DisturbanceCategoryResult | null;
   ahi: AhiSnapshot | null;
+  abo: AboExecutiveInput | null;
+  fourDx: FourDxWig[] | null;
 }): TopIssue[] {
   const issues: TopIssue[] = [];
-  const { upt, transmisi, ahi } = params;
+  const { upt, transmisi, ahi, abo, fourDx } = params;
 
   if (upt) {
     const worst = [...upt.kpis].filter((k) => k.achievement !== null).sort((a, b) => (a.achievement ?? 0) - (b.achievement ?? 0))[0];
@@ -265,6 +328,32 @@ export function buildTopIssues(params: {
         tone: worst.status,
         text: `${worst.displayName} — Healthy Index ${Math.round(worst.score * 100)}% (terendah).`,
         href: `/dashboard/kpi/ahi?section=${worst.key}#ahi-detail`,
+      });
+    }
+  }
+
+  if (abo) {
+    const allPrograms = [...abo.proteksiPrograms, ...abo.hargiPrograms];
+    const worst = [...allPrograms].sort((a, b) => a.percentRealisasi - b.percentRealisasi)[0];
+    if (worst && worst.status === "belum") {
+      issues.push({
+        tone: "warning",
+        text: `${worst.code} — realisasi ABO ${Math.round(worst.percentRealisasi * 100)}% terhadap target total (terendah).`,
+        href: "/dashboard/kpi/abo",
+      });
+    }
+  }
+
+  if (fourDx) {
+    const lms = fourDx.flatMap((w) => w.lms);
+    const worst = [...lms]
+      .filter((lm) => lm.percentRealisasiMingguan !== null)
+      .sort((a, b) => (a.percentRealisasiMingguan ?? 1) - (b.percentRealisasiMingguan ?? 1))[0];
+    if (worst && worst.status === "belum") {
+      issues.push({
+        tone: "warning",
+        text: `LM ${worst.code} — realisasi 4DX ${Math.round((worst.percentRealisasiMingguan ?? 0) * 100)}% minggu ini (terendah).`,
+        href: "/dashboard/kpi/4dx",
       });
     }
   }

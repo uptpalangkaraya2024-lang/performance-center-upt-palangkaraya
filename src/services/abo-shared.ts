@@ -192,6 +192,8 @@ function parseInputPkySheet(rows: unknown[][], programDescriptions: string[]): A
     tanggalRealisasi: number;
     hasilBa: number;
     kondisi: number;
+    catatanInduk: number;
+    catatanUpt: number;
   } | null = null;
 
   for (const row of rows) {
@@ -220,6 +222,10 @@ function parseInputPkySheet(rows: unknown[][], programDescriptions: string[]): A
         tanggalRealisasi: findCol(row, "TANGGAL REALISASI"),
         hasilBa: findCol(row, "HASIL / BA"),
         kondisi: findCol(row, "KONDISI"),
+        catatanInduk: findCol(row, "Catatan Induk"),
+        // Only ABO Hargi's INPUT PKY has this column (confirmed live) —
+        // used as a fallback when Catatan Induk is empty.
+        catatanUpt: findCol(row, "Catatan UPT"),
       };
       continue;
     }
@@ -238,6 +244,8 @@ function parseInputPkySheet(rows: unknown[][], programDescriptions: string[]): A
     const realisasiDate = cols.tanggalRealisasi === -1 ? "" : textAt(row, cols.tanggalRealisasi);
     const done = realisasiDate.length > 0;
     const hasilBa = cols.hasilBa === -1 ? "" : textAt(row, cols.hasilBa);
+    const catatanInduk = cols.catatanInduk === -1 ? "" : textAt(row, cols.catatanInduk);
+    const catatanUpt = cols.catatanUpt === -1 ? "" : textAt(row, cols.catatanUpt);
 
     blocks[blockIndex].push({
       ultg,
@@ -248,6 +256,7 @@ function parseInputPkySheet(rows: unknown[][], programDescriptions: string[]): A
       done,
       baMissing: done && !hasilBa,
       kondisi: cols.kondisi === -1 ? "" : textAt(row, cols.kondisi),
+      catatan: catatanInduk || catatanUpt,
     });
   }
   return blocks;

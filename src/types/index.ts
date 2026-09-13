@@ -741,7 +741,15 @@ export interface AboRuasItem {
    *  (kept in the breakdown regardless of period) rather than silently
    *  counted as fully closed. */
   baMissing: boolean;
+  /** OK / NOT OK, free text otherwise — a quality flag distinct from
+   *  `done`: an item can be realized (date filled) yet still read NOT OK
+   *  if the outcome itself was unsatisfactory. */
   kondisi: string;
+  /** "Catatan Induk" (both files) or "Catatan UPT" (Hargi only, used as a
+   *  fallback when Catatan Induk is empty) — free-text notes that often
+   *  carry the actual reason behind a delay or a NOT OK result, otherwise
+   *  invisible anywhere in the dashboard. */
+  catatan: string;
 }
 
 /** One program (PRO_01..14), joining "🖥️ PKY"'s UPT + per-ULTG blocks with
@@ -769,6 +777,7 @@ export interface AboRuasComputed {
   done: boolean;
   baMissing: boolean;
   kondisi: string;
+  catatan: string;
 }
 
 /** Shared stat shape for a chosen week — "to-date" sums every week from
