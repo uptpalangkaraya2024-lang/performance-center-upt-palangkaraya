@@ -74,14 +74,25 @@ function handleReadSheet(request) {
   };
 }
 
+// `sheets` accepts either a plain sheet-name string (headerRow defaults to
+// 1) or { name, headerRow } — added so a caller with several sheets that
+// each have their own header-row convention (Gangguan/RENUS's helper row
+// above the real header, vs a plain row-1 header) can still batch them
+// into one execution instead of one HTTP round trip per sheet. This is
+// the ONE Apps Script execution opening the spreadsheet once and reading
+// every sheet from it, cutting N round-trip overheads (~1.6-1.8s each,
+// confirmed by direct measurement — see the dashboard's own perf
+// investigation) down to one.
 function handleReadSheets(request) {
   requireField(request, 'fileName');
   requireField(request, 'sheets');
   var file = findFileByName(request.fileName);
   var result = {};
-  request.sheets.forEach(function (sheetName) {
+  request.sheets.forEach(function (sheetSpec) {
+    var sheetName = typeof sheetSpec === 'string' ? sheetSpec : sheetSpec.name;
+    var headerRow = (sheetSpec && sheetSpec.headerRow) || 1;
     try {
-      result[sheetName] = readSheetData(file, sheetName);
+      result[sheetName] = readSheetData(file, sheetName, headerRow);
     } catch (sheetError) {
       // Partial result — one bad sheet must not fail the others (AGENTS.md section 11).
       result[sheetName] = { error: normalizeError(sheetError) };

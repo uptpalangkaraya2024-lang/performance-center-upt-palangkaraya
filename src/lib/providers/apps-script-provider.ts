@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SheetRef } from "@/config/data-sources";
 import { DataSourceError, type DataSourceErrorKind } from "@/lib/errors";
-import type { DriveFileRef, SpreadsheetDataProvider } from "@/lib/data-provider";
+import type { BatchOutcome, DriveFileRef, SpreadsheetDataProvider } from "@/lib/data-provider";
 
 function resolveGatewayUrl(): string {
   const url = process.env.GOOGLE_APPS_SCRIPT_URL;
@@ -139,6 +139,77 @@ async function readSheetRaw(file: DriveFileRef, sheet: SheetRef): Promise<unknow
   return [data.headers ?? [], ...(data.rows ?? [])];
 }
 
+interface BatchSheetResult {
+  headers?: string[];
+  rows?: unknown[][];
+  error?: { code: string; message: string };
+}
+
+/** One Apps Script execution reading every requested sheet from the SAME
+ *  already-open spreadsheet, instead of one HTTP round trip per sheet.
+ *  Confirmed by direct measurement: each round trip pays a ~1.6-1.8s fixed
+ *  dispatch/network cost regardless of payload size, and the gateway's
+ *  concurrency appears to serialize simultaneous requests to the same
+ *  deployment anyway — so N sheets requested "in parallel" from this
+ *  client still cost roughly N x that overhead. Batching cut a real 6-sheet
+ *  read from ~22s (one at a time) to ~7s in that same measurement. A sheet
+ *  that individually errors doesn't fail the whole batch — its own outcome
+ *  just comes back `ok: false`, same as calling readSheet per-sheet and
+ *  catching each failure independently (so Data & Sync still shows the
+ *  real per-sheet error message, not a generic batch failure). */
+async function readSheetsBatchRaw(
+  file: DriveFileRef,
+  sheets: { name: string; headerRow: number }[],
+): Promise<Map<string, BatchOutcome<{ headers: string[]; rows: unknown[][] }>>> {
+  const data = await callGateway<{ file: string; sheets: Record<string, BatchSheetResult> }>(
+    { action: "readSheets", fileName: file.name, sheets },
+    { file: file.name },
+  );
+  const out = new Map<string, BatchOutcome<{ headers: string[]; rows: unknown[][] }>>();
+  for (const sheet of sheets) {
+    const entry = data.sheets[sheet.name];
+    if (!entry) {
+      out.set(sheet.name, { ok: false, message: "Sheet tidak ditemukan pada hasil batch." });
+    } else if (entry.error) {
+      out.set(sheet.name, { ok: false, message: entry.error.message });
+    } else {
+      out.set(sheet.name, { ok: true, value: { headers: entry.headers ?? [], rows: entry.rows ?? [] } });
+    }
+  }
+  return out;
+}
+
+async function readSheetsBatch(
+  file: DriveFileRef,
+  sheets: SheetRef[],
+): Promise<Map<string, BatchOutcome<Record<string, string>[]>>> {
+  const batch = await readSheetsBatchRaw(
+    file,
+    sheets.map((s) => ({ name: s.name, headerRow: s.headerRow ?? 1 })),
+  );
+  const out = new Map<string, BatchOutcome<Record<string, string>[]>>();
+  for (const [name, outcome] of batch) {
+    out.set(name, outcome.ok ? { ok: true, value: rowsToRecords(outcome.value.headers, outcome.value.rows) } : outcome);
+  }
+  return out;
+}
+
+async function readSheetsRawBatch(
+  file: DriveFileRef,
+  sheets: SheetRef[],
+): Promise<Map<string, BatchOutcome<unknown[][]>>> {
+  // Same headerRow:1 + re-prepend convention as readSheetRaw above.
+  const batch = await readSheetsBatchRaw(
+    file,
+    sheets.map((s) => ({ name: s.name, headerRow: 1 })),
+  );
+  const out = new Map<string, BatchOutcome<unknown[][]>>();
+  for (const [name, outcome] of batch) {
+    out.set(name, outcome.ok ? { ok: true, value: [outcome.value.headers, ...outcome.value.rows] } : outcome);
+  }
+  return out;
+}
+
 async function health(): Promise<{ healthy: boolean; message?: string }> {
   try {
     await callGateway<{ status: string }>({ action: "health" }, { file: "health" });
@@ -153,5 +224,7 @@ export const appsScriptProvider: SpreadsheetDataProvider = {
   findFile,
   readSheet,
   readSheetRaw,
+  readSheetsBatch,
+  readSheetsRawBatch,
   health,
 };

@@ -63,12 +63,13 @@ Semua request `POST` ke Web App URL, body JSON, satu field wajib: `action`.
 }
 ```
 
-**readSheets** (multi-sheet, one file)
+**readSheets** (multi-sheet, one file — one Apps Script execution reading every sheet from the same already-open spreadsheet, instead of one HTTP round trip per sheet)
 ```json
-{ "action": "readSheets", "fileName": "KPI", "sheets": ["ABO", "4DX", "CE", "AHI"] }
+{ "action": "readSheets", "fileName": "KPI", "sheets": [{ "name": "ABO", "headerRow": 1 }, { "name": "4DX" }, "CE"] }
 ```
+Each entry in `sheets` is either a plain sheet-name string (headerRow defaults to 1) or `{ "name": "...", "headerRow": N }` for a sheet whose real header isn't on row 1 (e.g. a numbered helper row above it, same as `readSheet`'s own `headerRow` field).
 ```json
-{ "success": true, "data": { "file": "KPI", "sheets": { "ABO": { "headers": [], "rows": [] }, "4DX": { "headers": [], "rows": [] }, "CE": {...}, "AHI": {...} } } }
+{ "success": true, "data": { "file": "KPI", "sheets": { "ABO": { "headers": [], "rows": [] }, "4DX": { "headers": [], "rows": [] }, "CE": {...} } } }
 ```
 A sheet that fails independently comes back as `{ "error": { "code": "...", "message": "..." } }` in its own slot — the others still return normally.
 

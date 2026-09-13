@@ -44,12 +44,18 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
   const provider = getDataProvider();
 
   // Every (file, sheet) pair is an independent network call to the same
-  // gateway — reading them one at a time via a sequential for-await loop
-  // was the dashboard's single biggest source of slow page loads on a
-  // cache miss (e.g. 4DX's 9 sheets took roughly 9x one call's latency
-  // instead of ~1x). Promise.all across both files and sheets lets them
-  // all fly at once; per-sheet cache/error/stale-fallback behavior is
-  // otherwise unchanged, just no longer blocking its neighbors.
+  // gateway. Reading them one at a time via a sequential for-await loop was
+  // the dashboard's original biggest source of slow page loads on a cache
+  // miss; running them "in parallel" via Promise.all helped but direct
+  // measurement showed each apps-script call still pays a fixed ~1.6-1.8s
+  // dispatch/network cost regardless of payload, and the gateway's own
+  // concurrency appears to serialize simultaneous calls to the same
+  // deployment anyway (6 sheets "in parallel" still took ~11s). The real
+  // win is provider.readSheetsBatch — one Apps Script execution reading
+  // every cache-miss sheet from the same already-open file (measured: the
+  // same 6 sheets in one batch call took ~7s instead of ~22s sequential).
+  // A provider without that capability (e.g. google-api) falls back to the
+  // per-sheet Promise.all path exactly as before.
   const perFileSource = await Promise.all(
     source.sources.map(async (fileSource): Promise<SheetReadResult[]> => {
       if (fileSource.enabled === false) return []; // not a failure — deliberately not ready yet
@@ -76,45 +82,84 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
         return [];
       }
 
-      const perSheet = await Promise.all(
-        fileSource.sheets.map(async (sheetRef): Promise<SheetReadResult | null> => {
-          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
-          const cached = rawCache.get(key);
-          if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
-            return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.records };
-          }
+      const hits: SheetReadResult[] = [];
+      const misses: (typeof fileSource.sheets)[number][] = [];
+      for (const sheetRef of fileSource.sheets) {
+        const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+        const cached = rawCache.get(key);
+        if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
+          hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.records });
+        } else {
+          misses.push(sheetRef);
+        }
+      }
+      if (misses.length === 0) return hits;
 
-          try {
-            const records = await provider.readSheet(file, sheetRef);
-            rawCache.set(key, { records, fetchedAt: Date.now() });
+      let fetched: SheetReadResult[];
+      if (misses.length > 1 && provider.readSheetsBatch) {
+        const batch = await provider.readSheetsBatch(file, misses);
+        fetched = misses.flatMap((sheetRef): SheetReadResult[] => {
+          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+          const outcome = batch.get(sheetRef.name);
+          if (outcome?.ok) {
+            rawCache.set(key, { records: outcome.value, fetchedAt: Date.now() });
             recordSyncSuccess({
               module: source.label,
               file: fileSource.file,
               sheet: sheetRef.name,
               provider: provider.name,
-              rows: records.length,
+              rows: outcome.value.length,
             });
-            return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records };
-          } catch (error) {
-            const message =
-              error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
-            recordSyncError({
-              module: source.label,
-              file: fileSource.file,
-              sheet: sheetRef.name,
-              provider: provider.name,
-              error: message,
-            });
-            // A transient failure shouldn't blank out a dashboard that had good
-            // data a moment ago — fall back to the stale (past-TTL) cache entry
-            // if one exists, even though the sync status above already recorded
-            // this as an error so an admin still sees it's failing.
-            return cached ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.records } : null;
+            return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: outcome.value }];
           }
-        }),
-      );
+          recordSyncError({
+            module: source.label,
+            file: fileSource.file,
+            sheet: sheetRef.name,
+            provider: provider.name,
+            error: outcome?.message ?? "Sheet tidak ada pada hasil batch.",
+          });
+          const stale = rawCache.get(key);
+          return stale ? [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.records }] : [];
+        });
+      } else {
+        const perSheet = await Promise.all(
+          misses.map(async (sheetRef): Promise<SheetReadResult | null> => {
+            const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+            try {
+              const records = await provider.readSheet(file, sheetRef);
+              rawCache.set(key, { records, fetchedAt: Date.now() });
+              recordSyncSuccess({
+                module: source.label,
+                file: fileSource.file,
+                sheet: sheetRef.name,
+                provider: provider.name,
+                rows: records.length,
+              });
+              return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records };
+            } catch (error) {
+              const message =
+                error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
+              recordSyncError({
+                module: source.label,
+                file: fileSource.file,
+                sheet: sheetRef.name,
+                provider: provider.name,
+                error: message,
+              });
+              // A transient failure shouldn't blank out a dashboard that had good
+              // data a moment ago — fall back to the stale (past-TTL) cache entry
+              // if one exists, even though the sync status above already recorded
+              // this as an error so an admin still sees it's failing.
+              const stale = rawCache.get(key);
+              return stale ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.records } : null;
+            }
+          }),
+        );
+        fetched = perSheet.filter((r): r is SheetReadResult => r !== null);
+      }
 
-      return perSheet.filter((r): r is SheetReadResult => r !== null);
+      return [...hits, ...fetched];
     }),
   );
 
@@ -147,10 +192,12 @@ const rawRowsCache = new Map<string, RawCacheEntry>();
 export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise<RawSheetReadResult[]> {
   const provider = getDataProvider();
 
-  // Same reasoning as readConfiguredSource above — every (file, sheet) read
-  // is independent, so they all run via Promise.all instead of a sequential
-  // for-await loop (which was the dominant source of slow page loads for
-  // the raw-grid modules, e.g. 4DX's 9 sheets).
+  // Same reasoning as readConfiguredSource above: prefer one batched Apps
+  // Script execution (provider.readSheetsRawBatch) over one HTTP round trip
+  // per sheet whenever there's more than one cache-miss sheet to fetch —
+  // measured to cut a real 6-sheet, ~22s-sequential read down to ~7s. A
+  // provider without that capability falls back to the per-sheet
+  // Promise.all path exactly as before.
   const perFileSource = await Promise.all(
     source.sources.map(async (fileSource): Promise<RawSheetReadResult[]> => {
       if (fileSource.enabled === false) return [];
@@ -172,41 +219,80 @@ export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise
         return [];
       }
 
-      const perSheet = await Promise.all(
-        fileSource.sheets.map(async (sheetRef): Promise<RawSheetReadResult | null> => {
-          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
-          const cached = rawRowsCache.get(key);
-          if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
-            return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows };
-          }
+      const hits: RawSheetReadResult[] = [];
+      const misses: (typeof fileSource.sheets)[number][] = [];
+      for (const sheetRef of fileSource.sheets) {
+        const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+        const cached = rawRowsCache.get(key);
+        if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
+          hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows });
+        } else {
+          misses.push(sheetRef);
+        }
+      }
+      if (misses.length === 0) return hits;
 
-          try {
-            const rows = await provider.readSheetRaw(file, sheetRef);
-            rawRowsCache.set(key, { rows, fetchedAt: Date.now() });
+      let fetched: RawSheetReadResult[];
+      if (misses.length > 1 && provider.readSheetsRawBatch) {
+        const batch = await provider.readSheetsRawBatch(file, misses);
+        fetched = misses.flatMap((sheetRef): RawSheetReadResult[] => {
+          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+          const outcome = batch.get(sheetRef.name);
+          if (outcome?.ok) {
+            rawRowsCache.set(key, { rows: outcome.value, fetchedAt: Date.now() });
             recordSyncSuccess({
               module: source.label,
               file: fileSource.file,
               sheet: sheetRef.name,
               provider: provider.name,
-              rows: rows.length,
+              rows: outcome.value.length,
             });
-            return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows };
-          } catch (error) {
-            const message =
-              error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
-            recordSyncError({
-              module: source.label,
-              file: fileSource.file,
-              sheet: sheetRef.name,
-              provider: provider.name,
-              error: message,
-            });
-            return cached ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows } : null;
+            return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: outcome.value }];
           }
-        }),
-      );
+          recordSyncError({
+            module: source.label,
+            file: fileSource.file,
+            sheet: sheetRef.name,
+            provider: provider.name,
+            error: outcome?.message ?? "Sheet tidak ada pada hasil batch.",
+          });
+          const stale = rawRowsCache.get(key);
+          return stale ? [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.rows }] : [];
+        });
+      } else {
+        const perSheet = await Promise.all(
+          misses.map(async (sheetRef): Promise<RawSheetReadResult | null> => {
+            const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+            try {
+              const rows = await provider.readSheetRaw(file, sheetRef);
+              rawRowsCache.set(key, { rows, fetchedAt: Date.now() });
+              recordSyncSuccess({
+                module: source.label,
+                file: fileSource.file,
+                sheet: sheetRef.name,
+                provider: provider.name,
+                rows: rows.length,
+              });
+              return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows };
+            } catch (error) {
+              const message =
+                error instanceof DataSourceError || error instanceof Error ? error.message : String(error);
+              recordSyncError({
+                module: source.label,
+                file: fileSource.file,
+                sheet: sheetRef.name,
+                provider: provider.name,
+                error: message,
+              });
+              const stale = rawRowsCache.get(key);
+              return stale ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.rows } : null;
+            }
+          }),
+        );
+        fetched = perSheet.filter((r): r is RawSheetReadResult => r !== null);
+      }
 
-      return perSheet.filter((r): r is RawSheetReadResult => r !== null);
+      return [...hits, ...fetched];
     }),
   );
 
