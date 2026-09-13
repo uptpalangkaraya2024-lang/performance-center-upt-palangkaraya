@@ -5,15 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { AiInsight } from "@/types";
 
-// Simple, per-severity cards (Critical / Attention / Good / Info), each a
-// fixed size with its own internal scroll — no module sub-grouping (tried,
-// but the extra header lines per module made the list read as longer, not
-// clearer). The item text itself already names its own module in most
-// cases (e.g. "1 KPI UPT...", "AHI MTU...", "5 program ABO..."). Since
-// UPT Performance Status now sits full-width above this section instead of
-// sharing a grid row with it (see src/app/dashboard/page.tsx), there's no
-// height-matching problem to solve here — this can just be a plain grid
-// that wraps naturally. Per user feedback.
+// Per-severity cards (Critical / Attention / Good / Info), each a fixed
+// size with its own internal scroll, sub-grouped by MODULE within each
+// card — spreading the module breakdown across 4 separate small cards
+// (instead of one long nested list) keeps it scannable without turning
+// into one long scroll. Per user feedback.
 const TONE_META: Record<AiInsight["tone"], { label: string; icon: typeof CheckCircle2; className: string; dotClassName: string }> = {
   critical: { label: "CRITICAL", icon: XCircle, className: "text-critical", dotClassName: "bg-critical" },
   warning: { label: "ATTENTION", icon: AlertTriangle, className: "text-warning-foreground", dotClassName: "bg-warning" },
@@ -22,6 +18,18 @@ const TONE_META: Record<AiInsight["tone"], { label: string; icon: typeof CheckCi
 };
 
 const TONE_ORDER: AiInsight["tone"][] = ["critical", "warning", "good", "none"];
+
+function groupByModule(items: AiInsight[]): { module: string; items: AiInsight[] }[] {
+  const order: string[] = [];
+  for (const item of items) {
+    const moduleName = item.module ?? "Lainnya";
+    if (!order.includes(moduleName)) order.push(moduleName);
+  }
+  return order.map((moduleName) => ({
+    module: moduleName,
+    items: items.filter((item) => (item.module ?? "Lainnya") === moduleName),
+  }));
+}
 
 export function AttentionCards({
   data,
@@ -58,29 +66,38 @@ export function AttentionCards({
                 {meta.label}
                 <span className="font-medium text-muted-foreground">({group.items.length})</span>
               </div>
-              <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto pr-1">
-                {group.items.map((item) =>
-                  item.href ? (
-                    <li key={item.id}>
-                      <Link
-                        href={item.href}
-                        className="group flex items-start gap-2 rounded-md text-sm hover:text-foreground"
-                      >
-                        <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", meta.dotClassName)} />
-                        <span className="flex-1 underline decoration-transparent underline-offset-2 group-hover:decoration-current">
-                          {item.text}
-                        </span>
-                        <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                      </Link>
-                    </li>
-                  ) : (
-                    <li key={item.id} className="flex items-start gap-2 text-sm">
-                      <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", meta.dotClassName)} />
-                      <span>{item.text}</span>
-                    </li>
-                  ),
-                )}
-              </ul>
+              <div className="flex max-h-56 flex-col gap-2.5 overflow-y-auto pr-1">
+                {groupByModule(group.items).map((moduleGroup) => (
+                  <div key={moduleGroup.module} className="flex flex-col gap-1">
+                    <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      {moduleGroup.module}
+                    </p>
+                    <ul className="flex flex-col gap-1.5">
+                      {moduleGroup.items.map((item) =>
+                        item.href ? (
+                          <li key={item.id}>
+                            <Link
+                              href={item.href}
+                              className="group flex items-start gap-2 rounded-md text-sm hover:text-foreground"
+                            >
+                              <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", meta.dotClassName)} />
+                              <span className="flex-1 underline decoration-transparent underline-offset-2 group-hover:decoration-current">
+                                {item.text}
+                              </span>
+                              <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                            </Link>
+                          </li>
+                        ) : (
+                          <li key={item.id} className="flex items-start gap-2 text-sm">
+                            <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", meta.dotClassName)} />
+                            <span>{item.text}</span>
+                          </li>
+                        ),
+                      )}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         );
