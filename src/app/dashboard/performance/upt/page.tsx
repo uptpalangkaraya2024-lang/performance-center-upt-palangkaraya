@@ -5,6 +5,8 @@ import { UptDashboardClient } from "@/components/kinerja-upt/upt-dashboard-clien
 import { getUptPerformance } from "@/services/upt-performance";
 
 export const dynamic = "force-dynamic";
+// See src/app/dashboard/page.tsx for why.
+export const maxDuration = 60;
 
 export default async function KinerjaUptPage() {
   const result = await getUptPerformance();

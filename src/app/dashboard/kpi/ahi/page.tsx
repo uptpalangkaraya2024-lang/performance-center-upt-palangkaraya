@@ -13,6 +13,9 @@ import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 
 export const dynamic = "force-dynamic";
+// See src/app/dashboard/page.tsx for why — AHI is the module with the
+// highest observed latency variance (5-30s for the same request).
+export const maxDuration = 60;
 
 export default async function AhiPage() {
   const result = await getAhiPerformance();

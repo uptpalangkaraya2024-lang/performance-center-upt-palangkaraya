@@ -5,6 +5,9 @@ import { FourDxView } from "@/components/four-dx/four-dx-view";
 import { getFourDxSnapshot } from "@/services/four-dx";
 
 export const dynamic = "force-dynamic";
+// See src/app/dashboard/page.tsx for why — 4DX reads 9 sheets, the
+// heaviest single module in the dashboard.
+export const maxDuration = 60;
 
 export default async function FourDxPage() {
   const snapshot = await getFourDxSnapshot();

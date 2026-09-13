@@ -18,6 +18,10 @@ function formatTime(date: Date | null): string | null {
 }
 
 export const dynamic = "force-dynamic";
+// See src/app/dashboard/page.tsx for why — Apps Script's own latency
+// varies a lot (measured 5-30s for the same request), and this page reads
+// several sources too.
+export const maxDuration = 60;
 
 export default async function DataSyncPage() {
   const provider = getDataProvider();

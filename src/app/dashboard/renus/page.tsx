@@ -6,6 +6,8 @@ import { getRenusData } from "@/services/renus";
 import { listSyncStatus } from "@/lib/sync-status";
 
 export const dynamic = "force-dynamic";
+// See src/app/dashboard/page.tsx for why.
+export const maxDuration = 60;
 
 function formatTime(date: Date | null): string | null {
   if (!date) return null;
