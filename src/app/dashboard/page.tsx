@@ -96,7 +96,13 @@ export default async function OverviewPage() {
         }
       />
 
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
+      {/* items-stretch (the grid default) is intentional here: UPT
+          Performance Status's natural, unconstrained height sets the row's
+          height, and Management Attention (h-full + its own internal
+          scroll) stretches to match it exactly — no leftover empty space
+          in the shorter column, and a long combined list still scrolls
+          inside its own card instead of growing the row further. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {upt.data ? (
           <UptPerformanceStatus
             overall={upt.data.overall}
@@ -112,9 +118,11 @@ export default async function OverviewPage() {
           </Card>
         )}
 
-        <div className="flex flex-col gap-2 xl:col-span-2">
-          <h3 className="text-sm font-semibold tracking-tight text-foreground">Management Attention</h3>
-          <ManagementAttentionSection initialInsights={managementAttention} />
+        <div className="flex h-full flex-col gap-2 xl:col-span-2">
+          <h3 className="shrink-0 text-sm font-semibold tracking-tight text-foreground">Management Attention</h3>
+          <div className="min-h-0 flex-1">
+            <ManagementAttentionSection initialInsights={managementAttention} />
+          </div>
         </div>
       </div>
 

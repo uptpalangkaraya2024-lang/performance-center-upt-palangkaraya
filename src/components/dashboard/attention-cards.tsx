@@ -5,37 +5,34 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { AiInsight } from "@/types";
 
-// One unified "Management Attention" list, grouped by MODULE (Kinerja UPT,
-// Gangguan, AHI, RENUS, ABO, 4DX, ...) with a divider between each group —
-// replaces the earlier version grouped by severity tone, which read as 4
-// disconnected cards (CRITICAL/ATTENTION/GOOD/INFO) alongside a separate
-// "Top Issue" card, confusing about which number belonged to which module.
-// Everything now lives in ONE card with a bounded height + single scroll,
-// so a long combined list never grows the card past a size that leaves the
-// UPT Performance Status card (its grid row sibling) looking oddly short
-// with empty space beneath it. Per user feedback.
-const TONE_META: Record<AiInsight["tone"], { icon: typeof CheckCircle2; dotClassName: string }> = {
-  critical: { icon: XCircle, dotClassName: "bg-critical" },
-  warning: { icon: AlertTriangle, dotClassName: "bg-warning" },
-  good: { icon: CheckCircle2, dotClassName: "bg-success" },
-  none: { icon: Info, dotClassName: "bg-muted-foreground" },
+// Grouped by SEVERITY first (Critical/Attention/Good/Info, same as the
+// original design), then by MODULE within each severity group (Kinerja
+// UPT, Gangguan, AHI, RENUS, ABO, 4DX) — so it's clear which module a
+// given Critical/Attention item belongs to, without losing the
+// at-a-glance "how bad is it right now" severity view. Per user feedback
+// (a module-only grouping lost that severity-first view they wanted).
+//
+// The whole thing lives in ONE card that fills its grid row's height
+// exactly (h-full, flex-1 CardContent with overflow-y-auto) instead of a
+// fixed max-height — so it always matches UPT Performance Status (its
+// grid row sibling) with no leftover empty space in the shorter column,
+// regardless of how long the combined list gets.
+const TONE_META: Record<AiInsight["tone"], { label: string; icon: typeof CheckCircle2; className: string; dotClassName: string }> = {
+  critical: { label: "CRITICAL", icon: XCircle, className: "text-critical", dotClassName: "bg-critical" },
+  warning: { label: "ATTENTION", icon: AlertTriangle, className: "text-warning-foreground", dotClassName: "bg-warning" },
+  good: { label: "GOOD", icon: CheckCircle2, className: "text-success", dotClassName: "bg-success" },
+  none: { label: "INFO", icon: Info, className: "text-muted-foreground", dotClassName: "bg-muted-foreground" },
 };
 
 const TONE_ORDER: AiInsight["tone"][] = ["critical", "warning", "good", "none"];
 
-function ModuleBadge({ moduleName, items }: { moduleName: string; items: AiInsight[] }) {
-  // The module's own worst tone present decides its little status dot —
-  // Critical if any item is critical, else Warning if any is warning, etc.
-  const worstTone = TONE_ORDER.find((tone) => items.some((item) => item.tone === tone)) ?? "none";
-  const meta = TONE_META[worstTone];
-  const Icon = meta.icon;
-  return (
-    <div className="flex items-center gap-1.5 text-xs font-bold tracking-widest text-foreground">
-      <Icon className={cn("size-3.5", worstTone === "critical" ? "text-critical" : worstTone === "warning" ? "text-warning-foreground" : worstTone === "good" ? "text-success" : "text-muted-foreground")} />
-      {moduleName.toUpperCase()}
-      <span className="font-medium text-muted-foreground">({items.length})</span>
-    </div>
-  );
+function groupByModule(items: AiInsight[]): { module: string; items: AiInsight[] }[] {
+  const order: string[] = [];
+  for (const item of items) {
+    const moduleName = item.module ?? "Lainnya";
+    if (!order.includes(moduleName)) order.push(moduleName);
+  }
+  return order.map((moduleName) => ({ module: moduleName, items: items.filter((item) => (item.module ?? "Lainnya") === moduleName) }));
 }
 
 export function AttentionCards({
@@ -45,60 +42,65 @@ export function AttentionCards({
   data: AiInsight[];
   emptyMessage?: string;
 }) {
-  if (data.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-6">
-          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const moduleOrder: string[] = [];
-  for (const item of data) {
-    const moduleName = item.module ?? "Lainnya";
-    if (!moduleOrder.includes(moduleName)) moduleOrder.push(moduleName);
-  }
-  const groups = moduleOrder.map((moduleName) => ({
-    module: moduleName,
-    items: data.filter((item) => (item.module ?? "Lainnya") === moduleName),
-  }));
+  const toneGroups = TONE_ORDER.map((tone) => ({ tone, items: data.filter((item) => item.tone === tone) })).filter(
+    (group) => group.items.length > 0,
+  );
 
   return (
-    <Card>
-      <CardContent className="max-h-[26rem] overflow-y-auto py-4">
-        <div className="flex flex-col divide-y divide-border">
-          {groups.map((group) => (
-            <div key={group.module} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
-              <ModuleBadge moduleName={group.module} items={group.items} />
-              <ul className="flex flex-col gap-1.5">
-                {group.items.map((item) => {
-                  const dotClass = TONE_META[item.tone].dotClassName;
-                  return item.href ? (
-                    <li key={item.id}>
-                      <Link
-                        href={item.href}
-                        className="group flex items-start gap-2 rounded-md text-sm hover:text-foreground"
-                      >
-                        <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", dotClass)} />
-                        <span className="flex-1 underline decoration-transparent underline-offset-2 group-hover:decoration-current">
-                          {item.text}
-                        </span>
-                        <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                      </Link>
-                    </li>
-                  ) : (
-                    <li key={item.id} className="flex items-start gap-2 text-sm">
-                      <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", dotClass)} />
-                      <span>{item.text}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+    <Card className="flex h-full flex-col">
+      <CardContent className="min-h-0 flex-1 overflow-y-auto py-4">
+        {toneGroups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-border">
+            {toneGroups.map((toneGroup) => {
+              const meta = TONE_META[toneGroup.tone];
+              const Icon = meta.icon;
+              const moduleGroups = groupByModule(toneGroup.items);
+              return (
+                <div key={toneGroup.tone} className="flex flex-col gap-2.5 py-3 first:pt-0 last:pb-0">
+                  <div className={cn("flex items-center gap-1.5 text-xs font-bold tracking-widest", meta.className)}>
+                    <Icon className="size-3.5" />
+                    {meta.label}
+                    <span className="font-medium text-muted-foreground">({toneGroup.items.length})</span>
+                  </div>
+                  <div className="flex flex-col gap-2 pl-1">
+                    {moduleGroups.map((moduleGroup) => (
+                      <div key={moduleGroup.module} className="flex flex-col gap-1">
+                        <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                          {moduleGroup.module}
+                        </p>
+                        <ul className="flex flex-col gap-1">
+                          {moduleGroup.items.map((item) =>
+                            item.href ? (
+                              <li key={item.id}>
+                                <Link
+                                  href={item.href}
+                                  className="group flex items-start gap-2 rounded-md text-sm hover:text-foreground"
+                                >
+                                  <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", meta.dotClassName)} />
+                                  <span className="flex-1 underline decoration-transparent underline-offset-2 group-hover:decoration-current">
+                                    {item.text}
+                                  </span>
+                                  <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                                </Link>
+                              </li>
+                            ) : (
+                              <li key={item.id} className="flex items-start gap-2 text-sm">
+                                <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", meta.dotClassName)} />
+                                <span>{item.text}</span>
+                              </li>
+                            ),
+                          )}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
