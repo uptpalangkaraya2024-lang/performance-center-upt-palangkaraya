@@ -158,6 +158,12 @@ export interface AiInsight {
    *  specific KPI card on Kinerja UPT, or the AHI section it's about.
    *  Absent when the insight has no single destination worth linking to. */
   href?: string;
+  /** Which module this came from (e.g. "Kinerja UPT", "ABO", "4DX",
+   *  "Gangguan", "AHI", "RENUS") — lets the homepage group its unified
+   *  Management Attention list by module instead of severity alone.
+   *  Optional: an insight producer that isn't grouped this way (e.g. the
+   *  RENUS page's own direct use of buildRenusReminders) can simply omit it. */
+  module?: string;
 }
 
 export type UptKpiDirection = "HIGHER_IS_BETTER" | "LOWER_IS_BETTER";

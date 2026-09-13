@@ -1,7 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AiInsightList } from "@/components/dashboard/ai-insight-list";
-import { AttentionCards } from "@/components/dashboard/attention-cards";
-import { AboFourDxInsights } from "@/components/dashboard/abo-four-dx-insights";
+import { ManagementAttentionSection } from "@/components/dashboard/management-attention-section";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { GiCorrelationTable } from "@/components/dashboard/gi-correlation-table";
 import { PageHero } from "@/components/dashboard/page-hero";
@@ -13,7 +11,7 @@ import { getDisturbances } from "@/services/disturbances";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
 import { getRenusData } from "@/services/renus";
-import { buildManagementAttention, buildTopIssues } from "@/lib/executive-insights";
+import { buildManagementAttention } from "@/lib/executive-insights";
 import { buildGiCorrelation } from "@/lib/asset-correlation";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { StatusLevel } from "@/types";
@@ -36,8 +34,8 @@ export default async function OverviewPage() {
   // pushed this page's total render time over Vercel's serverless function
   // duration limit, intermittently returning a hard server-error page for
   // every visitor. They're now fetched client-side after this page has
-  // already rendered — see AboFourDxInsights below and
-  // src/app/api/exec-abo-4dx-insights/route.ts.
+  // already rendered, then merged into the same list — see
+  // ManagementAttentionSection and src/app/api/exec-abo-4dx-insights/route.ts.
   const [upt, disturbances, ahi, renus, bayLineReports] = await Promise.all([
     getUptPerformance(),
     getDisturbances(),
@@ -62,13 +60,6 @@ export default async function OverviewPage() {
     ahi: ahi.data,
     bayLineReports: bayLineReports.length > 0 ? bayLineReports : null,
     renusReminders: renus.error ? null : renus.reminders,
-    abo: null,
-    fourDx: null,
-  });
-  const topIssues = buildTopIssues({
-    upt: upt.data,
-    transmisi: disturbances.error ? null : disturbances.transmisi,
-    ahi: ahi.data,
     abo: null,
     fourDx: null,
   });
@@ -123,44 +114,22 @@ export default async function OverviewPage() {
 
         <div className="flex flex-col gap-2 xl:col-span-2">
           <h3 className="text-sm font-semibold tracking-tight text-foreground">Management Attention</h3>
-          <AttentionCards data={managementAttention} />
+          <ManagementAttentionSection initialInsights={managementAttention} />
         </div>
       </div>
 
-      <AboFourDxInsights />
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Gap to Target — Kinerja UPT</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {upt.data ? (
-              <UptGapToTarget kpis={upt.data.kpis} />
-            ) : (
-              <DataUnavailable message="Kinerja UPT belum tersedia." />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Top Issue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AiInsightList
-              data={topIssues.map((issue, index) => ({
-                id: String(index),
-                tone: issue.tone,
-                text: issue.text,
-                href: issue.href,
-              }))}
-              title="Top Issue"
-              emptyMessage="Tidak ada isu prioritas saat ini."
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Gap to Target — Kinerja UPT</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {upt.data ? (
+            <UptGapToTarget kpis={upt.data.kpis} />
+          ) : (
+            <DataUnavailable message="Kinerja UPT belum tersedia." />
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

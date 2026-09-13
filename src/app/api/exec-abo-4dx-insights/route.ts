@@ -4,16 +4,17 @@ import { getAboHargiSnapshot } from "@/services/abo-hargi";
 import { getFourDxSnapshot } from "@/services/four-dx";
 import { buildAboSnapshotComputed, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
 import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
-import { buildManagementAttention, buildTopIssues } from "@/lib/executive-insights";
+import { buildManagementAttention } from "@/lib/executive-insights";
 
 // Split out of the homepage's own SSR request (src/app/dashboard/page.tsx)
 // deliberately — ABO (2 files) + 4DX (9 sheets) pushed the homepage's total
 // data-fetch time over Vercel's serverless function duration limit,
 // intermittently rendering a hard server-error page for every visitor
 // instead of just this one card being late. Fetched client-side after the
-// rest of the page has already rendered (see
-// src/components/dashboard/abo-four-dx-insights.tsx) — the same fix
-// pattern already used for the sidebar's nav badges.
+// rest of the page has already rendered and merged into the SAME unified
+// Management Attention list (see
+// src/components/dashboard/management-attention-section.tsx) — the same
+// fix pattern already used for the sidebar's nav badges.
 export const maxDuration = 60;
 
 export async function GET() {
@@ -49,7 +50,6 @@ export async function GET() {
     abo,
     fourDx: fourDxWigs,
   });
-  const topIssues = buildTopIssues({ upt: null, transmisi: null, ahi: null, abo, fourDx: fourDxWigs });
 
-  return NextResponse.json({ managementAttention, topIssues });
+  return NextResponse.json({ managementAttention });
 }
