@@ -96,34 +96,29 @@ export default async function OverviewPage() {
         }
       />
 
-      {/* items-stretch (the grid default) is intentional here: UPT
-          Performance Status's natural, unconstrained height sets the row's
-          height, and Management Attention (h-full + its own internal
-          scroll) stretches to match it exactly — no leftover empty space
-          in the shorter column, and a long combined list still scrolls
-          inside its own card instead of growing the row further. */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        {upt.data ? (
-          <UptPerformanceStatus
-            overall={upt.data.overall}
-            periodLabel={upt.data.periodLabel}
-            status={uptStatus}
-            overallWeightedScore={upt.data.overallWeightedScore}
-          />
-        ) : (
-          <Card className="xl:col-span-1">
-            <CardContent className="py-8">
-              <DataUnavailable message="Kinerja UPT belum tersedia. Lihat halaman Data & Sync." />
-            </CardContent>
-          </Card>
-        )}
+      {/* UPT Performance Status full-width on its own row, Management
+          Attention full-width below it — no longer paired side-by-side in
+          one grid row, which is what made one of them look
+          disproportionate no matter how the heights were reconciled.
+          Per user feedback. */}
+      {upt.data ? (
+        <UptPerformanceStatus
+          overall={upt.data.overall}
+          periodLabel={upt.data.periodLabel}
+          status={uptStatus}
+          overallWeightedScore={upt.data.overallWeightedScore}
+        />
+      ) : (
+        <Card>
+          <CardContent className="py-8">
+            <DataUnavailable message="Kinerja UPT belum tersedia. Lihat halaman Data & Sync." />
+          </CardContent>
+        </Card>
+      )}
 
-        <div className="flex h-full flex-col gap-2 xl:col-span-2">
-          <h3 className="shrink-0 text-sm font-semibold tracking-tight text-foreground">Management Attention</h3>
-          <div className="min-h-0 flex-1">
-            <ManagementAttentionSection initialInsights={managementAttention} />
-          </div>
-        </div>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold tracking-tight text-foreground">Management Attention</h3>
+        <ManagementAttentionSection initialInsights={managementAttention} />
       </div>
 
       <Card>

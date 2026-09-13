@@ -12,9 +12,12 @@ const STATUS_META: Record<StatusLevel, { label: string; icon: typeof CheckCircle
   none: { label: "NO DATA", icon: AlertTriangle, tint: "bg-muted text-muted-foreground", bar: "bg-border" },
 };
 
-// "Performance Score" here is the share of UPT KPIs that met their own
-// target this period (achieved / total) — computed straight from Kinerja
-// UPT's per-KPI status, not a separately-sourced or invented aggregate.
+// A wide, horizontal banner (not a narrow column card) — placed full-width
+// above Management Attention rather than sharing a grid row with it. Per
+// user feedback: pairing a naturally-short card with a naturally-tall list
+// in the same row always left one of them looking disproportionate no
+// matter how the heights were reconciled; stacking them instead sidesteps
+// the problem entirely.
 export function UptPerformanceStatus({
   overall,
   periodLabel,
@@ -36,31 +39,28 @@ export function UptPerformanceStatus({
   const Icon = meta.icon;
 
   return (
-    <Card className="gap-3 overflow-hidden py-0">
+    <Card className="gap-0 overflow-hidden py-0">
       <div className={cn("h-1 w-full", meta.bar)} />
-      <CardContent className="flex flex-col gap-4 px-5 py-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-              UPT Performance Status
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Kinerja s.d. {periodLabel}</p>
-          </div>
-          <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", meta.tint)}>
+      <CardContent className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:gap-8">
+        <div className="flex shrink-0 flex-col gap-1 lg:w-56">
+          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">UPT Performance Status</p>
+          <p className="text-xs text-muted-foreground">Kinerja s.d. {periodLabel}</p>
+          <span className={cn("mt-1 inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", meta.tint)}>
             <Icon className="size-3.5" />
             {meta.label}
           </span>
         </div>
 
-        <div className="flex items-end gap-3">
-          <span className="text-4xl font-bold tabular-nums text-foreground">{score === null ? "-" : `${score}%`}</span>
-          <span className="mb-1 text-sm text-muted-foreground">KPI tercapai target</span>
+        <div className="flex min-w-0 flex-1 items-center gap-4">
+          <div className="flex shrink-0 items-end gap-2">
+            <span className="text-4xl font-bold tabular-nums text-foreground">{score === null ? "-" : `${score}%`}</span>
+            <span className="mb-1 text-sm text-muted-foreground whitespace-nowrap">KPI tercapai target</span>
+          </div>
+          <div className="hidden min-w-24 flex-1 sm:block">{score !== null ? <Progress value={score} /> : null}</div>
         </div>
 
-        {score !== null ? <Progress value={score} /> : null}
-
         {overallWeightedScore !== undefined && overallWeightedScore !== null ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="shrink-0 text-xs text-muted-foreground">
             Skor Kontrak (Bobot Resmi):{" "}
             <span className="font-semibold text-foreground tabular-nums">
               {overallWeightedScore.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%
@@ -68,7 +68,7 @@ export function UptPerformanceStatus({
           </p>
         ) : null}
 
-        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+        <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs sm:w-72">
           <div className="rounded-md bg-success/10 py-2">
             <div className="text-base font-bold text-success">{overall.achieved}</div>
             <div className="text-muted-foreground">Achieved</div>
