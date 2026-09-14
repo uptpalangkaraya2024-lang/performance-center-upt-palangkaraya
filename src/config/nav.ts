@@ -37,15 +37,13 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Monitoring",
-    items: [
-      { title: "Kinerja UPT", href: "/dashboard/performance/upt", icon: Building2 },
-      { title: "Kinerja ULTG", href: "/dashboard/performance/ultg", icon: Network, comingSoon: true },
-      { title: "Gangguan", href: "/dashboard/disturbances", icon: Zap },
-    ],
+    items: [{ title: "Gangguan", href: "/dashboard/disturbances", icon: Zap }],
   },
   {
     label: "Performance",
     items: [
+      { title: "Kinerja UPT", href: "/dashboard/performance/upt", icon: Building2 },
+      { title: "Kinerja ULTG", href: "/dashboard/performance/ultg", icon: Network, comingSoon: true },
       { title: "ABO", href: "/dashboard/kpi/abo", icon: ShieldCheck },
       { title: "4DX", href: "/dashboard/kpi/4dx", icon: Target },
       { title: "CE", href: "/dashboard/kpi/ce", icon: Gauge, comingSoon: true },
