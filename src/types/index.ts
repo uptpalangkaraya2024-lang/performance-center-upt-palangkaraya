@@ -841,3 +841,50 @@ export interface AboProgramComputed extends AboStatFields {
    *  feedback. */
   ruasItems: AboRuasComputed[];
 }
+
+// CE (Common Enemy) — a FLAT list of one-off findings/anomalies (no
+// program/LM grouping like ABO/4DX), each tracked to a single target week
+// and a single CLOSE/OPEN completion flag. Confirmed live: only
+// "🏭 INPUT CE PKY" is read — the file also holds the other 3 UPTs' own
+// Input sheets plus pan-UPT rollup sheets, neither used here (this
+// dashboard computes its own Palangkaraya-only rollup independently, same
+// principle as 4DX's REKAP and ABO's own target sheets).
+export interface CeItem {
+  id: number;
+  ultg: string;
+  gardu: string;
+  bay: string;
+  span: string;
+  jenisAsset: string;
+  indikator: string;
+  phasa: string;
+  namaProgram: string;
+  anomaliPemicu: string;
+  /** Critical / Poor / Fair (or blank) — the AHI-style condition scale. */
+  kriteriaBefore: string;
+  actionPlan: string;
+  kriteriaAfter: string;
+  catatanUpt: string;
+  /** "!" / "✅" / blank — a simple flag column, "!" surfaced in the attention list. */
+  alert: string;
+  catatanInduk: string;
+  targetWeekLabel: string | null;
+  tanggalTarget: string | null;
+  realisasiWeekLabel: string | null;
+  tanggalRealisasi: string | null;
+  satuan: string;
+  /** ON TARGET / LAGGING / FINISH (LEAD) / FINISH (LAGGING) — shown as-is
+   *  for context; CLS/OPN (`done` below) stays the authoritative
+   *  completion signal, confirmed to mismatch STATUS on a few edge-case rows. */
+  status: string;
+  /** CLS/OPN === "CLOSE" — the sole completion signal for this module
+   *  (LINK BA/LAP. PENGUJIAN is confirmed blank on every CLOSE item, so
+   *  unlike ABO there's no separate "realized but evidence missing" case
+   *  to track here). */
+  done: boolean;
+}
+
+export interface CeSnapshot {
+  items: CeItem[];
+  error: string | null;
+}

@@ -62,6 +62,7 @@ export default async function OverviewPage() {
     renusReminders: renus.error ? null : renus.reminders,
     abo: null,
     fourDx: null,
+    ce: null,
   });
 
   const lastSyncOverall = listSyncStatus().reduce<Date | null>(

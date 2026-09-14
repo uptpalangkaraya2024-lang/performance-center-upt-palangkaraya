@@ -46,7 +46,7 @@ export const navGroups: NavGroup[] = [
       { title: "Kinerja ULTG", href: "/dashboard/performance/ultg", icon: Network, comingSoon: true },
       { title: "ABO", href: "/dashboard/kpi/abo", icon: ShieldCheck },
       { title: "4DX", href: "/dashboard/kpi/4dx", icon: Target },
-      { title: "CE", href: "/dashboard/kpi/ce", icon: Gauge, comingSoon: true },
+      { title: "CE", href: "/dashboard/kpi/ce", icon: Gauge },
       { title: "AHI", href: "/dashboard/kpi/ahi", icon: Activity },
     ],
   },

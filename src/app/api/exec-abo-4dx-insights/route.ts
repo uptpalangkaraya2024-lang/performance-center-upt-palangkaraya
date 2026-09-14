@@ -2,26 +2,28 @@ import { NextResponse } from "next/server";
 import { getAboProteksiSnapshot } from "@/services/abo-proteksi";
 import { getAboHargiSnapshot } from "@/services/abo-hargi";
 import { getFourDxSnapshot } from "@/services/four-dx";
+import { getCeSnapshot } from "@/services/ce-proteksi";
 import { buildAboSnapshotComputed, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
 import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
 import { buildManagementAttention } from "@/lib/executive-insights";
 
 // Split out of the homepage's own SSR request (src/app/dashboard/page.tsx)
-// deliberately — ABO (2 files) + 4DX (9 sheets) pushed the homepage's total
-// data-fetch time over Vercel's serverless function duration limit,
-// intermittently rendering a hard server-error page for every visitor
-// instead of just this one card being late. Fetched client-side after the
-// rest of the page has already rendered and merged into the SAME unified
-// Management Attention list (see
+// deliberately — ABO (2 files) + 4DX (9 sheets) + CE (1 large sheet) pushed
+// the homepage's total data-fetch time over Vercel's serverless function
+// duration limit, intermittently rendering a hard server-error page for
+// every visitor instead of just this one card being late. Fetched
+// client-side after the rest of the page has already rendered and merged
+// into the SAME unified Management Attention list (see
 // src/components/dashboard/management-attention-section.tsx) — the same
 // fix pattern already used for the sidebar's nav badges.
 export const maxDuration = 60;
 
 export async function GET() {
-  const [aboProteksiSnapshot, aboHargiSnapshot, fourDxSnapshot] = await Promise.all([
+  const [aboProteksiSnapshot, aboHargiSnapshot, fourDxSnapshot, ceSnapshot] = await Promise.all([
     getAboProteksiSnapshot(),
     getAboHargiSnapshot(),
     getFourDxSnapshot(),
+    getCeSnapshot(),
   ]);
 
   const aboWeekLabel = defaultAboWeekLabel();
@@ -49,6 +51,7 @@ export async function GET() {
     renusReminders: null,
     abo,
     fourDx: fourDxWigs,
+    ce: ceSnapshot.error ? null : ceSnapshot,
   });
 
   return NextResponse.json({ managementAttention });

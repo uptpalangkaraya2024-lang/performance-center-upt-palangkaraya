@@ -260,4 +260,28 @@ export const dataSources = {
       },
     ],
   },
+  // UIP3B Kalimantan-wide file (also holds Input CE for BPP/BJB/PNK, plus
+  // pan-UPT rollup sheets DASHBOARD CE / KAL-CE Weekly) — per the user's
+  // explicit instruction, only Palangkaraya's own sheet is read here, and
+  // every rollup (target/realisasi count, %achieve, breakdown) is computed
+  // independently rather than trusting the pan-UPT DASHBOARD CE sheet
+  // (same "don't rely on a manually-maintained rollup" principle already
+  // applied to 4DX's REKAP and ABO).
+  ceProteksi: {
+    id: "ce-proteksi",
+    label: "CE Proteksi",
+    sources: [
+      {
+        file: "NEXT LEVEL MONITORING Common Enemy 2026",
+        sheets: [
+          {
+            name: "🏭 INPUT CE PKY",
+            required: false,
+            purpose:
+              "Flat list (no block/LM structure) — one row per finding/anomaly, not grouped by program. Real header sits one row below the sheet's own literal row 1 (a helper row with month labels for a pivot area) — found by content match, not a fixed index. Confirmed live: 983 numbered rows, but 349 are empty placeholders (numeric ID, everything else blank) — a real item requires Nama Program or GARDU INDUK to also be non-blank, leaving 634 real findings. CLS/OPN (CLOSE/OPEN) is the sole completion signal; LINK BA/LAP. PENGUJIAN is confirmed blank on every CLOSE item so, unlike ABO, it carries no BA-missing signal here.",
+          },
+        ],
+      },
+    ],
+  },
 } satisfies Record<string, DataSourceConfig>;

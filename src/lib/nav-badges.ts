@@ -3,8 +3,10 @@ import "server-only";
 import { getAboProteksiSnapshot } from "@/services/abo-proteksi";
 import { getAboHargiSnapshot } from "@/services/abo-hargi";
 import { getFourDxSnapshot } from "@/services/four-dx";
+import { getCeSnapshot } from "@/services/ce-proteksi";
 import { buildAboSnapshotComputed, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
 import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
+import { buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 
 /** href -> count of "belum" items for that module, at today's period.
  *  Rendered as a small pill next to the matching sidebar entry so a user
@@ -33,6 +35,18 @@ export async function getNavBadges(): Promise<Record<string, number>> {
     const wigs = buildFourDxWigs(snapshot.wigs, period, snapshot.realizations, snapshot.monitoring);
     const belumCount = wigs.flatMap((w) => w.lms).filter((lm) => lm.status === "belum").length;
     if (belumCount > 0) badges["/dashboard/kpi/4dx"] = belumCount;
+  } catch {
+    // ditto
+  }
+
+  try {
+    const snapshot = await getCeSnapshot();
+    if (!snapshot.error) {
+      const weekLabel = defaultCeWeekLabel();
+      const attention = buildCeAttentionItems(snapshot.items, weekLabel);
+      const needsAttention = new Set(attention.map((a) => a.item.id)).size;
+      if (needsAttention > 0) badges["/dashboard/kpi/ce"] = needsAttention;
+    }
   } catch {
     // ditto
   }

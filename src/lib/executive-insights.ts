@@ -4,11 +4,13 @@
 // permitted, an AI backend is not.
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
 import { collectAboAttentionItems } from "@/lib/abo-proteksi-compute";
+import { buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 import type {
   AboProgramComputed,
   AhiSnapshot,
   AiInsight,
   BayLineReport,
+  CeSnapshot,
   DisturbanceCategoryResult,
   FourDxWig,
   RenusData,
@@ -84,13 +86,14 @@ export function buildManagementAttention(params: {
   renusReminders: AiInsight[] | null;
   abo: AboExecutiveInput | null;
   fourDx: FourDxWig[] | null;
+  ce: CeSnapshot | null;
 }): AiInsight[] {
   const insights: AiInsight[] = [];
   let nextId = 0;
   const push = (module: string, tone: AiInsight["tone"], text: string, href?: string) =>
     insights.push({ id: String(nextId++), module, tone, text, href });
 
-  const { upt, transmisi, trafoHv, trafoLv, ahi, bayLineReports, renusReminders, abo, fourDx } = params;
+  const { upt, transmisi, trafoHv, trafoLv, ahi, bayLineReports, renusReminders, abo, fourDx, ce } = params;
 
   if (upt) {
     if (upt.overall.critical > 0) {
@@ -240,6 +243,26 @@ export function buildManagementAttention(params: {
       );
     } else if (lms.length > 0) {
       push("4DX", "good", "Seluruh Lead Measure 4DX tercapai periode ini.", "/dashboard/kpi/4dx");
+    }
+  }
+
+  if (ce && ce.items.length > 0) {
+    const weekLabel = defaultCeWeekLabel();
+    const attention = buildCeAttentionItems(ce.items, weekLabel);
+    const criticalOpen = attention.filter((a) => a.issue === "Critical & Belum Selesai").length;
+    const alertCount = attention.filter((a) => a.issue === "Alert").length;
+    const overdue = attention.filter((a) => a.issue === "Terlambat").length;
+    if (criticalOpen > 0) {
+      push("CE", "critical", `${criticalOpen} temuan CE kondisi Critical belum selesai (CLOSE).`, "/dashboard/kpi/ce");
+    }
+    if (overdue > 0) {
+      push("CE", "warning", `${overdue} temuan CE melewati target minggu dan masih Open.`, "/dashboard/kpi/ce");
+    }
+    if (alertCount > 0) {
+      push("CE", "warning", `${alertCount} temuan CE ditandai Alert.`, "/dashboard/kpi/ce");
+    }
+    if (criticalOpen === 0 && overdue === 0 && alertCount === 0) {
+      push("CE", "good", "Tidak ada temuan CE yang perlu perhatian khusus saat ini.", "/dashboard/kpi/ce");
     }
   }
 
