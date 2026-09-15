@@ -21,20 +21,27 @@ function parseNumber(raw: unknown): number | null {
 }
 
 /** The "Kumulatif" section's own sub-header row reads "TARGET TRAFO" at the
- *  first column of a 12-column block, with "UPT PALANGKA RAYA" named 2 rows
- *  above at (or just before) that same column — found by content match
- *  rather than a fixed index, since this UIP3B-wide sheet's block widths
- *  differ per UPT/UP2B (System Operators only carry ERT/ACC, no
- *  TRAFO/TRANS) and any shift elsewhere in the sheet must not silently
- *  misalign Palangkaraya's own numbers. */
+ *  first column of a 12-column block, exactly 2 rows below "UPT PALANGKA
+ *  RAYA" at THE SAME column — found by content match rather than a fixed
+ *  index, since this UIP3B-wide sheet's block widths differ per UPT/UP2B
+ *  (System Operators only carry ERT/ACC, no TRAFO/TRANS) and any shift
+ *  elsewhere in the sheet must not silently misalign Palangkaraya's own
+ *  numbers.
+ *
+ *  Must be an EXACT same-column match, not a "nearby within N columns"
+ *  fuzzy search — confirmed live that a wide lookahead window (originally
+ *  14 columns) false-matches the PRECEDING UPT's own "TARGET TRAFO" cell,
+ *  since adjacent blocks are only ~12 columns apart and Palangkaraya's own
+ *  name label falls inside that neighbor's lookahead window. This silently
+ *  produced a real UPT's set of numbers (Balikpapan's, in the case that
+ *  surfaced the bug) mislabeled as Palangkaraya's. */
 function findPalangkarayaKumulatifBlock(grid: unknown[][]): { headerRow: number; startCol: number } | null {
-  for (let r = 2; r < grid.length; r++) {
+  for (let r = 0; r < grid.length; r++) {
     const row = grid[r] ?? [];
     for (let c = 0; c < row.length; c++) {
-      if (normalize(row[c]) !== "TARGET TRAFO") continue;
-      const nameRow = grid[r - 2] ?? [];
-      const nearby = nameRow.slice(c, c + 14).some((v) => normalize(v) === UPT_LABEL);
-      if (nearby) return { headerRow: r, startCol: c };
+      if (normalize(row[c]) !== UPT_LABEL) continue;
+      const headerRow = grid[r + 2] ?? [];
+      if (normalize(headerRow[c]) === "TARGET TRAFO") return { headerRow: r + 2, startCol: c };
     }
   }
   return null;
