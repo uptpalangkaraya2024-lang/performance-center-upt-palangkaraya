@@ -488,6 +488,7 @@ export function buildFourDxInsightRecap(
 
   lines.push("💪 UPT Palangkaraya #Super");
   lines.push("by: Performance Center UPT Palangkaraya");
+  lines.push("https://performance-center-upt-palangkaraya.vercel.app/dashboard/kpi/4dx");
 
   return lines.join("\n").trim();
 }
