@@ -6,6 +6,7 @@ import {
   Bar,
   CartesianGrid,
   ComposedChart,
+  LabelList,
   Legend,
   Line,
   ReferenceLine,
@@ -255,8 +256,12 @@ function WigOutcomeChart({ chart, unit }: { chart: FourDxOutcomeChartPoint[]; un
           }}
         />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="bulanan" name="Real.Bulanan" fill="var(--chart-2)" radius={[3, 3, 0, 0]} />
-        <Line dataKey="kumulatif" name="Real.Kumulatif" stroke="var(--chart-1)" strokeWidth={2.5} dot={{ r: 3 }} />
+        <Bar dataKey="bulanan" name="Real.Bulanan" fill="var(--chart-2)" radius={[3, 3, 0, 0]}>
+          <LabelList dataKey="bulanan" position="top" fontSize={10} fill="var(--muted-foreground)" />
+        </Bar>
+        <Line dataKey="kumulatif" name="Real.Kumulatif" stroke="var(--chart-1)" strokeWidth={2.5} dot={{ r: 3 }}>
+          <LabelList dataKey="kumulatif" position="top" fontSize={10} fill="var(--chart-1)" />
+        </Line>
         {target !== null ? (
           <ReferenceLine y={target} stroke="var(--critical)" strokeDasharray="4 4" label={{ value: "Target 4DX", fontSize: 10, fill: "var(--critical)", position: "insideTopRight" }} />
         ) : null}
@@ -278,6 +283,13 @@ function OutcomeCorrelationBanner({
   statuses: FourDxOutcomeStatus[];
   charts: Record<number, FourDxOutcomeChartPoint[]>;
 }) {
+  // Chart data is always the full 12 months (Jan-Des) — this range filter
+  // only slices which months are DISPLAYED, it never recomputes Kumulatif
+  // from the truncated range, since "Kumulatif" is meaningless if it
+  // doesn't start counting from January.
+  const [fromMonth, setFromMonth] = useState(0);
+  const [toMonth, setToMonth] = useState(11);
+
   return (
     <Card>
       <CardHeader>
@@ -285,13 +297,69 @@ function OutcomeCorrelationBanner({
         <p className="text-xs text-muted-foreground">
           Realisasi kumulatif tahun berjalan dari data gangguan aktual, dibandingkan target tahunan tiap WIG.
         </p>
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
+          <span>Tampilkan bulan:</span>
+          <Select
+            value={String(fromMonth)}
+            onValueChange={(v) => {
+              if (!v) return;
+              const idx = Number(v);
+              setFromMonth(idx);
+              if (idx > toMonth) setToMonth(idx);
+            }}
+          >
+            <SelectTrigger size="sm" className="w-[110px]">
+              <SelectValue placeholder="Dari">{MONTH_FULL_ID[fromMonth]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_FULL_ID.map((m, idx) => (
+                <SelectItem key={m} value={String(idx)}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span>sampai</span>
+          <Select
+            value={String(toMonth)}
+            onValueChange={(v) => {
+              if (!v) return;
+              const idx = Number(v);
+              setToMonth(idx);
+              if (idx < fromMonth) setFromMonth(idx);
+            }}
+          >
+            <SelectTrigger size="sm" className="w-[110px]">
+              <SelectValue placeholder="Sampai">{MONTH_FULL_ID[toMonth]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_FULL_ID.map((m, idx) => (
+                <SelectItem key={m} value={String(idx)}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {fromMonth !== 0 || toMonth !== 11 ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFromMonth(0);
+                setToMonth(11);
+              }}
+              className="text-primary hover:underline"
+            >
+              Reset ke Jan–Des
+            </button>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {statuses.map((s) => {
             const accent = WIG_COLORS[(s.wigNumber - 1) % WIG_COLORS.length];
             const unit = s.wigNumber === 3 ? "Jam" : "kali";
-            const chart = charts[s.wigNumber] ?? [];
+            const chart = (charts[s.wigNumber] ?? []).slice(fromMonth, toMonth + 1);
             return (
               <div key={s.wigNumber} className="flex flex-col gap-2 rounded-lg border p-3" style={{ borderLeft: `4px solid ${accent}` }}>
                 <button
