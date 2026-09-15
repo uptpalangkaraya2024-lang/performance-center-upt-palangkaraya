@@ -234,11 +234,50 @@ const OUTCOME_STATUS_LABEL: Record<FourDxOutcomeStatus["status"], string> = {
   unknown: "Belum Ada Data",
 };
 
-/** "Korelasi Antar WIG" banner at the very top of the page — each WIG's
- *  outcome-to-date against its own annual target side by side, so a case
- *  like WIG 2 already sitting at 10 against a year-end target of 9 is
- *  visible before scrolling into that WIG's own section. */
-function OutcomeCorrelationBanner({ statuses }: { statuses: FourDxOutcomeStatus[] }) {
+/** Per-WIG outcome correlation chart — Real.Bulanan (bar) + Real.Kumulatif
+ *  (line) + Target 4DX (flat reference line), same 3-series shape as the
+ *  reference PPT's own per-WIG slide, sourced from actual disturbance/
+ *  incident data rather than Lead Measure completion. */
+function WigOutcomeChart({ chart, unit }: { chart: FourDxOutcomeChartPoint[]; unit: string }) {
+  const target = chart.find((p) => p.target !== null)?.target ?? null;
+  return (
+    <ResponsiveContainer width="100%" height={180}>
+      <ComposedChart data={chart} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+        <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
+        <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={unit === "Jam"} />
+        <Tooltip
+          contentStyle={{
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            fontSize: 12,
+          }}
+        />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="bulanan" name="Real.Bulanan" fill="var(--chart-2)" radius={[3, 3, 0, 0]} />
+        <Line dataKey="kumulatif" name="Real.Kumulatif" stroke="var(--chart-1)" strokeWidth={2.5} dot={{ r: 3 }} />
+        {target !== null ? (
+          <ReferenceLine y={target} stroke="var(--critical)" strokeDasharray="4 4" label={{ value: "Target 4DX", fontSize: 10, fill: "var(--critical)", position: "insideTopRight" }} />
+        ) : null}
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** "Korelasi Antar WIG" resume at the very top of the page — each WIG's
+ *  target-vs-realisasi status AND its own Real.Bulanan/Kumulatif/Target
+ *  chart together, so a case like WIG 2 already sitting at 10 against a
+ *  year-end target of 9 is visible (with its trend) before scrolling any
+ *  further — per the user's request to surface this as a resume up top
+ *  instead of only inside each WIG's own section further down the page. */
+function OutcomeCorrelationBanner({
+  statuses,
+  charts,
+}: {
+  statuses: FourDxOutcomeStatus[];
+  charts: Record<number, FourDxOutcomeChartPoint[]>;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -248,27 +287,29 @@ function OutcomeCorrelationBanner({ statuses }: { statuses: FourDxOutcomeStatus[
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {statuses.map((s) => {
             const accent = WIG_COLORS[(s.wigNumber - 1) % WIG_COLORS.length];
             const unit = s.wigNumber === 3 ? "Jam" : "kali";
+            const chart = charts[s.wigNumber] ?? [];
             return (
-              <button
-                key={s.wigNumber}
-                type="button"
-                onClick={() => jumpTo(wigAnchorId(s.wigNumber))}
-                className="flex flex-col gap-1.5 rounded-lg border p-3 text-left transition-colors hover:bg-muted/10"
-                style={{ borderLeft: `4px solid ${accent}` }}
-              >
-                <span className="text-xs font-semibold tracking-tight text-foreground">WIG {s.wigNumber} — {s.label}</span>
-                <span className="text-lg font-semibold tabular-nums text-foreground">
-                  {s.realisasiKumulatif ?? "—"}{" "}
-                  <span className="text-xs font-normal text-muted-foreground">/ target {s.target ?? "—"} {unit}</span>
-                </span>
-                <span className={cn("inline-flex w-fit rounded-full border px-2 py-0.5 text-xs font-medium", OUTCOME_STATUS_CLASS[s.status])}>
-                  {OUTCOME_STATUS_LABEL[s.status]}
-                </span>
-              </button>
+              <div key={s.wigNumber} className="flex flex-col gap-2 rounded-lg border p-3" style={{ borderLeft: `4px solid ${accent}` }}>
+                <button
+                  type="button"
+                  onClick={() => jumpTo(wigAnchorId(s.wigNumber))}
+                  className="flex flex-col gap-1.5 text-left"
+                >
+                  <span className="text-xs font-semibold tracking-tight text-foreground">WIG {s.wigNumber} — {s.label}</span>
+                  <span className="text-lg font-semibold tabular-nums text-foreground">
+                    {s.realisasiKumulatif ?? "—"}{" "}
+                    <span className="text-xs font-normal text-muted-foreground">/ target {s.target ?? "—"} {unit}</span>
+                  </span>
+                  <span className={cn("inline-flex w-fit rounded-full border px-2 py-0.5 text-xs font-medium", OUTCOME_STATUS_CLASS[s.status])}>
+                    {OUTCOME_STATUS_LABEL[s.status]}
+                  </span>
+                </button>
+                {chart.length > 0 ? <WigOutcomeChart chart={chart} unit={unit} /> : null}
+              </div>
             );
           })}
         </div>
@@ -282,108 +323,57 @@ function formatPercentSigned(v: number | null): string {
   return `${Math.round(v * 100)}%`;
 }
 
-/** Per-WIG achievement across the current week AND the year so far — "baik
- *  di periode minggu berjalan atau sebelumnya" per the user's request,
- *  distinct from the Resume table below which only shows the currently
- *  selected week's numbers. */
-function AchievementSummaryCards({ summaries, wigLabels }: { summaries: FourDxAchievementSummary[]; wigLabels: Record<number, string> }) {
+/** Per-WIG achievement summary. "Periode dipilih" follows the month/week
+ *  filter above (recomputed from the already-filtered `wigs`, same numbers
+ *  the Resume table below shows) — "rata-rata tahun ini" is deliberately
+ *  NOT filter-dependent: it's the year-to-date average across every
+ *  already-elapsed week, which by definition can't be an average "as of" a
+ *  future week the filter might select, so it stays labeled and computed
+ *  separately (see buildFourDxAchievementSummaries). */
+function AchievementSummaryCards({
+  wigs,
+  summaries,
+  wigLabels,
+}: {
+  wigs: FourDxWig[];
+  summaries: FourDxAchievementSummary[];
+  wigLabels: Record<number, string>;
+}) {
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold tracking-tight text-foreground">Ringkasan Pencapaian</h3>
+      <p className="text-xs text-muted-foreground">
+        &quot;Periode dipilih&quot; mengikuti filter bulan/minggu di atas. &quot;Rata-rata tahun ini&quot; selalu dihitung
+        dari seluruh minggu yang sudah berjalan tahun ini, terlepas dari filter.
+      </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {summaries.map((s) => (
-          <div key={s.wigNumber} className="flex flex-col gap-1.5 rounded-lg border p-3">
-            <span className="text-xs font-semibold tracking-tight text-foreground">WIG {s.wigNumber} — {wigLabels[s.wigNumber]}</span>
-            <span className="text-sm text-muted-foreground">
-              Minggu ini: <span className="font-medium text-foreground">{s.current ? `${s.current.tercapai}/${s.current.total}` : "—"}</span> LM tercapai
-            </span>
-            <span className="text-sm text-muted-foreground">
-              Rata-rata tahun ini: <span className="font-medium text-foreground">{formatPercentSigned(s.ytdPercent)}</span>
-            </span>
-            <div className="flex items-end gap-0.5" title="Tren 8 minggu terakhir">
-              {s.recentWeeks.map((w, i) => (
-                <div
-                  key={`${w.label}-${i}`}
-                  className="w-2 rounded-t bg-primary/70"
-                  style={{ height: `${Math.max(4, (w.percent ?? 0) * 24)}px` }}
-                />
-              ))}
+        {wigs.map((wig) => {
+          const summary = summaries.find((s) => s.wigNumber === wig.number);
+          const evaluable = wig.lms.filter((lm) => lm.targetMingguan > 0);
+          const tercapai = evaluable.filter((lm) => lm.status === "tercapai").length;
+          return (
+            <div key={wig.number} className="flex flex-col gap-1.5 rounded-lg border p-3">
+              <span className="text-xs font-semibold tracking-tight text-foreground">WIG {wig.number} — {wigLabels[wig.number]}</span>
+              <span className="text-sm text-muted-foreground">
+                Periode dipilih: <span className="font-medium text-foreground">{evaluable.length > 0 ? `${tercapai}/${evaluable.length}` : "—"}</span> LM tercapai
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Rata-rata tahun ini: <span className="font-medium text-foreground">{formatPercentSigned(summary?.ytdPercent ?? null)}</span>
+              </span>
+              <div className="flex items-end gap-0.5" title="Tren 8 minggu terakhir">
+                {(summary?.recentWeeks ?? []).map((w, i) => (
+                  <div
+                    key={`${w.label}-${i}`}
+                    className="w-2 rounded-t bg-primary/70"
+                    style={{ height: `${Math.max(4, (w.percent ?? 0) * 24)}px` }}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
-  );
-}
-
-/** Per-WIG outcome correlation chart — Real.Bulanan (bar) + Real.Kumulatif
- *  (line) + Target 4DX (flat reference line), same 3-series shape as the
- *  reference PPT's own per-WIG slide, sourced from actual disturbance/
- *  incident data rather than Lead Measure completion. */
-function WigOutcomeChart({ chart, unit }: { chart: FourDxOutcomeChartPoint[]; unit: string }) {
-  const target = chart.find((p) => p.target !== null)?.target ?? null;
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3">
-      <p className="text-xs font-medium text-foreground">Korelasi Gangguan Aktual ({unit})</p>
-      <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={chart} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
-          <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={unit === "Jam"} />
-          <Tooltip
-            contentStyle={{
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-md)",
-              fontSize: 12,
-            }}
-          />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Bar dataKey="bulanan" name="Real.Bulanan" fill="var(--chart-2)" radius={[3, 3, 0, 0]} />
-          <Line dataKey="kumulatif" name="Real.Kumulatif" stroke="var(--chart-1)" strokeWidth={2.5} dot={{ r: 3 }} />
-          {target !== null ? (
-            <ReferenceLine y={target} stroke="var(--critical)" strokeDasharray="4 4" label={{ value: "Target 4DX", fontSize: 10, fill: "var(--critical)", position: "insideTopRight" }} />
-          ) : null}
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/** Visible at the bottom of the page (not tucked in a slide-out sheet) per
- *  the user's request — a narrative, WA-ready summary of target-vs-
- *  realisasi and YTD achievement per WIG, closed with the UPT's own
- *  signature line. */
-function InsightRecapCard({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <Card className="print:break-inside-avoid">
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">Catatan &amp; Insight (Format WA)</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 print:hidden"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(text);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              } catch {
-                // clipboard permission denied — the text is still selectable below
-              }
-            }}
-          >
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {copied ? "Tersalin" : "Copy"}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <pre className="overflow-auto rounded-lg border bg-muted/20 p-3 text-xs whitespace-pre-wrap text-foreground">{text}</pre>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -541,7 +531,7 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
 
   return (
     <div className="flex flex-col gap-4">
-      {outcomeStatuses.length > 0 ? <OutcomeCorrelationBanner statuses={outcomeStatuses} /> : null}
+      {outcomeStatuses.length > 0 ? <OutcomeCorrelationBanner statuses={outcomeStatuses} charts={outcomeCharts} /> : null}
 
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <Select
@@ -614,29 +604,23 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
         </p>
       </div>
 
-      <AchievementSummaryCards summaries={achievementSummaries} wigLabels={wigLabels} />
+      <AchievementSummaryCards wigs={wigs} summaries={achievementSummaries} wigLabels={wigLabels} />
 
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold tracking-tight text-foreground">Resume Semua Lead Measure</h3>
         <ResumeTable wigs={wigs} />
       </div>
 
-      {wigs.map((wig) => {
-        const chart = outcomeCharts[wig.number];
-        return (
-          <div key={wig.number} className="flex flex-col gap-2">
-            <WigBanner wig={wig} />
-            {chart && chart.length > 0 ? <WigOutcomeChart chart={chart} unit={wig.number === 3 ? "Jam" : "kali"} /> : null}
-            <div className="flex flex-col gap-3">
-              {wig.lms.map((lm) => (
-                <LmCard key={lm.code} lm={lm} />
-              ))}
-            </div>
+      {wigs.map((wig) => (
+        <div key={wig.number} className="flex flex-col gap-2">
+          <WigBanner wig={wig} />
+          <div className="flex flex-col gap-3">
+            {wig.lms.map((lm) => (
+              <LmCard key={lm.code} lm={lm} />
+            ))}
           </div>
-        );
-      })}
-
-      <InsightRecapCard text={insightRecap} />
+        </div>
+      ))}
     </div>
   );
 }
