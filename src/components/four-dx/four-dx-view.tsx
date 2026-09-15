@@ -235,12 +235,19 @@ const OUTCOME_STATUS_LABEL: Record<FourDxOutcomeStatus["status"], string> = {
   unknown: "Belum Ada Data",
 };
 
-/** Per-WIG outcome correlation chart — Real.Bulanan (bar) + Real.Kumulatif
- *  (line) + Target 4DX (flat reference line), same 3-series shape as the
- *  reference PPT's own per-WIG slide, sourced from actual disturbance/
- *  incident data rather than Lead Measure completion. */
-function WigOutcomeChart({ chart, unit }: { chart: FourDxOutcomeChartPoint[]; unit: string }) {
+type OutcomeChartMode = "bulanan" | "kumulatif" | "keduanya";
+
+/** Per-WIG outcome correlation chart — Real.Bulanan (bar) and/or
+ *  Real.Kumulatif (line), plus Target 4DX (flat reference line), same
+ *  series shape as the reference PPT's own per-WIG slide, sourced from
+ *  actual disturbance/incident data rather than Lead Measure completion.
+ *  `mode` picks which series are drawn — showing both at once (the
+ *  default) works, but a count-scale bar and a running-total line can
+ *  crowd each other on a small chart, so either can be viewed alone. */
+function WigOutcomeChart({ chart, unit, mode }: { chart: FourDxOutcomeChartPoint[]; unit: string; mode: OutcomeChartMode }) {
   const target = chart.find((p) => p.target !== null)?.target ?? null;
+  const showBulanan = mode === "bulanan" || mode === "keduanya";
+  const showKumulatif = mode === "kumulatif" || mode === "keduanya";
   return (
     <ResponsiveContainer width="100%" height={180}>
       <ComposedChart data={chart} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
@@ -256,12 +263,16 @@ function WigOutcomeChart({ chart, unit }: { chart: FourDxOutcomeChartPoint[]; un
           }}
         />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="bulanan" name="Real.Bulanan" fill="var(--chart-2)" radius={[3, 3, 0, 0]}>
-          <LabelList dataKey="bulanan" position="top" fontSize={10} fill="var(--muted-foreground)" />
-        </Bar>
-        <Line dataKey="kumulatif" name="Real.Kumulatif" stroke="var(--chart-1)" strokeWidth={2.5} dot={{ r: 3 }}>
-          <LabelList dataKey="kumulatif" position="top" fontSize={10} fill="var(--chart-1)" />
-        </Line>
+        {showBulanan ? (
+          <Bar dataKey="bulanan" name="Real.Bulanan" fill="var(--chart-2)" radius={[3, 3, 0, 0]}>
+            <LabelList dataKey="bulanan" position="top" fontSize={10} fill="var(--muted-foreground)" />
+          </Bar>
+        ) : null}
+        {showKumulatif ? (
+          <Line dataKey="kumulatif" name="Real.Kumulatif" stroke="var(--chart-1)" strokeWidth={2.5} dot={{ r: 3 }}>
+            <LabelList dataKey="kumulatif" position="top" fontSize={10} fill="var(--chart-1)" />
+          </Line>
+        ) : null}
         {target !== null ? (
           <ReferenceLine y={target} stroke="var(--critical)" strokeDasharray="4 4" label={{ value: "Target 4DX", fontSize: 10, fill: "var(--critical)", position: "insideTopRight" }} />
         ) : null}
@@ -289,6 +300,7 @@ function OutcomeCorrelationBanner({
   // doesn't start counting from January.
   const [fromMonth, setFromMonth] = useState(0);
   const [toMonth, setToMonth] = useState(11);
+  const [mode, setMode] = useState<OutcomeChartMode>("keduanya");
 
   return (
     <Card>
@@ -298,6 +310,25 @@ function OutcomeCorrelationBanner({
           Realisasi kumulatif tahun berjalan dari data gangguan aktual, dibandingkan target tahunan tiap WIG.
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
+          <div className="flex items-center rounded-full border p-0.5">
+            {([
+              { value: "bulanan" as const, label: "Bulanan" },
+              { value: "kumulatif" as const, label: "Kumulatif" },
+              { value: "keduanya" as const, label: "Keduanya" },
+            ]).map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMode(value)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                  mode === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <span>Tampilkan bulan:</span>
           <Select
             value={String(fromMonth)}
@@ -376,7 +407,7 @@ function OutcomeCorrelationBanner({
                     {OUTCOME_STATUS_LABEL[s.status]}
                   </span>
                 </button>
-                {chart.length > 0 ? <WigOutcomeChart chart={chart} unit={unit} /> : null}
+                {chart.length > 0 ? <WigOutcomeChart chart={chart} unit={unit} mode={mode} /> : null}
               </div>
             );
           })}
