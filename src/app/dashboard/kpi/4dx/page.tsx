@@ -3,6 +3,7 @@ import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { FourDxView } from "@/components/four-dx/four-dx-view";
 import { getFourDxSnapshot } from "@/services/four-dx";
+import { getFourDxOutcomeSnapshot } from "@/services/four-dx-gangguan";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why — 4DX reads 9 sheets, the
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function FourDxPage() {
-  const snapshot = await getFourDxSnapshot();
+  const [snapshot, outcome] = await Promise.all([getFourDxSnapshot(), getFourDxOutcomeSnapshot()]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,12 +37,13 @@ export default async function FourDxPage() {
           </CardContent>
         </Card>
       ) : (
-        <FourDxView snapshot={snapshot} />
+        <FourDxView snapshot={snapshot} outcome={outcome} />
       )}
 
       <p className="text-[11px] text-muted-foreground print:hidden">
         Source: [02] Monitoring 4DX Transmisi UPT Palangkaraya 2026 · Sheet: TARGET WIG 1-4, ULTG Palangkaraya/Pangkalan
-        Bun/Muara Teweh, K3 UPT Palangkaraya · Provider: Apps Script
+        Bun/Muara Teweh, K3 UPT Palangkaraya · Korelasi Gangguan: 2026_Kertas Kerja 4DX UIP3B Kalimantan (Data Gangguan)
+        · Provider: Apps Script
       </p>
     </div>
   );

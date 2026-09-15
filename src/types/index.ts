@@ -695,6 +695,36 @@ export interface FourDxWig {
   lms: FourDxLm[];
 }
 
+/** One calendar month's outcome numbers for a single WIG-level metric
+ *  (Gangguan Trafo, Gangguan Transmisi, Emergency Response Time, or
+ *  Accident) — straight from the "Data Gangguan" sheet's own "Kumulatif"
+ *  section, UPT PALANGKA RAYA column block. Distinct from FourDxLm's
+ *  target/realisasi: this is the WIG's own headline OUTCOME measure (what
+ *  the WIG is ultimately trying to move), not a Lead Measure's preventive-
+ *  action count. `target` here is the sheet's own per-month target cell,
+ *  kept for reference — the page uses the WIG title's own stated annual
+ *  target as the authoritative flat reference line instead, since the
+ *  sheet leaves ERT's target blank for Palangkaraya specifically. */
+export interface FourDxOutcomeMonthly {
+  /** 3-letter uppercase, e.g. "JAN" — matches four-dx-compute's MONTH_ABBR_ID. */
+  month: string;
+  target: number | null;
+  bulanan: number | null;
+  kumulatif: number | null;
+}
+
+/** UPT Palangkaraya's own outcome trend for all 4 WIGs, read from a
+ *  SEPARATE UIP3B-wide "kertas kerja" file — not the 4DX targeting file
+ *  itself — per the user's explicit request to correlate each WIG's Lead
+ *  Measures against the actual recorded disturbance/incident numbers. */
+export interface FourDxOutcomeSnapshot {
+  trafo: FourDxOutcomeMonthly[];
+  transmisi: FourDxOutcomeMonthly[];
+  ert: FourDxOutcomeMonthly[];
+  accident: FourDxOutcomeMonthly[];
+  error: string | null;
+}
+
 // ABO Proteksi — week label (e.g. "Sep-M2") -> value. Unlike 4DX, ABO's own
 // week labels are the ground truth for period matching (confirmed with the
 // user) — no DATASET-style real-date lookup is needed, so there's no

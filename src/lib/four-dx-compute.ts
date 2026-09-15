@@ -11,6 +11,7 @@ import type {
   FourDxLm,
   FourDxLmRaw,
   FourDxMonitoringRow,
+  FourDxOutcomeMonthly,
   FourDxPeriodBoundary,
   FourDxRealization,
   FourDxWig,
@@ -273,6 +274,105 @@ export function buildFourDxWigs(
   });
 }
 
+/** Extracts each WIG's own headline OUTCOME target straight from its title
+ *  text (e.g. "...dari 2 kali menjadi 1 kali" -> 1, "...menjadi 2.1 Jam" ->
+ *  2.1) — confirmed against the live sheet's own 4 titles. WIG 4's title
+ *  ("Menjaga Komitmen Zero Accident...") has no such number, so "Zero" is
+ *  special-cased to 0 rather than left unparsed. Preferred over the "Data
+ *  Gangguan" sheet's own per-month TARGET ERT cell for Palangkaraya, which
+ *  is confirmed blank there — the title is the one place every WIG's
+ *  annual target is reliably stated. */
+export function extractWigOutcomeTarget(title: string): number | null {
+  if (/zero/i.test(title)) return 0;
+  const m = /menjadi\s+([\d.,]+)\s*(?:kali|jam)/i.exec(title);
+  if (!m) return null;
+  const n = Number(m[1].replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+export interface FourDxOutcomeChartPoint {
+  month: string;
+  target: number | null;
+  bulanan: number | null;
+  kumulatif: number | null;
+}
+
+/** Builds the chart-ready series for one WIG's outcome metric — same
+ *  Real.Bulanan / Real.Kumulatif / Target 4DX shape as the reference PPT's
+ *  own per-WIG slide, with `target` overridden to the WIG title's own
+ *  annual figure (flat across every month) rather than the sheet's
+ *  per-month target cell (see extractWigOutcomeTarget). */
+export function buildFourDxOutcomeChart(
+  monthly: FourDxOutcomeMonthly[],
+  annualTarget: number | null,
+): FourDxOutcomeChartPoint[] {
+  return monthly.map((m) => ({ month: m.month, target: annualTarget, bulanan: m.bulanan, kumulatif: m.kumulatif }));
+}
+
+export interface FourDxWeeklyAchievement {
+  label: string;
+  tercapai: number;
+  total: number;
+  percent: number | null;
+}
+
+export interface FourDxAchievementSummary {
+  wigNumber: number;
+  current: FourDxWeeklyAchievement | null;
+  ytdTercapai: number;
+  ytdTotal: number;
+  ytdPercent: number | null;
+  /** Last 8 evaluated weeks, oldest first — for a small trend sparkline. */
+  recentWeeks: FourDxWeeklyAchievement[];
+}
+
+/** Per-WIG achievement across every week already elapsed this year, not
+ *  just the currently-selected one — "pencapaian baik di periode minggu
+ *  berjalan atau sebelumnya" per the user's request. Only counts an LM in a
+ *  given week if it actually had a target that week (targetMingguan > 0) —
+ *  otherwise a week where an LM has nothing scheduled would count as a free
+ *  "tercapai" and inflate the average. Reuses buildFourDxWigs per week
+ *  (cheap — a handful of LMs, pure in-memory array work, no network calls)
+ *  rather than re-deriving its fallback-description-matching logic here. */
+export function buildFourDxAchievementSummaries(
+  wigsRaw: FourDxWigRaw[],
+  periodBoundaries: FourDxPeriodBoundary[],
+  realizations: FourDxRealization[],
+  monitoring: FourDxMonitoringRow[],
+  currentPeriodLabel: string,
+  fallbackYear: number,
+): FourDxAchievementSummary[] {
+  const orderedLabels = periodBoundaries
+    .slice()
+    .sort((a, b) => monthAbbrIndex(a.monthAbbr) - monthAbbrIndex(b.monthAbbr) || a.weekOfMonth - b.weekOfMonth)
+    .map((b) => b.label);
+  const currentIdx = orderedLabels.indexOf(currentPeriodLabel);
+  const elapsedLabels = currentIdx === -1 ? orderedLabels : orderedLabels.slice(0, currentIdx + 1);
+
+  return wigsRaw.map((wigRaw) => {
+    const weeks: FourDxWeeklyAchievement[] = [];
+    for (const label of elapsedLabels) {
+      const period = resolvePeriodRange(label, periodBoundaries, fallbackYear);
+      const built = buildFourDxWigs([wigRaw], period, realizations, monitoring)[0];
+      const evaluable = built.lms.filter((lm) => lm.targetMingguan > 0);
+      const tercapai = evaluable.filter((lm) => lm.status === "tercapai").length;
+      weeks.push({ label, tercapai, total: evaluable.length, percent: evaluable.length > 0 ? tercapai / evaluable.length : null });
+    }
+
+    const ytdTercapai = weeks.reduce((sum, w) => sum + w.tercapai, 0);
+    const ytdTotal = weeks.reduce((sum, w) => sum + w.total, 0);
+
+    return {
+      wigNumber: wigRaw.number,
+      current: weeks.at(-1) ?? null,
+      ytdTercapai,
+      ytdTotal,
+      ytdPercent: ytdTotal > 0 ? ytdTercapai / ytdTotal : null,
+      recentWeeks: weeks.slice(-8),
+    };
+  });
+}
+
 /** WhatsApp-style recap text for one chosen period — mirrors the manual
  *  weekly update format (confirmed against a real example the user pasted):
  *  per-asset LMs get a plain "- <asset> ✅" line, ULTG-level LMs (WIG 2 & 4)
@@ -320,6 +420,74 @@ export function formatFourDxWaRecap(period: FourDxPeriodRange, year: number, wig
       }
     }
   }
+
+  return lines.join("\n").trim();
+}
+
+function latestNonNull(monthly: FourDxOutcomeChartPoint[]): number | null {
+  for (let i = monthly.length - 1; i >= 0; i--) {
+    if (monthly[i].kumulatif !== null) return monthly[i].kumulatif;
+  }
+  return null;
+}
+
+export interface FourDxOutcomeStatus {
+  wigNumber: number;
+  label: string;
+  realisasiKumulatif: number | null;
+  target: number | null;
+  /** All 4 WIGs are "lower is better" (reduce disturbances/response time,
+   *  keep accidents at zero) — realisasi at or under target is "aman",
+   *  over it is "lewat-target", and no data yet is "unknown". */
+  status: "aman" | "lewat-target" | "unknown";
+}
+
+/** Cross-WIG "korelasi antar WIG" summary for the top of the page — each
+ *  WIG's outcome-to-date against its own annual target, so a case like WIG
+ *  2 already sitting at 10 against a year-end target of 9 is visible at a
+ *  glance instead of buried inside that WIG's own chart. */
+export function buildFourDxOutcomeStatuses(
+  wigs: { number: number; label: string; chart: FourDxOutcomeChartPoint[]; target: number | null }[],
+): FourDxOutcomeStatus[] {
+  return wigs.map(({ number, label, chart, target }) => {
+    const realisasiKumulatif = latestNonNull(chart);
+    const status: FourDxOutcomeStatus["status"] =
+      realisasiKumulatif === null || target === null ? "unknown" : realisasiKumulatif <= target ? "aman" : "lewat-target";
+    return { wigNumber: number, label, realisasiKumulatif, target, status };
+  });
+}
+
+/** WA-formatted narrative recap — target-vs-realisasi per WIG plus the
+ *  year-to-date achievement rate, closed with the UPT's own signature
+ *  jargon per the user's explicit request. Distinct from
+ *  formatFourDxWaRecap above: that one is the per-LM per-asset checklist
+ *  for one specific week; this is a higher-level "what does it all mean"
+ *  note meant to sit at the bottom of the page. */
+export function buildFourDxInsightRecap(
+  periodLabel: string,
+  outcomeStatuses: FourDxOutcomeStatus[],
+  achievementSummaries: FourDxAchievementSummary[],
+): string {
+  const lines: string[] = [`*📊 INSIGHT 4DX UPT PALANGKARAYA — Periode ${periodLabel}*`, ""];
+
+  for (const outcome of outcomeStatuses) {
+    const achievement = achievementSummaries.find((a) => a.wigNumber === outcome.wigNumber);
+    const statusText =
+      outcome.status === "aman" ? "✅ Aman" : outcome.status === "lewat-target" ? "⚠️ Sudah lewat target tahunan" : "— Belum ada data";
+    const unit = outcome.wigNumber === 3 ? "Jam" : "kali";
+
+    lines.push(`*WIG ${outcome.wigNumber} — ${outcome.label}*`);
+    lines.push(
+      `Realisasi: ${outcome.realisasiKumulatif ?? "—"} ${unit} / Target: ${outcome.target ?? "—"} ${unit} (${statusText})`,
+    );
+    if (achievement && achievement.ytdPercent !== null) {
+      lines.push(`Rata-rata Lead Measure tercapai tahun ini: ${Math.round(achievement.ytdPercent * 100)}%`);
+    }
+    lines.push("");
+  }
+
+  lines.push("💪 UPT Palangkaraya #Super");
+  lines.push("by: Performance Center UPT Palangkaraya");
 
   return lines.join("\n").trim();
 }

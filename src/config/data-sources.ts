@@ -168,6 +168,33 @@ export const dataSources = {
       },
     ],
   },
+  // A separate UIP3B-Kalimantan-wide "kertas kerja" file — NOT the 4DX
+  // targeting file itself (dataSources.fourDx) — used only to correlate
+  // each WIG's Lead Measures against the actual recorded outcome numbers
+  // (disturbance/incident counts), per the user's explicit request. Read
+  // raw: the sheet is a stacked "Bulanan" section then a "Kumulatif"
+  // section, each a grid of per-UPT/UP2B column blocks, not a clean single
+  // header row — UPT PALANGKA RAYA's own block is found by content match
+  // (searching for "UPT PALANGKA RAYA" then "TARGET TRAFO" 2 rows below,
+  // not a fixed column index), same defensive approach as every other
+  // block-structured sheet in this app.
+  fourDxGangguan: {
+    id: "four-dx-gangguan",
+    label: "4DX Data Gangguan",
+    sources: [
+      {
+        file: "2026_Kertas Kerja 4DX UIP3B Kalimantan",
+        sheets: [
+          {
+            name: "Data Gangguan",
+            required: false,
+            purpose:
+              "UIP3B Kalimantan-wide monthly disturbance/incident rollup. Only the 'Kumulatif' section's UPT PALANGKA RAYA column block is used (12 sub-columns: TARGET/​ /BULAN/​kumulatif x TRAFO,TRANS,ERT,ACC) — confirmed live at columns AX-BI, found by content match. Gives both the monthly count and the running cumulative total per outcome metric (Gangguan Trafo = WIG 1, Gangguan Transmisi = WIG 2, Emergency Response Time = WIG 3, Accident = WIG 4).",
+          },
+        ],
+      },
+    ],
+  },
   disturbances: {
     id: "disturbances",
     label: "Gangguan",

@@ -2,6 +2,18 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { Check, CheckCircle2, Circle, Copy, MessageSquareText, Printer, RotateCcw } from "lucide-react";
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import {
   Select,
@@ -23,13 +35,21 @@ import {
 import {
   MONTH_ABBR_ID,
   MONTH_FULL_ID,
+  buildFourDxAchievementSummaries,
+  buildFourDxInsightRecap,
+  buildFourDxOutcomeChart,
+  buildFourDxOutcomeStatuses,
   buildFourDxWigs,
+  extractWigOutcomeTarget,
   formatFourDxWaRecap,
   monthAbbrIndex,
   resolvePeriodRange,
+  type FourDxAchievementSummary,
+  type FourDxOutcomeChartPoint,
+  type FourDxOutcomeStatus,
 } from "@/lib/four-dx-compute";
 import { cn } from "@/lib/utils";
-import type { FourDxLm, FourDxSnapshot, FourDxWig } from "@/types";
+import type { FourDxLm, FourDxOutcomeSnapshot, FourDxSnapshot, FourDxWig } from "@/types";
 
 // One accent color per WIG — same sticky-banner pattern as AHI Bay Line
 // (src/components/ahi/bay-line-report.tsx) and Gangguan.
@@ -202,6 +222,171 @@ function LmCard({ lm }: { lm: FourDxLm }) {
   );
 }
 
+const OUTCOME_STATUS_CLASS: Record<FourDxOutcomeStatus["status"], string> = {
+  aman: "border-success/40 bg-success/10 text-success",
+  "lewat-target": "border-critical/40 bg-critical/10 text-critical",
+  unknown: "border-border bg-muted/40 text-muted-foreground",
+};
+
+const OUTCOME_STATUS_LABEL: Record<FourDxOutcomeStatus["status"], string> = {
+  aman: "Aman",
+  "lewat-target": "Lewat Target",
+  unknown: "Belum Ada Data",
+};
+
+/** "Korelasi Antar WIG" banner at the very top of the page — each WIG's
+ *  outcome-to-date against its own annual target side by side, so a case
+ *  like WIG 2 already sitting at 10 against a year-end target of 9 is
+ *  visible before scrolling into that WIG's own section. */
+function OutcomeCorrelationBanner({ statuses }: { statuses: FourDxOutcomeStatus[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Korelasi Antar WIG — Target vs Realisasi Aktual</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Realisasi kumulatif tahun berjalan dari data gangguan aktual, dibandingkan target tahunan tiap WIG.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {statuses.map((s) => {
+            const accent = WIG_COLORS[(s.wigNumber - 1) % WIG_COLORS.length];
+            const unit = s.wigNumber === 3 ? "Jam" : "kali";
+            return (
+              <button
+                key={s.wigNumber}
+                type="button"
+                onClick={() => jumpTo(wigAnchorId(s.wigNumber))}
+                className="flex flex-col gap-1.5 rounded-lg border p-3 text-left transition-colors hover:bg-muted/10"
+                style={{ borderLeft: `4px solid ${accent}` }}
+              >
+                <span className="text-xs font-semibold tracking-tight text-foreground">WIG {s.wigNumber} — {s.label}</span>
+                <span className="text-lg font-semibold tabular-nums text-foreground">
+                  {s.realisasiKumulatif ?? "—"}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">/ target {s.target ?? "—"} {unit}</span>
+                </span>
+                <span className={cn("inline-flex w-fit rounded-full border px-2 py-0.5 text-xs font-medium", OUTCOME_STATUS_CLASS[s.status])}>
+                  {OUTCOME_STATUS_LABEL[s.status]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatPercentSigned(v: number | null): string {
+  if (v === null) return "—";
+  return `${Math.round(v * 100)}%`;
+}
+
+/** Per-WIG achievement across the current week AND the year so far — "baik
+ *  di periode minggu berjalan atau sebelumnya" per the user's request,
+ *  distinct from the Resume table below which only shows the currently
+ *  selected week's numbers. */
+function AchievementSummaryCards({ summaries, wigLabels }: { summaries: FourDxAchievementSummary[]; wigLabels: Record<number, string> }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold tracking-tight text-foreground">Ringkasan Pencapaian</h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {summaries.map((s) => (
+          <div key={s.wigNumber} className="flex flex-col gap-1.5 rounded-lg border p-3">
+            <span className="text-xs font-semibold tracking-tight text-foreground">WIG {s.wigNumber} — {wigLabels[s.wigNumber]}</span>
+            <span className="text-sm text-muted-foreground">
+              Minggu ini: <span className="font-medium text-foreground">{s.current ? `${s.current.tercapai}/${s.current.total}` : "—"}</span> LM tercapai
+            </span>
+            <span className="text-sm text-muted-foreground">
+              Rata-rata tahun ini: <span className="font-medium text-foreground">{formatPercentSigned(s.ytdPercent)}</span>
+            </span>
+            <div className="flex items-end gap-0.5" title="Tren 8 minggu terakhir">
+              {s.recentWeeks.map((w, i) => (
+                <div
+                  key={`${w.label}-${i}`}
+                  className="w-2 rounded-t bg-primary/70"
+                  style={{ height: `${Math.max(4, (w.percent ?? 0) * 24)}px` }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Per-WIG outcome correlation chart — Real.Bulanan (bar) + Real.Kumulatif
+ *  (line) + Target 4DX (flat reference line), same 3-series shape as the
+ *  reference PPT's own per-WIG slide, sourced from actual disturbance/
+ *  incident data rather than Lead Measure completion. */
+function WigOutcomeChart({ chart, unit }: { chart: FourDxOutcomeChartPoint[]; unit: string }) {
+  const target = chart.find((p) => p.target !== null)?.target ?? null;
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3">
+      <p className="text-xs font-medium text-foreground">Korelasi Gangguan Aktual ({unit})</p>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={chart} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
+          <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={unit === "Jam"} />
+          <Tooltip
+            contentStyle={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-md)",
+              fontSize: 12,
+            }}
+          />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Bar dataKey="bulanan" name="Real.Bulanan" fill="var(--chart-2)" radius={[3, 3, 0, 0]} />
+          <Line dataKey="kumulatif" name="Real.Kumulatif" stroke="var(--chart-1)" strokeWidth={2.5} dot={{ r: 3 }} />
+          {target !== null ? (
+            <ReferenceLine y={target} stroke="var(--critical)" strokeDasharray="4 4" label={{ value: "Target 4DX", fontSize: 10, fill: "var(--critical)", position: "insideTopRight" }} />
+          ) : null}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Visible at the bottom of the page (not tucked in a slide-out sheet) per
+ *  the user's request — a narrative, WA-ready summary of target-vs-
+ *  realisasi and YTD achievement per WIG, closed with the UPT's own
+ *  signature line. */
+function InsightRecapCard({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Card className="print:break-inside-avoid">
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">Catatan &amp; Insight (Format WA)</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 print:hidden"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(text);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              } catch {
+                // clipboard permission denied — the text is still selectable below
+              }
+            }}
+          >
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? "Tersalin" : "Copy"}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <pre className="overflow-auto rounded-lg border bg-muted/20 p-3 text-xs whitespace-pre-wrap text-foreground">{text}</pre>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Slide-in panel from the side (not a card sitting in the main page flow) —
 // keeps the recap available on demand without pushing down/competing with
 // the Resume table and per-WIG sections for vertical space on the main page.
@@ -252,7 +437,7 @@ function WaRecapSheet({ text }: { text: string }) {
   );
 }
 
-export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
+export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; outcome: FourDxOutcomeSnapshot }) {
   // Month/week options come from DATASET's own boundaries (periodBoundaries)
   // rather than TARGET WIG's columns — a month can legitimately have 5 weeks
   // (e.g. a 31-day month), and which weeks exist varies per month, so this
@@ -290,6 +475,62 @@ export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
     [period, snapshot.currentYear, wigs],
   );
 
+  // Achievement across every already-elapsed week this year — independent
+  // of the month/week filter above, which only ever shows one selected
+  // week's numbers.
+  const achievementSummaries = useMemo(
+    () =>
+      buildFourDxAchievementSummaries(
+        snapshot.wigs,
+        snapshot.periodBoundaries,
+        snapshot.realizations,
+        snapshot.monitoring,
+        snapshot.currentPeriodLabel,
+        snapshot.currentYear,
+      ),
+    [snapshot.wigs, snapshot.periodBoundaries, snapshot.realizations, snapshot.monitoring, snapshot.currentPeriodLabel, snapshot.currentYear],
+  );
+
+  const wigLabels = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const wig of snapshot.wigs) map[wig.number] = wig.title.replace(/^WIG\s*\d+\.\s*/i, "");
+    return map;
+  }, [snapshot.wigs]);
+
+  const wigOutcomeTargets = useMemo(() => {
+    const map: Record<number, number | null> = {};
+    for (const wig of snapshot.wigs) map[wig.number] = extractWigOutcomeTarget(wig.title);
+    return map;
+  }, [snapshot.wigs]);
+
+  const outcomeCharts = useMemo(() => {
+    const map: Record<number, FourDxOutcomeChartPoint[]> = {};
+    if (!outcome.error) {
+      map[1] = buildFourDxOutcomeChart(outcome.trafo, wigOutcomeTargets[1] ?? null);
+      map[2] = buildFourDxOutcomeChart(outcome.transmisi, wigOutcomeTargets[2] ?? null);
+      map[3] = buildFourDxOutcomeChart(outcome.ert, wigOutcomeTargets[3] ?? null);
+      map[4] = buildFourDxOutcomeChart(outcome.accident, wigOutcomeTargets[4] ?? null);
+    }
+    return map;
+  }, [outcome, wigOutcomeTargets]);
+
+  const outcomeStatuses = useMemo(() => {
+    if (outcome.error) return [];
+    return buildFourDxOutcomeStatuses(
+      snapshot.wigs.map((wig) => ({
+        number: wig.number,
+        label: wigLabels[wig.number] ?? "",
+        chart: outcomeCharts[wig.number] ?? [],
+        target: wigOutcomeTargets[wig.number] ?? null,
+      })),
+    );
+  }, [outcome.error, snapshot.wigs, wigLabels, outcomeCharts, wigOutcomeTargets]);
+
+  const insightRecap = useMemo(
+    () => buildFourDxInsightRecap(snapshot.currentPeriodLabel, outcomeStatuses, achievementSummaries),
+    [snapshot.currentPeriodLabel, outcomeStatuses, achievementSummaries],
+  );
+
   if (snapshot.wigs.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -300,6 +541,8 @@ export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {outcomeStatuses.length > 0 ? <OutcomeCorrelationBanner statuses={outcomeStatuses} /> : null}
+
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <Select
           value={monthAbbr}
@@ -371,21 +614,29 @@ export function FourDxView({ snapshot }: { snapshot: FourDxSnapshot }) {
         </p>
       </div>
 
+      <AchievementSummaryCards summaries={achievementSummaries} wigLabels={wigLabels} />
+
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold tracking-tight text-foreground">Resume Semua Lead Measure</h3>
         <ResumeTable wigs={wigs} />
       </div>
 
-      {wigs.map((wig) => (
-        <div key={wig.number} className="flex flex-col gap-2">
-          <WigBanner wig={wig} />
-          <div className="flex flex-col gap-3">
-            {wig.lms.map((lm) => (
-              <LmCard key={lm.code} lm={lm} />
-            ))}
+      {wigs.map((wig) => {
+        const chart = outcomeCharts[wig.number];
+        return (
+          <div key={wig.number} className="flex flex-col gap-2">
+            <WigBanner wig={wig} />
+            {chart && chart.length > 0 ? <WigOutcomeChart chart={chart} unit={wig.number === 3 ? "Jam" : "kali"} /> : null}
+            <div className="flex flex-col gap-3">
+              {wig.lms.map((lm) => (
+                <LmCard key={lm.code} lm={lm} />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
+
+      <InsightRecapCard text={insightRecap} />
     </div>
   );
 }
