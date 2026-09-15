@@ -24,7 +24,7 @@ export async function getNavBadges(): Promise<Record<string, number>> {
     const belumCount =
       buildAboSnapshotComputed(proteksi, weekLabel).filter((p) => p.status === "belum").length +
       buildAboSnapshotComputed(hargi, weekLabel).filter((p) => p.status === "belum").length;
-    if (belumCount > 0) badges["/dashboard/kpi/abo"] = belumCount;
+    if (belumCount > 0) badges["/dashboard/abo"] = belumCount;
   } catch {
     // A badge count failing must never break the sidebar.
   }
@@ -34,7 +34,7 @@ export async function getNavBadges(): Promise<Record<string, number>> {
     const period = resolvePeriodRange(snapshot.currentPeriodLabel, snapshot.periodBoundaries, snapshot.currentYear);
     const wigs = buildFourDxWigs(snapshot.wigs, period, snapshot.realizations, snapshot.monitoring);
     const belumCount = wigs.flatMap((w) => w.lms).filter((lm) => lm.status === "belum").length;
-    if (belumCount > 0) badges["/dashboard/kpi/4dx"] = belumCount;
+    if (belumCount > 0) badges["/dashboard/4dx"] = belumCount;
   } catch {
     // ditto
   }
@@ -45,7 +45,7 @@ export async function getNavBadges(): Promise<Record<string, number>> {
       const weekLabel = defaultCeWeekLabel();
       const attention = buildCeAttentionItems(snapshot.items, weekLabel);
       const needsAttention = new Set(attention.map((a) => a.item.id)).size;
-      if (needsAttention > 0) badges["/dashboard/kpi/ce"] = needsAttention;
+      if (needsAttention > 0) badges["/dashboard/ce"] = needsAttention;
     }
   } catch {
     // ditto

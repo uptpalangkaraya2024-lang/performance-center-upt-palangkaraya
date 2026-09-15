@@ -142,7 +142,7 @@ export function buildManagementAttention(params: {
         "AHI",
         "critical",
         `${critical.map((s) => s.displayName).join(", ")} dalam kondisi kritis (ada hasil Critical).`,
-        `/dashboard/kpi/ahi?section=${critical[0].key}#ahi-detail`,
+        `/dashboard/ahi?section=${critical[0].key}#ahi-detail`,
       );
     }
     if (warning.length > 0) {
@@ -150,11 +150,11 @@ export function buildManagementAttention(params: {
         "AHI",
         "warning",
         `${warning.map((s) => s.displayName).join(", ")} perlu perhatian (ada hasil Poor).`,
-        `/dashboard/kpi/ahi?section=${warning[0].key}#ahi-detail`,
+        `/dashboard/ahi?section=${warning[0].key}#ahi-detail`,
       );
     }
     if (critical.length === 0 && warning.length === 0) {
-      push("AHI", "good", "Seluruh kategori AHI dalam kondisi sehat.", "/dashboard/kpi/ahi");
+      push("AHI", "good", "Seluruh kategori AHI dalam kondisi sehat.", "/dashboard/ahi");
     }
   }
 
@@ -184,7 +184,7 @@ export function buildManagementAttention(params: {
         "AHI",
         "critical",
         `${retestUnits} peralatan di ${retestBays.size} bay line memerlukan Pengujian Ulang (AHI Report).`,
-        "/dashboard/kpi/ahi",
+        "/dashboard/ahi",
       );
     }
     if (mandatoryUnits > 0) {
@@ -192,7 +192,7 @@ export function buildManagementAttention(params: {
         "AHI",
         "warning",
         `${mandatoryUnits} peralatan di ${mandatoryBays.size} bay line memerlukan Mandatory Pengujian (AHI Report).`,
-        "/dashboard/kpi/ahi",
+        "/dashboard/ahi",
       );
     }
   }
@@ -208,10 +208,10 @@ export function buildManagementAttention(params: {
           .slice(0, 3)
           .map((p) => p.code)
           .join(", ")}${belum.length > 3 ? ", dll." : "."}`,
-        "/dashboard/kpi/abo",
+        "/dashboard/abo",
       );
     } else if (allPrograms.length > 0) {
-      push("ABO", "good", "Seluruh program ABO (Proteksi & Hargi) tercapai target periode ini.", "/dashboard/kpi/abo");
+      push("ABO", "good", "Seluruh program ABO (Proteksi & Hargi) tercapai target periode ini.", "/dashboard/abo");
     }
 
     const attentionItems = [
@@ -220,11 +220,11 @@ export function buildManagementAttention(params: {
     ];
     const baMissing = attentionItems.filter((i) => i.issue === "BA belum diupload").length;
     if (baMissing > 0) {
-      push("ABO", "warning", `${baMissing} ruas ABO sudah direalisasi namun Berita Acara belum diupload.`, "/dashboard/kpi/abo");
+      push("ABO", "warning", `${baMissing} ruas ABO sudah direalisasi namun Berita Acara belum diupload.`, "/dashboard/abo");
     }
     const notOk = attentionItems.filter((i) => i.issue === "Kondisi NOT OK").length;
     if (notOk > 0) {
-      push("ABO", "critical", `${notOk} ruas ABO terealisasi dengan kondisi NOT OK — perlu tindak lanjut.`, "/dashboard/kpi/abo");
+      push("ABO", "critical", `${notOk} ruas ABO terealisasi dengan kondisi NOT OK — perlu tindak lanjut.`, "/dashboard/abo");
     }
   }
 
@@ -239,10 +239,10 @@ export function buildManagementAttention(params: {
           .slice(0, 3)
           .map((lm) => `LM ${lm.code}`)
           .join(", ")}${belum.length > 3 ? ", dll." : "."}`,
-        "/dashboard/kpi/4dx",
+        "/dashboard/4dx",
       );
     } else if (lms.length > 0) {
-      push("4DX", "good", "Seluruh Lead Measure 4DX tercapai periode ini.", "/dashboard/kpi/4dx");
+      push("4DX", "good", "Seluruh Lead Measure 4DX tercapai periode ini.", "/dashboard/4dx");
     }
   }
 
@@ -253,16 +253,16 @@ export function buildManagementAttention(params: {
     const alertCount = attention.filter((a) => a.issue === "Alert").length;
     const overdue = attention.filter((a) => a.issue === "Terlambat").length;
     if (criticalOpen > 0) {
-      push("CE", "critical", `${criticalOpen} temuan CE kondisi Critical belum selesai (CLOSE).`, "/dashboard/kpi/ce");
+      push("CE", "critical", `${criticalOpen} temuan CE kondisi Critical belum selesai (CLOSE).`, "/dashboard/ce");
     }
     if (overdue > 0) {
-      push("CE", "warning", `${overdue} temuan CE melewati target minggu dan masih Open.`, "/dashboard/kpi/ce");
+      push("CE", "warning", `${overdue} temuan CE melewati target minggu dan masih Open.`, "/dashboard/ce");
     }
     if (alertCount > 0) {
-      push("CE", "warning", `${alertCount} temuan CE ditandai Alert.`, "/dashboard/kpi/ce");
+      push("CE", "warning", `${alertCount} temuan CE ditandai Alert.`, "/dashboard/ce");
     }
     if (criticalOpen === 0 && overdue === 0 && alertCount === 0) {
-      push("CE", "good", "Tidak ada temuan CE yang perlu perhatian khusus saat ini.", "/dashboard/kpi/ce");
+      push("CE", "good", "Tidak ada temuan CE yang perlu perhatian khusus saat ini.", "/dashboard/ce");
     }
   }
 

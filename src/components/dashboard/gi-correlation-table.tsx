@@ -44,7 +44,7 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
                 <TableCell className="font-medium whitespace-nowrap">
                   {row.ahiTotal > 0 ? (
                     <Link
-                      href={`/dashboard/kpi/ahi?gi=${encodeURIComponent(row.gi)}#ahi-anomaly`}
+                      href={`/dashboard/ahi?gi=${encodeURIComponent(row.gi)}#ahi-anomaly`}
                       className="text-primary underline decoration-transparent underline-offset-2 hover:decoration-current"
                     >
                       {row.gi}
