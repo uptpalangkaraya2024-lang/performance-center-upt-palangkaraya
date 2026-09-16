@@ -4,6 +4,7 @@ import { DATA_CACHE_TTL_MS } from "@/config/cache";
 import type { DataSourceConfig } from "@/config/data-sources";
 import { getDataProvider } from "@/lib/data-provider-registry";
 import { DataSourceError } from "@/lib/errors";
+import { SharedCache } from "@/lib/shared-cache";
 import { recordSyncError, recordSyncSuccess } from "@/lib/sync-status";
 
 export interface SheetReadResult {
@@ -19,11 +20,13 @@ export interface SheetReadResult {
 // AGENTS.md section 1 rules out). Keyed by provider name too: switching
 // DATA_PROVIDER mid-run (e.g. during local testing) must not serve one
 // provider's cached rows under the other's identity.
-interface CacheEntry {
-  records: Record<string, string>[];
-  fetchedAt: number;
-}
-const rawCache = new Map<string, CacheEntry>();
+//
+// Backed by Upstash Redis when configured (see src/lib/shared-cache.ts) so
+// every serverless instance shares one cache instead of each starting cold
+// — a request landing on a freshly-spun-up instance no longer re-triggers
+// a full Apps Script read if another instance already fetched the same
+// sheet moments ago.
+const rawCache = new SharedCache<Record<string, string>[]>("raw");
 
 function cacheKey(provider: string, file: string, sheet: string): string {
   return `${provider}::${file}::${sheet}`;
@@ -84,51 +87,57 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
 
       const hits: SheetReadResult[] = [];
       const misses: (typeof fileSource.sheets)[number][] = [];
-      for (const sheetRef of fileSource.sheets) {
-        const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
-        const cached = rawCache.get(key);
-        if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
-          hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.records });
-        } else {
-          misses.push(sheetRef);
-        }
-      }
+      await Promise.all(
+        fileSource.sheets.map(async (sheetRef) => {
+          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+          const cached = await rawCache.get(key);
+          if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
+            hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.value });
+          } else {
+            misses.push(sheetRef);
+          }
+        }),
+      );
       if (misses.length === 0) return hits;
 
       let fetched: SheetReadResult[];
       if (misses.length > 1 && provider.readSheetsBatch) {
         const batch = await provider.readSheetsBatch(file, misses);
-        fetched = misses.flatMap((sheetRef): SheetReadResult[] => {
-          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
-          const outcome = batch.get(sheetRef.name);
-          if (outcome?.ok) {
-            rawCache.set(key, { records: outcome.value, fetchedAt: Date.now() });
-            recordSyncSuccess({
-              module: source.label,
-              file: fileSource.file,
-              sheet: sheetRef.name,
-              provider: provider.name,
-              rows: outcome.value.length,
-            });
-            return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: outcome.value }];
-          }
-          recordSyncError({
-            module: source.label,
-            file: fileSource.file,
-            sheet: sheetRef.name,
-            provider: provider.name,
-            error: outcome?.message ?? "Sheet tidak ada pada hasil batch.",
-          });
-          const stale = rawCache.get(key);
-          return stale ? [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.records }] : [];
-        });
+        fetched = (
+          await Promise.all(
+            misses.map(async (sheetRef): Promise<SheetReadResult[]> => {
+              const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+              const outcome = batch.get(sheetRef.name);
+              if (outcome?.ok) {
+                await rawCache.set(key, outcome.value);
+                recordSyncSuccess({
+                  module: source.label,
+                  file: fileSource.file,
+                  sheet: sheetRef.name,
+                  provider: provider.name,
+                  rows: outcome.value.length,
+                });
+                return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: outcome.value }];
+              }
+              recordSyncError({
+                module: source.label,
+                file: fileSource.file,
+                sheet: sheetRef.name,
+                provider: provider.name,
+                error: outcome?.message ?? "Sheet tidak ada pada hasil batch.",
+              });
+              const stale = await rawCache.get(key);
+              return stale ? [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.value }] : [];
+            }),
+          )
+        ).flat();
       } else {
         const perSheet = await Promise.all(
           misses.map(async (sheetRef): Promise<SheetReadResult | null> => {
             const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
             try {
               const records = await provider.readSheet(file, sheetRef);
-              rawCache.set(key, { records, fetchedAt: Date.now() });
+              await rawCache.set(key, records);
               recordSyncSuccess({
                 module: source.label,
                 file: fileSource.file,
@@ -151,8 +160,8 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
               // data a moment ago — fall back to the stale (past-TTL) cache entry
               // if one exists, even though the sync status above already recorded
               // this as an error so an admin still sees it's failing.
-              const stale = rawCache.get(key);
-              return stale ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.records } : null;
+              const stale = await rawCache.get(key);
+              return stale ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.value } : null;
             }
           }),
         );
@@ -173,14 +182,11 @@ export interface RawSheetReadResult {
   rows: unknown[][];
 }
 
-interface RawCacheEntry {
-  rows: unknown[][];
-  fetchedAt: number;
-}
 // Separate from rawCache above — same (provider, file, sheet) key space would
 // otherwise let a raw-grid read and a header-keyed read silently overwrite
-// each other's cache entry despite returning differently-shaped data.
-const rawRowsCache = new Map<string, RawCacheEntry>();
+// each other's cache entry despite returning differently-shaped data. Same
+// Redis-backed two-tier cache as rawCache (see src/lib/shared-cache.ts).
+const rawRowsCache = new SharedCache<unknown[][]>("raw-rows");
 
 /**
  * Raw-grid counterpart of readConfiguredSource() — for a report-layout sheet
@@ -221,51 +227,57 @@ export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise
 
       const hits: RawSheetReadResult[] = [];
       const misses: (typeof fileSource.sheets)[number][] = [];
-      for (const sheetRef of fileSource.sheets) {
-        const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
-        const cached = rawRowsCache.get(key);
-        if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
-          hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.rows });
-        } else {
-          misses.push(sheetRef);
-        }
-      }
+      await Promise.all(
+        fileSource.sheets.map(async (sheetRef) => {
+          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+          const cached = await rawRowsCache.get(key);
+          if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
+            hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.value });
+          } else {
+            misses.push(sheetRef);
+          }
+        }),
+      );
       if (misses.length === 0) return hits;
 
       let fetched: RawSheetReadResult[];
       if (misses.length > 1 && provider.readSheetsRawBatch) {
         const batch = await provider.readSheetsRawBatch(file, misses);
-        fetched = misses.flatMap((sheetRef): RawSheetReadResult[] => {
-          const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
-          const outcome = batch.get(sheetRef.name);
-          if (outcome?.ok) {
-            rawRowsCache.set(key, { rows: outcome.value, fetchedAt: Date.now() });
-            recordSyncSuccess({
-              module: source.label,
-              file: fileSource.file,
-              sheet: sheetRef.name,
-              provider: provider.name,
-              rows: outcome.value.length,
-            });
-            return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: outcome.value }];
-          }
-          recordSyncError({
-            module: source.label,
-            file: fileSource.file,
-            sheet: sheetRef.name,
-            provider: provider.name,
-            error: outcome?.message ?? "Sheet tidak ada pada hasil batch.",
-          });
-          const stale = rawRowsCache.get(key);
-          return stale ? [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.rows }] : [];
-        });
+        fetched = (
+          await Promise.all(
+            misses.map(async (sheetRef): Promise<RawSheetReadResult[]> => {
+              const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
+              const outcome = batch.get(sheetRef.name);
+              if (outcome?.ok) {
+                await rawRowsCache.set(key, outcome.value);
+                recordSyncSuccess({
+                  module: source.label,
+                  file: fileSource.file,
+                  sheet: sheetRef.name,
+                  provider: provider.name,
+                  rows: outcome.value.length,
+                });
+                return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: outcome.value }];
+              }
+              recordSyncError({
+                module: source.label,
+                file: fileSource.file,
+                sheet: sheetRef.name,
+                provider: provider.name,
+                error: outcome?.message ?? "Sheet tidak ada pada hasil batch.",
+              });
+              const stale = await rawRowsCache.get(key);
+              return stale ? [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.value }] : [];
+            }),
+          )
+        ).flat();
       } else {
         const perSheet = await Promise.all(
           misses.map(async (sheetRef): Promise<RawSheetReadResult | null> => {
             const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
             try {
               const rows = await provider.readSheetRaw(file, sheetRef);
-              rawRowsCache.set(key, { rows, fetchedAt: Date.now() });
+              await rawRowsCache.set(key, rows);
               recordSyncSuccess({
                 module: source.label,
                 file: fileSource.file,
@@ -284,8 +296,8 @@ export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise
                 provider: provider.name,
                 error: message,
               });
-              const stale = rawRowsCache.get(key);
-              return stale ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.rows } : null;
+              const stale = await rawRowsCache.get(key);
+              return stale ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.value } : null;
             }
           }),
         );
