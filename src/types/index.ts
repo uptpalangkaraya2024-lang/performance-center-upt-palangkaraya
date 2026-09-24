@@ -112,6 +112,15 @@ export interface DisturbanceUltgMonthlyYear {
   data: DisturbanceMonthlyYearPoint[];
 }
 
+/** Same shape again, sliced by bay ("ruas") — added for the Gangguan
+ *  presentation view's "kontribusi ruas" slide, which needs a single
+ *  month's per-bay breakdown rather than all-time totals (see
+ *  `bayBreakdown`/`allBayCounts` below, which never split by month). */
+export interface DisturbanceBayMonthlyYear {
+  bay: string;
+  data: DisturbanceMonthlyYearPoint[];
+}
+
 /** Everything needed to render one category's (Transmisi or Trafo) section
  *  of the Gangguan page — see src/services/disturbances.ts. */
 export interface DisturbanceCategoryResult {
@@ -126,6 +135,14 @@ export interface DisturbanceCategoryResult {
   monthlyByYearByKind: DisturbanceKindMonthlyYear[];
   /** Same shape, one entry per ULTG — lets the YoY chart filter to a single sub unit. */
   monthlyByYearByUltg: DisturbanceUltgMonthlyYear[];
+  /** Same shape, one entry per bay ("ruas") — used by the presentation
+   *  view's month-scoped "kontribusi ruas" slide (see DisturbanceBayMonthlyYear). */
+  monthlyByYearByBay: DisturbanceBayMonthlyYear[];
+  /** Every calendar day this category had at least one row, keyed by
+   *  "yyyy-MM-dd" (straight from TGL, date part only) -> event count that
+   *  day. Powers the presentation view's monthly calendar slide — a day
+   *  missing from this map had zero disturbances. */
+  dailyCounts: Record<string, number>;
   years: string[];
   topBay: DisturbanceBayCount[];
   /** Every bay's count, not just the top 8 in `topBay` — kept for anything

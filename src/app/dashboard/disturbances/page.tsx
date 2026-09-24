@@ -1,4 +1,5 @@
-import { CheckCircle2, CircleDashed, TrendingUp, XCircle } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, CircleDashed, MonitorPlay, TrendingUp, XCircle } from "lucide-react";
 
 import {
   Table,
@@ -9,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
@@ -413,6 +415,14 @@ export default async function DisturbancesPage() {
         }
         actions={
           !result.error ? (
+            <>
+            <Link
+              href="/dashboard/disturbances/presentasi"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <MonitorPlay className="size-3.5" />
+              Mode Presentasi
+            </Link>
             <ExportExcelButton
               filename="Gangguan-UPT-Palangkaraya.xlsx"
               sheets={[
@@ -547,6 +557,7 @@ export default async function DisturbancesPage() {
                 },
               ]}
             />
+            </>
           ) : undefined
         }
       />

@@ -5,6 +5,7 @@ import { readConfiguredSource } from "@/lib/data-connector";
 import { parseDurationMinutes, requireText } from "@/lib/parse";
 import type {
   DisturbanceBayCount,
+  DisturbanceBayMonthlyYear,
   DisturbanceBaySummary,
   DisturbanceCategoryResult,
   DisturbanceCategorySummary,
@@ -152,6 +153,8 @@ function emptyCategory(): DisturbanceCategoryResult {
     monthlyByYearByCause: [],
     monthlyByYearByKind: [],
     monthlyByYearByUltg: [],
+    monthlyByYearByBay: [],
+    dailyCounts: {},
     years: [],
     topBay: [],
     allBayCounts: [],
@@ -329,6 +332,26 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     .map(([bay, count]) => ({ bay, count }));
   const topBay = allBayCounts.slice(0, 8);
 
+  // Same order as bayBreakdown (total desc) — one month x year matrix per
+  // bay, so the presentation view's "kontribusi ruas" slide can read off a
+  // single selected month instead of only ever seeing all-time totals.
+  const bayOrder = allBayCounts.map((b) => b.bay);
+  const monthlyByYearByBay: DisturbanceBayMonthlyYear[] = bayOrder.map((bay) => ({
+    bay,
+    data: buildMonthlyByYear(rows.filter((r) => r.namaBay === bay), sortedYears),
+  }));
+
+  // One count per calendar day this category had at least one row — a day
+  // with zero rows simply has no key here (see DisturbanceCategoryResult's
+  // own doc comment). Straight from TGL's date part (yyyy-MM-dd), so this
+  // needs no separate date parsing beyond the string slice already proven
+  // safe elsewhere in this file (TGL sorts correctly as a plain string).
+  const dailyCounts: Record<string, number> = {};
+  for (const row of rows) {
+    const day = row.tgl.slice(0, 10);
+    dailyCounts[day] = (dailyCounts[day] ?? 0) + 1;
+  }
+
   const giCounts = new Map<string, number>();
   for (const row of rows) {
     if (!row.gi) continue;
@@ -383,6 +406,8 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     monthlyByYearByCause,
     monthlyByYearByKind,
     monthlyByYearByUltg,
+    monthlyByYearByBay,
+    dailyCounts,
     years: sortedYears,
     topBay,
     allBayCounts,
