@@ -143,6 +143,11 @@ export interface DisturbanceCategoryResult {
    *  day. Powers the presentation view's monthly calendar slide — a day
    *  missing from this map had zero disturbances. */
   dailyCounts: Record<string, number>;
+  /** Same per-day keys, but each value is itself a KODE GGN breakdown
+   *  (e.g. `{ Trip: 1, "AR Sukses": 2 }`) instead of a bare total — lets
+   *  the calendar slide color a Transmisi day by Trip vs Reclose instead
+   *  of only showing how many events happened. */
+  dailyByKind: Record<string, Record<string, number>>;
   years: string[];
   topBay: DisturbanceBayCount[];
   /** Every bay's count, not just the top 8 in `topBay` — kept for anything

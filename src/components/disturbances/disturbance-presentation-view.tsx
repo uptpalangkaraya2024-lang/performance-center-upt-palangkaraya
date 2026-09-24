@@ -40,6 +40,7 @@ import {
   type CombinedBayEntry,
   type CombinedCalendarDay,
 } from "@/lib/disturbance-presentation-compute";
+import type { DisturbanceCause } from "@/types";
 import type { DisturbanceCategoryResult } from "@/types";
 
 const DAY_LABELS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
@@ -69,6 +70,17 @@ function todayInJakarta(): { year: number; monthIndex0: number } {
 function formatPercent(v: number | null): string {
   if (v === null) return "—";
   return `${Math.round(v * 100)}%`;
+}
+
+/** Sums each category's own all-time causePareto by matching cause label —
+ *  used to pick Transmisi's own top-5 causes and Trafo's own top-5 causes
+ *  (HV+LV merged) as two SEPARATE rankings instead of one pooled-across-
+ *  every-category list, so an unrelated category's cause can't crowd out
+ *  the other's in the presentation's cause slide. */
+function paretoFor(cats: DisturbanceCategoryResult[]): DisturbanceCause[] {
+  const counts = new Map<string, number>();
+  for (const cat of cats) for (const c of cat.causePareto) counts.set(c.cause, (counts.get(c.cause) ?? 0) + c.count);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([cause, count]) => ({ cause, count }));
 }
 
 /** Injects `@page { size: landscape; }` only while this view is mounted —
@@ -122,6 +134,22 @@ function ChartTooltip({ contentStyle }: { contentStyle?: React.CSSProperties } =
   );
 }
 
+// Short, unambiguous tag text per (category, kind) pair — e.g. "T · Trip",
+// "T · Reclose", "HV · Trip" — so a glance at the calendar tells both WHICH
+// asset type and WHICH kind of event happened, not just a bare count.
+function categoryAbbr(label: string): string {
+  return label === "Transmisi" ? "T" : label === "Trafo HV" ? "HV" : "LV";
+}
+function kindAbbr(kind: string): string {
+  return kind === "AR Sukses" ? "Reclose" : kind === "Tidak Trip" ? "T.Trip" : kind;
+}
+// Transmisi is colored by KIND (Trip=red vs Reclose=green) since that
+// distinction is the whole point of an auto-reclose scheme; Trafo HV/LV
+// have no reclose scheme so they stay colored by CATEGORY instead.
+function tagColor(categoryLabel: string, kind: string): string {
+  return categoryLabel === "Transmisi" ? (KIND_COLOR[kind] ?? "var(--muted-foreground)") : CATEGORY_COLOR[categoryLabel];
+}
+
 function CombinedCalendarGrid({ days, monthIndex0, year }: { days: CombinedCalendarDay[]; monthIndex0: number; year: number }) {
   const firstWeekday = new Date(year, monthIndex0, 1).getDay(); // 0=Sun
   const leadingBlanks = (firstWeekday + 6) % 7; // shift to Monday-first
@@ -142,37 +170,50 @@ function CombinedCalendarGrid({ days, monthIndex0, year }: { days: CombinedCalen
             key={d.date}
             className={cn(
               "flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border p-1",
-              d.total > 0 ? "border-critical/40 bg-critical/10" : "border-success/30 bg-success/5",
+              d.total > 0 ? "border-critical/50 bg-critical/10" : "border-success/30 bg-success/5",
             )}
           >
             <span className={cn("text-sm font-semibold tabular-nums", d.total > 0 ? "text-critical" : "text-foreground")}>
               {d.day}
             </span>
-            {d.byCategory.map((c) => (
-              <span
-                key={c.label}
-                className="rounded px-1 text-[9px] leading-tight font-medium whitespace-nowrap"
-                style={{ backgroundColor: `color-mix(in srgb, ${CATEGORY_COLOR[c.label]} 18%, transparent)`, color: CATEGORY_COLOR[c.label] }}
-              >
-                {c.label === "Transmisi" ? "T" : c.label === "Trafo HV" ? "HV" : "LV"}:{c.count}
-              </span>
-            ))}
+            {d.byCategory.flatMap((c) =>
+              (c.byKind.length > 0 ? c.byKind : [{ kind: "", count: c.count }]).map((k) => (
+                <span
+                  key={`${c.label}-${k.kind}`}
+                  className="rounded px-1 text-[8px] leading-tight font-semibold whitespace-nowrap"
+                  style={{ backgroundColor: `color-mix(in srgb, ${tagColor(c.label, k.kind)} 20%, transparent)`, color: tagColor(c.label, k.kind) }}
+                >
+                  {categoryAbbr(c.label)}
+                  {k.kind ? ` · ${kindAbbr(k.kind)}` : ""}:{k.count}
+                </span>
+              )),
+            )}
           </div>
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        {Object.entries(CATEGORY_COLOR).map(([label, color]) => (
-          <span key={label} className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
-            {label}
-          </span>
-        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full" style={{ backgroundColor: KIND_COLOR.Trip }} />
+          Transmisi · Trip
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full" style={{ backgroundColor: KIND_COLOR["AR Sukses"] }} />
+          Transmisi · Reclose (AR Sukses)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full" style={{ backgroundColor: CATEGORY_COLOR["Trafo HV"] }} />
+          Trafo HV
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full" style={{ backgroundColor: CATEGORY_COLOR["Trafo LV"] }} />
+          Trafo LV
+        </span>
       </div>
     </div>
   );
 }
 
-function BayTable({ entries, limit = 15 }: { entries: CombinedBayEntry[]; limit?: number }) {
+function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?: number }) {
   if (entries.length === 0) {
     return <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>;
   }
@@ -184,6 +225,7 @@ function BayTable({ entries, limit = 15 }: { entries: CombinedBayEntry[]; limit?
           <thead>
             <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
               <th className="px-3 py-2 font-medium">Ruas</th>
+              <th className="px-3 py-2 font-medium">ULTG</th>
               <th className="px-3 py-2 font-medium">Kategori</th>
               <th className="px-3 py-2 font-medium text-right">Jumlah</th>
             </tr>
@@ -192,6 +234,7 @@ function BayTable({ entries, limit = 15 }: { entries: CombinedBayEntry[]; limit?
             {shown.map((e, i) => (
               <tr key={`${e.bay}-${i}`} className="border-b last:border-0">
                 <td className="px-3 py-2 text-foreground">{e.bay}</td>
+                <td className="px-3 py-2 text-muted-foreground">{e.ultg}</td>
                 <td className="px-3 py-2">
                   <CategoryBadge label={e.category} />
                 </td>
@@ -206,32 +249,6 @@ function BayTable({ entries, limit = 15 }: { entries: CombinedBayEntry[]; limit?
           Menampilkan {limit} dari {entries.length} ruas yang mengalami gangguan bulan ini.
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function KindStackedBar({ kind }: { kind: { label: string; count: number }[] }) {
-  const total = kind.reduce((s, k) => s + k.count, 0);
-  if (total === 0) return <p className="text-sm text-muted-foreground">Tidak ada kejadian bulan ini.</p>;
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex h-8 overflow-hidden rounded-full border">
-        {kind.map((k) => (
-          <div
-            key={k.label}
-            style={{ width: `${(k.count / total) * 100}%`, backgroundColor: KIND_COLOR[k.label] ?? "var(--muted-foreground)" }}
-            title={`${k.label}: ${k.count}`}
-          />
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        {kind.map((k) => (
-          <span key={k.label} className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full" style={{ backgroundColor: KIND_COLOR[k.label] ?? "var(--muted-foreground)" }} />
-            {k.label}: <span className="font-semibold text-foreground">{k.count}</span> ({formatPercent(k.count / total)})
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
@@ -296,7 +313,12 @@ export function DisturbancePresentationView({
   );
 
   const combinedCalendarDays = useMemo(
-    () => buildCombinedCalendarDays(categories.map((c) => ({ label: c.label, dailyCounts: c.data.dailyCounts })), Number(year), monthIndex0),
+    () =>
+      buildCombinedCalendarDays(
+        categories.map((c) => ({ label: c.label, dailyCounts: c.data.dailyCounts, dailyByKind: c.data.dailyByKind })),
+        Number(year),
+        monthIndex0,
+      ),
     [categories, year, monthIndex0],
   );
   const combinedCalendarSummary = useMemo(() => summarizeCombinedCalendar(combinedCalendarDays), [combinedCalendarDays]);
@@ -314,7 +336,14 @@ export function DisturbancePresentationView({
   const combinedBay = useMemo(
     () =>
       buildCombinedBayBreakdown(
-        categories.map((c) => ({ label: c.label, series: c.data.monthlyByYearByBay })),
+        categories.map((c) => {
+          const ultgByBay = new Map(c.data.bayBreakdown.map((b) => [b.bay, b.ultg]));
+          return {
+            label: c.label,
+            series: c.data.monthlyByYearByBay,
+            ultgOf: (bay: string) => ultgByBay.get(bay) ?? "—",
+          };
+        }),
         monthLabel,
         year,
       ),
@@ -340,17 +369,28 @@ export function DisturbancePresentationView({
     );
   }, [trafoHv.monthlyByYearByKind, trafoLv.monthlyByYearByKind, year]);
 
-  const combinedCausePareto = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const cat of categories) for (const c of cat.data.causePareto) counts.set(c.cause, (counts.get(c.cause) ?? 0) + c.count);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([cause, count]) => ({ cause, count }));
-  }, [categories]);
-  const topCauseLabels = useMemo(() => combinedCausePareto.slice(0, 5).map((c) => c.cause), [combinedCausePareto]);
-  const cumulativeCause = useMemo(() => {
-    const merged = mergeCauseSeries(categories.map((c) => c.data.monthlyByYearByCause));
-    const series = merged.filter((c) => topCauseLabels.includes(c.cause)).map((c) => ({ label: c.cause, data: c.data }));
+  // Transmisi and Trafo (HV+LV merged) causes are kept in two SEPARATE
+  // paretos/trends rather than one combined-across-everything chart — a
+  // single top-5 across all 3 categories tends to conflate causes that are
+  // only meaningful for one asset type (e.g. a lightning-strike cause
+  // dominating Transmisi's own trend gets buried by a totally unrelated
+  // Trafo cause, and vice versa), per explicit user feedback.
+  const transmisiCausePareto = useMemo(() => paretoFor([transmisi]), [transmisi]);
+  const transmisiTopCauses = useMemo(() => transmisiCausePareto.slice(0, 5).map((c) => c.cause), [transmisiCausePareto]);
+  const cumulativeCauseTransmisi = useMemo(() => {
+    const series = transmisi.monthlyByYearByCause
+      .filter((c) => transmisiTopCauses.includes(c.cause))
+      .map((c) => ({ label: c.cause, data: c.data }));
     return buildCumulativeForYear(series, year);
-  }, [categories, topCauseLabels, year]);
+  }, [transmisi.monthlyByYearByCause, transmisiTopCauses, year]);
+
+  const trafoCausePareto = useMemo(() => paretoFor([trafoHv, trafoLv]), [trafoHv, trafoLv]);
+  const trafoTopCauses = useMemo(() => trafoCausePareto.slice(0, 5).map((c) => c.cause), [trafoCausePareto]);
+  const cumulativeCauseTrafo = useMemo(() => {
+    const merged = mergeCauseSeries([trafoHv.monthlyByYearByCause, trafoLv.monthlyByYearByCause]);
+    const series = merged.filter((c) => trafoTopCauses.includes(c.cause)).map((c) => ({ label: c.cause, data: c.data }));
+    return buildCumulativeForYear(series, year);
+  }, [trafoHv.monthlyByYearByCause, trafoLv.monthlyByYearByCause, trafoTopCauses, year]);
 
   const donutData = totalByCategory.filter((c) => c.total > 0).map((c) => ({ name: c.label, value: c.total }));
 
@@ -402,156 +442,134 @@ export function DisturbancePresentationView({
       {
         id: "kalender",
         title: "Kalender Gangguan (Gabungan)",
-        subtitle: `${formatPercent(combinedCalendarSummary.percentWithoutDisturbance)} hari tanpa gangguan (${combinedCalendarSummary.daysWithoutDisturbance} dari ${combinedCalendarSummary.daysInMonth} hari)`,
-        render: () => <CombinedCalendarGrid days={combinedCalendarDays} monthIndex0={monthIndex0} year={Number(year)} />,
-      },
-      {
-        id: "transmisi-ar-trip",
-        title: "Transmisi — AR & Trip",
-        subtitle: `Jumlah kejadian Transmisi — ${monthLabel} ${year}`,
+        subtitle: `${formatPercent(combinedCalendarSummary.percentWithDisturbance)} hari dengan gangguan · ${formatPercent(combinedCalendarSummary.percentWithoutDisturbance)} hari tanpa gangguan (${combinedCalendarSummary.daysWithoutDisturbance} dari ${combinedCalendarSummary.daysInMonth} hari)`,
         render: () => (
           <div className="flex flex-col gap-5">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <StatTile value={String(kindCountFor("Transmisi", "Trip"))} label="Lockout (Trip)" className="text-critical" />
-              <StatTile value={String(kindCountFor("Transmisi", "AR Sukses"))} label="AR (Auto-Reclose Sukses)" className="text-success" />
-              <StatTile value={String(kindCountFor("Transmisi", "Tidak Trip"))} label="Tidak Trip" />
+            <CombinedCalendarGrid days={combinedCalendarDays} monthIndex0={monthIndex0} year={Number(year)} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile value={String(kindCountFor("Transmisi", "Trip"))} label="Transmisi · Trip" className="text-critical" />
+              <StatTile value={String(kindCountFor("Transmisi", "AR Sukses"))} label="Transmisi · Reclose" className="text-success" />
+              <StatTile value={String(totalByCategory.find((c) => c.label === "Trafo HV")?.total ?? 0)} label="Trafo HV · Gangguan" />
+              <StatTile value={String(totalByCategory.find((c) => c.label === "Trafo LV")?.total ?? 0)} label="Trafo LV · Gangguan" />
             </div>
-            <KindStackedBar kind={kindByCategory.find((c) => c.label === "Transmisi")?.kind ?? []} />
           </div>
         ),
       },
       {
-        id: "trafo-hv-lv",
-        title: "Trafo HV & LV — Trip / Tidak Trip",
-        subtitle: `Sisi HV (seluruh trafo) vs sisi LV/incoming 20kV saja — ${monthLabel} ${year}`,
-        render: () => (
-          <div className="flex flex-col gap-5">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border p-4" style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR["Trafo HV"] }}>
-                <p className="mb-3 text-sm font-semibold text-foreground">Trafo HV</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <StatTile value={String(kindCountFor("Trafo HV", "Trip"))} label="Trip" className="text-critical" />
-                  <StatTile value={String(kindCountFor("Trafo HV", "Tidak Trip"))} label="Tidak Trip" />
-                </div>
-              </div>
-              <div className="rounded-lg border p-4" style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR["Trafo LV"] }}>
-                <p className="mb-3 text-sm font-semibold text-foreground">Trafo LV</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <StatTile value={String(kindCountFor("Trafo LV", "Trip"))} label="Trip" className="text-critical" />
-                  <StatTile value={String(kindCountFor("Trafo LV", "Tidak Trip"))} label="Tidak Trip" />
-                </div>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={[
-                  { label: "Trip", "Trafo HV": kindCountFor("Trafo HV", "Trip"), "Trafo LV": kindCountFor("Trafo LV", "Trip") },
-                  { label: "Tidak Trip", "Trafo HV": kindCountFor("Trafo HV", "Tidak Trip"), "Trafo LV": kindCountFor("Trafo LV", "Tidak Trip") },
-                ]}
-                margin={{ top: 8, right: 12, left: -12, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                <ChartTooltip />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Trafo HV" fill={CATEGORY_COLOR["Trafo HV"]} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Trafo LV" fill={CATEGORY_COLOR["Trafo LV"]} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ),
-      },
-      {
-        id: "ultg",
-        title: "Kontribusi ULTG",
+        id: "ultg-ruas",
+        title: "Kontribusi ULTG & Ruas",
         subtitle: `Transmisi + Trafo HV + Trafo LV — ${monthLabel} ${year}`,
-        render: () =>
-          combinedUltg.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={340}>
-              <BarChart data={combinedUltg} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" width={150} />
-                <ChartTooltip />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Transmisi" stackId="a" fill={CATEGORY_COLOR.Transmisi} />
-                <Bar dataKey="Trafo HV" stackId="a" fill={CATEGORY_COLOR["Trafo HV"]} />
-                <Bar dataKey="Trafo LV" stackId="a" fill={CATEGORY_COLOR["Trafo LV"]} radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ),
+        render: () => (
+          <div className="flex flex-col gap-5">
+            {combinedUltg.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={combinedUltg} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" width={150} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Transmisi" stackId="a" fill={CATEGORY_COLOR.Transmisi} />
+                  <Bar dataKey="Trafo HV" stackId="a" fill={CATEGORY_COLOR["Trafo HV"]} />
+                  <Bar dataKey="Trafo LV" stackId="a" fill={CATEGORY_COLOR["Trafo LV"]} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            <div>
+              <p className="mb-2 text-sm font-semibold text-foreground">Kontribusi Ruas</p>
+              <BayTable entries={combinedBay} />
+            </div>
+          </div>
+        ),
       },
       {
-        id: "ruas",
-        title: "Kontribusi Ruas",
-        subtitle: `Ruas dengan gangguan, ditandai kategorinya — ${monthLabel} ${year}`,
-        render: () => <BayTable entries={combinedBay} />,
-      },
-      {
-        id: "kumulatif-transmisi",
-        title: "Kumulatif Transmisi — AR / Trip",
+        id: "kumulatif-transmisi-trafo",
+        title: "Kumulatif Transmisi & Trafo",
         subtitle: `Tren kumulatif sepanjang tahun ${year}`,
         render: () => (
-          <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={cumulativeTransmisi} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-              <ChartTooltip />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              {Object.keys(KIND_COLOR)
-                .filter((kind) => cumulativeTransmisi.some((p) => Number(p[kind] ?? 0) > 0))
-                .map((kind) => (
-                  <Line key={kind} type="monotone" dataKey={kind} name={kind} stroke={KIND_COLOR[kind]} strokeWidth={2.5} dot={{ r: 3 }} />
-                ))}
-            </LineChart>
-          </ResponsiveContainer>
-        ),
-      },
-      {
-        id: "kumulatif-trafo",
-        title: "Kumulatif Trafo HV vs LV",
-        subtitle: `Tren Trip kumulatif sepanjang tahun ${year}`,
-        render: () => (
-          <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={cumulativeTrafo} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-              <ChartTooltip />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="Trafo HV" stroke={CATEGORY_COLOR["Trafo HV"]} strokeWidth={2.5} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="Trafo LV" stroke={CATEGORY_COLOR["Trafo LV"]} strokeWidth={2.5} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-semibold text-foreground">Transmisi — AR / Trip</p>
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={cumulativeTransmisi} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {Object.keys(KIND_COLOR)
+                    .filter((kind) => cumulativeTransmisi.some((p) => Number(p[kind] ?? 0) > 0))
+                    .map((kind) => (
+                      <Line key={kind} type="monotone" dataKey={kind} name={kind} stroke={KIND_COLOR[kind]} strokeWidth={2.5} dot={{ r: 3 }} />
+                    ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-semibold text-foreground">Trafo HV vs LV — Trip</p>
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={cumulativeTrafo} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="Trafo HV" stroke={CATEGORY_COLOR["Trafo HV"]} strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="Trafo LV" stroke={CATEGORY_COLOR["Trafo LV"]} strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         ),
       },
       {
         id: "kumulatif-penyebab",
         title: "Kumulatif Penyebab Gangguan",
-        subtitle: `Top 5 penyebab gabungan — tren kumulatif tahun ${year}`,
+        subtitle: `Top 5 penyebab — Transmisi dan Trafo dipisah agar tidak rancu — tren kumulatif tahun ${year}`,
         render: () => (
-          <div className="flex flex-col gap-3">
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={cumulativeCause} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                <ChartTooltip />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {topCauseLabels.map((cause, i) => (
-                  <Line key={cause} type="monotone" dataKey={cause} name={cause} stroke={`var(--chart-${(i % 5) + 1})`} strokeWidth={2.5} dot={{ r: 3 }} />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-            {combinedCausePareto.length > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Penyebab terbesar sepanjang data: {combinedCausePareto.slice(0, 5).map((c) => `${c.cause} (${c.count})`).join(", ")}.
-              </p>
-            ) : null}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-semibold text-foreground">Penyebab Transmisi</p>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={cumulativeCauseTransmisi} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  {transmisiTopCauses.map((cause, i) => (
+                    <Line key={cause} type="monotone" dataKey={cause} name={cause} stroke={`var(--chart-${(i % 5) + 1})`} strokeWidth={2.5} dot={{ r: 3 }} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+              {transmisiCausePareto.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Terbesar: {transmisiCausePareto.slice(0, 5).map((c) => `${c.cause} (${c.count})`).join(", ")}.
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-semibold text-foreground">Penyebab Trafo (HV + LV)</p>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={cumulativeCauseTrafo} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  {trafoTopCauses.map((cause, i) => (
+                    <Line key={cause} type="monotone" dataKey={cause} name={cause} stroke={`var(--chart-${(i % 5) + 1})`} strokeWidth={2.5} dot={{ r: 3 }} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+              {trafoCausePareto.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Terbesar: {trafoCausePareto.slice(0, 5).map((c) => `${c.cause} (${c.count})`).join(", ")}.
+                </p>
+              ) : null}
+            </div>
           </div>
         ),
       },
@@ -562,7 +580,6 @@ export function DisturbancePresentationView({
       monthIndex0,
       grandTotal,
       totalByCategory,
-      kindByCategory,
       kindCountFor,
       donutData,
       combinedCalendarSummary,
@@ -571,9 +588,12 @@ export function DisturbancePresentationView({
       combinedBay,
       cumulativeTransmisi,
       cumulativeTrafo,
-      cumulativeCause,
-      topCauseLabels,
-      combinedCausePareto,
+      cumulativeCauseTransmisi,
+      cumulativeCauseTrafo,
+      transmisiTopCauses,
+      trafoTopCauses,
+      transmisiCausePareto,
+      trafoCausePareto,
     ],
   );
 

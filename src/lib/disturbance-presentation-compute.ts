@@ -17,46 +17,12 @@ export const MONTH_ID = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
 
-export interface CalendarDay {
-  date: string; // yyyy-MM-dd
-  day: number;
-  count: number;
-}
-
-/** Every calendar day in the given month (0-indexed), each paired with its
- *  disturbance count from `dailyCounts` — 0 when the day has no entry
- *  (DisturbanceCategoryResult.dailyCounts only ever holds days that had at
- *  least one event). Built from a plain date-string template, not a Date
- *  object per day, so there's no timezone ambiguity between the key format
- *  here and the one the service wrote (both plain "yyyy-MM-dd"). */
-export function buildCalendarDays(dailyCounts: Record<string, number>, year: number, monthIndex0: number): CalendarDay[] {
-  const daysInMonth = new Date(year, monthIndex0 + 1, 0).getDate();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const days: CalendarDay[] = [];
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = `${year}-${pad(monthIndex0 + 1)}-${pad(day)}`;
-    days.push({ date, day, count: dailyCounts[date] ?? 0 });
-  }
-  return days;
-}
-
 export interface CalendarSummary {
   daysInMonth: number;
   daysWithDisturbance: number;
   daysWithoutDisturbance: number;
+  percentWithDisturbance: number | null;
   percentWithoutDisturbance: number | null;
-}
-
-export function summarizeCalendar(days: CalendarDay[]): CalendarSummary {
-  const daysInMonth = days.length;
-  const daysWithDisturbance = days.filter((d) => d.count > 0).length;
-  const daysWithoutDisturbance = daysInMonth - daysWithDisturbance;
-  return {
-    daysInMonth,
-    daysWithDisturbance,
-    daysWithoutDisturbance,
-    percentWithoutDisturbance: daysInMonth > 0 ? daysWithoutDisturbance / daysInMonth : null,
-  };
 }
 
 function monthValue(data: DisturbanceMonthlyYearPoint[], monthLabel: string, year: string): number {
@@ -126,17 +92,28 @@ export function buildCumulativeForYear(
 // month), so a per-category-only calendar silently hides 2 of every 3
 // events unless the viewer manually flips tabs.
 
+export interface CombinedCalendarDayCategory {
+  label: string;
+  count: number;
+  /** Per-KODE GGN split for this category on this day (Trip/AR Sukses/
+   *  Tidak Trip) — the calendar only actually USES this for Transmisi
+   *  (to color Trip vs Reclose separately), but it's computed uniformly
+   *  for every category rather than as a Transmisi-only special case. */
+  byKind: { kind: string; count: number }[];
+}
+
 export interface CombinedCalendarDay {
   date: string;
   day: number;
   total: number;
-  byCategory: { label: string; count: number }[];
+  byCategory: CombinedCalendarDayCategory[];
 }
 
-/** Same per-day walk as buildCalendarDays, but merges every category's
- *  dailyCounts for that same date instead of reading just one. */
+/** Same per-day walk as before, but merges every category's dailyCounts
+ *  for that same date instead of reading just one, and carries each
+ *  category's own Trip/AR Sukses/Tidak Trip split for that day too. */
 export function buildCombinedCalendarDays(
-  dailyCountsByCategory: { label: string; dailyCounts: Record<string, number> }[],
+  categories: { label: string; dailyCounts: Record<string, number>; dailyByKind: Record<string, Record<string, number>> }[],
   year: number,
   monthIndex0: number,
 ): CombinedCalendarDay[] {
@@ -145,8 +122,12 @@ export function buildCombinedCalendarDays(
   const days: CombinedCalendarDay[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
     const date = `${year}-${pad(monthIndex0 + 1)}-${pad(day)}`;
-    const byCategory = dailyCountsByCategory
-      .map((c) => ({ label: c.label, count: c.dailyCounts[date] ?? 0 }))
+    const byCategory: CombinedCalendarDayCategory[] = categories
+      .map((c) => ({
+        label: c.label,
+        count: c.dailyCounts[date] ?? 0,
+        byKind: Object.entries(c.dailyByKind[date] ?? {}).map(([kind, count]) => ({ kind, count })),
+      }))
       .filter((c) => c.count > 0);
     days.push({ date, day, total: byCategory.reduce((s, c) => s + c.count, 0), byCategory });
   }
@@ -161,6 +142,7 @@ export function summarizeCombinedCalendar(days: CombinedCalendarDay[]): Calendar
     daysInMonth,
     daysWithDisturbance,
     daysWithoutDisturbance,
+    percentWithDisturbance: daysInMonth > 0 ? daysWithDisturbance / daysInMonth : null,
     percentWithoutDisturbance: daysInMonth > 0 ? daysWithoutDisturbance / daysInMonth : null,
   };
 }
@@ -200,15 +182,19 @@ export function buildCombinedUltgBreakdown(
 export interface CombinedBayEntry {
   bay: string;
   category: string;
+  ultg: string;
   count: number;
 }
 
 /** One row per (bay, category) pair that had at least one event this
  *  month — a bay only ever belongs to one category in practice (KODE BAY
  *  determines both), so this is a flat union rather than a per-bay matrix,
- *  tagged with its category for the "kontribusi ruas" slide's own badge. */
+ *  tagged with its category for the "kontribusi ruas" slide's own badge.
+ *  `ultgOf` looks up which ULTG a given bay belongs to (from that
+ *  category's own bayBreakdown, which already carries `ultg` per bay) so
+ *  the merged ULTG+ruas slide can show both in one table. */
 export function buildCombinedBayBreakdown(
-  categories: { label: string; series: { bay: string; data: DisturbanceMonthlyYearPoint[] }[] }[],
+  categories: { label: string; series: { bay: string; data: DisturbanceMonthlyYearPoint[] }[]; ultgOf: (bay: string) => string }[],
   monthLabel: string,
   year: string,
 ): CombinedBayEntry[] {
@@ -216,7 +202,7 @@ export function buildCombinedBayBreakdown(
   for (const cat of categories) {
     for (const s of cat.series) {
       const count = monthValue(s.data, monthLabel, year);
-      if (count > 0) rows.push({ bay: s.bay, category: cat.label, count });
+      if (count > 0) rows.push({ bay: s.bay, category: cat.label, ultg: cat.ultgOf(s.bay), count });
     }
   }
   return rows.sort((a, b) => b.count - a.count);

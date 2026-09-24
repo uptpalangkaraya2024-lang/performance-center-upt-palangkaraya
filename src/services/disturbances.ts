@@ -155,6 +155,7 @@ function emptyCategory(): DisturbanceCategoryResult {
     monthlyByYearByUltg: [],
     monthlyByYearByBay: [],
     dailyCounts: {},
+    dailyByKind: {},
     years: [],
     topBay: [],
     allBayCounts: [],
@@ -347,9 +348,18 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
   // needs no separate date parsing beyond the string slice already proven
   // safe elsewhere in this file (TGL sorts correctly as a plain string).
   const dailyCounts: Record<string, number> = {};
+  // Same per-day walk, but also split by KODE GGN (Trip/AR Sukses/Tidak
+  // Trip) — the presentation view's calendar slide colors Transmisi days
+  // by Trip vs Reclose specifically, which a bare daily total can't tell
+  // apart.
+  const dailyByKind: Record<string, Record<string, number>> = {};
   for (const row of rows) {
     const day = row.tgl.slice(0, 10);
     dailyCounts[day] = (dailyCounts[day] ?? 0) + 1;
+    const kindLabel = KIND_LABELS[row.kind] ?? titleCase(row.kind);
+    const dayKinds = dailyByKind[day] ?? {};
+    dayKinds[kindLabel] = (dayKinds[kindLabel] ?? 0) + 1;
+    dailyByKind[day] = dayKinds;
   }
 
   const giCounts = new Map<string, number>();
@@ -408,6 +418,7 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     monthlyByYearByUltg,
     monthlyByYearByBay,
     dailyCounts,
+    dailyByKind,
     years: sortedYears,
     topBay,
     allBayCounts,
