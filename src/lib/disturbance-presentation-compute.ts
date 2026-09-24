@@ -115,3 +115,137 @@ export function buildCumulativeForYear(
     return point;
   });
 }
+
+// --- Cross-category ("gabungan") helpers ------------------------------
+//
+// Every function above works on ONE category's own data. The overview,
+// calendar, ULTG and ruas slides all combine Transmisi + Trafo HV + Trafo
+// LV into one picture instead — confirmed necessary live: a single day can
+// genuinely have disturbances split across different categories (e.g. 1
+// Sep 2026 Transmisi, 2 Sep Trafo LV, 19 Sep Trafo HV all in the same
+// month), so a per-category-only calendar silently hides 2 of every 3
+// events unless the viewer manually flips tabs.
+
+export interface CombinedCalendarDay {
+  date: string;
+  day: number;
+  total: number;
+  byCategory: { label: string; count: number }[];
+}
+
+/** Same per-day walk as buildCalendarDays, but merges every category's
+ *  dailyCounts for that same date instead of reading just one. */
+export function buildCombinedCalendarDays(
+  dailyCountsByCategory: { label: string; dailyCounts: Record<string, number> }[],
+  year: number,
+  monthIndex0: number,
+): CombinedCalendarDay[] {
+  const daysInMonth = new Date(year, monthIndex0 + 1, 0).getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const days: CombinedCalendarDay[] = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${year}-${pad(monthIndex0 + 1)}-${pad(day)}`;
+    const byCategory = dailyCountsByCategory
+      .map((c) => ({ label: c.label, count: c.dailyCounts[date] ?? 0 }))
+      .filter((c) => c.count > 0);
+    days.push({ date, day, total: byCategory.reduce((s, c) => s + c.count, 0), byCategory });
+  }
+  return days;
+}
+
+export function summarizeCombinedCalendar(days: CombinedCalendarDay[]): CalendarSummary {
+  const daysInMonth = days.length;
+  const daysWithDisturbance = days.filter((d) => d.total > 0).length;
+  const daysWithoutDisturbance = daysInMonth - daysWithDisturbance;
+  return {
+    daysInMonth,
+    daysWithDisturbance,
+    daysWithoutDisturbance,
+    percentWithoutDisturbance: daysInMonth > 0 ? daysWithoutDisturbance / daysInMonth : null,
+  };
+}
+
+export interface CombinedUltgEntry {
+  ultg: string;
+  total: number;
+  [categoryLabel: string]: string | number;
+}
+
+/** One row per ULTG (union across all 3 categories), each column one
+ *  category's own count for the selected month — feeds a stacked bar so a
+ *  single chart shows both "which ULTG" and "which category" at once. */
+export function buildCombinedUltgBreakdown(
+  categories: { label: string; series: { ultg: string; data: DisturbanceMonthlyYearPoint[] }[] }[],
+  monthLabel: string,
+  year: string,
+): CombinedUltgEntry[] {
+  const ultgs = new Set<string>();
+  for (const cat of categories) for (const s of cat.series) ultgs.add(s.ultg);
+
+  return [...ultgs]
+    .map((ultg) => {
+      const row: CombinedUltgEntry = { ultg, total: 0 };
+      for (const cat of categories) {
+        const entry = cat.series.find((s) => s.ultg === ultg);
+        const count = entry ? monthValue(entry.data, monthLabel, year) : 0;
+        row[cat.label] = count;
+        row.total += count;
+      }
+      return row;
+    })
+    .filter((row) => row.total > 0)
+    .sort((a, b) => b.total - a.total);
+}
+
+export interface CombinedBayEntry {
+  bay: string;
+  category: string;
+  count: number;
+}
+
+/** One row per (bay, category) pair that had at least one event this
+ *  month — a bay only ever belongs to one category in practice (KODE BAY
+ *  determines both), so this is a flat union rather than a per-bay matrix,
+ *  tagged with its category for the "kontribusi ruas" slide's own badge. */
+export function buildCombinedBayBreakdown(
+  categories: { label: string; series: { bay: string; data: DisturbanceMonthlyYearPoint[] }[] }[],
+  monthLabel: string,
+  year: string,
+): CombinedBayEntry[] {
+  const rows: CombinedBayEntry[] = [];
+  for (const cat of categories) {
+    for (const s of cat.series) {
+      const count = monthValue(s.data, monthLabel, year);
+      if (count > 0) rows.push({ bay: s.bay, category: cat.label, count });
+    }
+  }
+  return rows.sort((a, b) => b.count - a.count);
+}
+
+/** Merges several categories' own per-cause month x year matrices into one
+ *  by summing matching cause labels (PENYEBAB uses the same fixed label
+ *  set in every category, so labels line up directly) — used for a
+ *  combined "kumulatif penyebab" trend across the whole Gangguan module
+ *  rather than one category at a time. */
+export function mergeCauseSeries(
+  categorySeries: { cause: string; data: DisturbanceMonthlyYearPoint[] }[][],
+): { cause: string; data: DisturbanceMonthlyYearPoint[] }[] {
+  const byCause = new Map<string, DisturbanceMonthlyYearPoint[]>();
+  for (const series of categorySeries) {
+    for (const { cause, data } of series) {
+      const existing = byCause.get(cause);
+      if (!existing) {
+        byCause.set(cause, data.map((p) => ({ ...p })));
+        continue;
+      }
+      for (let i = 0; i < data.length; i++) {
+        const point = data[i];
+        for (const key of Object.keys(point)) {
+          if (key === "month") continue;
+          existing[i][key] = Number(existing[i][key] ?? 0) + Number(point[key] ?? 0);
+        }
+      }
+    }
+  }
+  return [...byCause.entries()].map(([cause, data]) => ({ cause, data }));
+}
