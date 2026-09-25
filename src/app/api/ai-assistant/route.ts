@@ -1,4 +1,4 @@
-import { GoogleGenAI, type Content, type Part } from "@google/genai";
+import { ApiError, GoogleGenAI, type Content, type GenerateContentResponse, type Part } from "@google/genai";
 import { NextResponse } from "next/server";
 
 import { AI_ASSISTANT_TOOLS, runAiTool, type AiToolName } from "@/lib/ai-assistant-tools";
@@ -23,7 +23,51 @@ export const maxDuration = 60;
 // own alias for "whichever flash model is currently the recommended,
 // generally-available one" — it sidesteps this exact version-pin churn
 // instead of chasing it again next time a model gets retired/replaced.
+//
+// Even the alias hit a sustained 503 "high demand" live (confirmed across
+// several retries a minute apart — not a one-off blip), which free-tier
+// flash capacity is apparently prone to. FALLBACK_MODEL gives one more
+// shot on a separate, usually-less-congested capacity pool before giving up.
 const MODEL = "gemini-flash-latest";
+const FALLBACK_MODEL = "gemini-flash-lite-latest";
+
+function isRetryableApiError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 503 || err.status === 429);
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Calls generateContent against MODEL, retrying a transient 503/429 with a
+ *  short backoff, then falling back to FALLBACK_MODEL for the rest of this
+ *  request if MODEL is still unavailable — rather than failing the whole
+ *  question over what Google itself calls a "usually temporary" spike. */
+async function generateContentWithRetry(
+  ai: GoogleGenAI,
+  params: Omit<Parameters<GoogleGenAI["models"]["generateContent"]>[0], "model">,
+  currentModel: { name: string },
+): Promise<GenerateContentResponse> {
+  const attempts: { model: string; delayMs: number }[] = [
+    { model: currentModel.name, delayMs: 0 },
+    { model: currentModel.name, delayMs: 1500 },
+    { model: FALLBACK_MODEL, delayMs: 0 },
+    { model: FALLBACK_MODEL, delayMs: 1500 },
+  ];
+  let lastErr: unknown;
+  for (const attempt of attempts) {
+    if (attempt.delayMs > 0) await sleep(attempt.delayMs);
+    try {
+      const response = await ai.models.generateContent({ ...params, model: attempt.model });
+      currentModel.name = attempt.model; // stick with whichever model actually answered for the rest of this request
+      return response;
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableApiError(err)) throw err;
+    }
+  }
+  throw lastErr;
+}
 
 const SYSTEM_PROMPT = `Anda adalah AI Assistant Performance Center UPT Palangkaraya — asisten operasional untuk tim UPT Palangkaraya (unit transmisi listrik PLN).
 
@@ -88,25 +132,29 @@ export async function POST(request: Request) {
   // question ever needs.
   const MAX_ROUNDS = 6;
   let finalText: string | null = null;
+  const currentModel = { name: MODEL };
 
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await ai.models.generateContent({
-        model: MODEL,
-        contents,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          tools: [
-            {
-              functionDeclarations: AI_ASSISTANT_TOOLS.map((t) => ({
-                name: t.name,
-                description: t.description,
-                parametersJsonSchema: t.parameters,
-              })),
-            },
-          ],
+      const response = await generateContentWithRetry(
+        ai,
+        {
+          contents,
+          config: {
+            systemInstruction: SYSTEM_PROMPT,
+            tools: [
+              {
+                functionDeclarations: AI_ASSISTANT_TOOLS.map((t) => ({
+                  name: t.name,
+                  description: t.description,
+                  parametersJsonSchema: t.parameters,
+                })),
+              },
+            ],
+          },
         },
-      });
+        currentModel,
+      );
 
       const functionCalls = response.functionCalls ?? [];
       if (functionCalls.length === 0) {
@@ -135,6 +183,12 @@ export async function POST(request: Request) {
       contents.push({ role: "user", parts: responseParts });
     }
   } catch (err) {
+    if (isRetryableApiError(err)) {
+      return NextResponse.json(
+        { error: "Layanan Gemini sedang mengalami lonjakan permintaan tinggi (masalah sementara dari Google, bukan konfigurasi Anda) — coba lagi dalam beberapa saat." },
+        { status: 503 },
+      );
+    }
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: `Gagal menghubungi Gemini API: ${message}` }, { status: 502 });
   }
