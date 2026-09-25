@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI, type Content, type Part } from "@google/genai";
 import { NextResponse } from "next/server";
 
 import { AI_ASSISTANT_TOOLS, runAiTool, type AiToolName } from "@/lib/ai-assistant-tools";
@@ -10,7 +10,14 @@ import { AI_ASSISTANT_TOOLS, runAiTool, type AiToolName } from "@/lib/ai-assista
 // the system prompt below forbids answering from memory, and every tool
 // call is round-tripped through the exact same compute functions the
 // dashboard's own pages use — never a re-derived number.
+//
+// Gemini (not Claude) per the user's own choice — a genuinely free tier
+// (no card required) via a Google AI Studio API key, vs. Anthropic's
+// pay-as-you-go-only Console. gemini-2.5-flash: stable, fast, and the free
+// tier is far more generous on Flash than on Pro-tier models.
 export const maxDuration = 60;
+
+const MODEL = "gemini-2.5-flash";
 
 const SYSTEM_PROMPT = `Anda adalah AI Assistant Performance Center UPT Palangkaraya — asisten operasional untuk tim UPT Palangkaraya (unit transmisi listrik PLN).
 
@@ -31,19 +38,18 @@ function isChatMessage(v: unknown): v is ChatMessage {
   return (
     typeof v === "object" &&
     v !== null &&
-    (v as { role?: unknown }).role !== undefined &&
     ((v as { role?: unknown }).role === "user" || (v as { role?: unknown }).role === "assistant") &&
     typeof (v as { content?: unknown }).content === "string"
   );
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       {
         error:
-          "ANTHROPIC_API_KEY belum diatur di server. Tambahkan environment variable ini (lokal: .env.local, produksi: pengaturan project Vercel) lalu deploy ulang.",
+          "GEMINI_API_KEY belum diatur di server. Buat API key gratis di Google AI Studio (aistudio.google.com/apikey), tambahkan sebagai environment variable (lokal: .env.local, produksi: pengaturan project Vercel), lalu deploy ulang.",
       },
       { status: 503 },
     );
@@ -62,11 +68,14 @@ export async function POST(request: Request) {
   }
   const messages: ChatMessage[] = rawMessages;
 
-  const client = new Anthropic({ apiKey });
-  const conversation: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
+  const ai = new GoogleGenAI({ apiKey });
+  const contents: Content[] = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
   const toolsUsed = new Set<string>();
 
-  // Tool-use loop: Claude may call one or more tools before giving a final
+  // Tool-use loop: Gemini may call one or more tools before giving a final
   // text answer. Capped at a handful of round-trips as a safety net against
   // a runaway loop — every tool here is a fast, cheap read (existing service
   // caches), so this cap is generous relative to how many calls a real
@@ -76,44 +85,52 @@ export async function POST(request: Request) {
 
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await client.messages.create({
-        model: "claude-sonnet-5",
-        max_tokens: 2048,
-        system: SYSTEM_PROMPT,
-        tools: AI_ASSISTANT_TOOLS,
-        messages: conversation,
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents,
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          tools: [
+            {
+              functionDeclarations: AI_ASSISTANT_TOOLS.map((t) => ({
+                name: t.name,
+                description: t.description,
+                parametersJsonSchema: t.parameters,
+              })),
+            },
+          ],
+        },
       });
 
-      conversation.push({ role: "assistant", content: response.content });
-
-      if (response.stop_reason !== "tool_use") {
-        finalText = response.content
-          .filter((block): block is Anthropic.TextBlock => block.type === "text")
-          .map((block) => block.text)
-          .join("\n")
-          .trim();
+      const functionCalls = response.functionCalls ?? [];
+      if (functionCalls.length === 0) {
+        finalText = (response.text ?? "").trim();
         break;
       }
 
-      const toolUseBlocks = response.content.filter(
-        (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-      );
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of toolUseBlocks) {
-        toolsUsed.add(block.name);
+      // Echo the model's own function-call turn back into the conversation
+      // before appending the results — Gemini expects to see its own
+      // request alongside the matching response on the next turn.
+      const modelContent = response.candidates?.[0]?.content;
+      contents.push(modelContent ?? { role: "model", parts: functionCalls.map((fc) => ({ functionCall: fc })) });
+
+      const responseParts: Part[] = [];
+      for (const call of functionCalls) {
+        const name = call.name as AiToolName;
+        toolsUsed.add(name);
         let output: unknown;
         try {
-          output = await runAiTool(block.name as AiToolName, (block.input as Record<string, unknown>) ?? {});
+          output = await runAiTool(name, call.args ?? {});
         } catch (err) {
           output = { error: `Gagal memanggil data: ${err instanceof Error ? err.message : String(err)}` };
         }
-        toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(output) });
+        responseParts.push({ functionResponse: { id: call.id, name: call.name, response: { output } } });
       }
-      conversation.push({ role: "user", content: toolResults });
+      contents.push({ role: "user", parts: responseParts });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `Gagal menghubungi Claude API: ${message}` }, { status: 502 });
+    return NextResponse.json({ error: `Gagal menghubungi Gemini API: ${message}` }, { status: 502 });
   }
 
   if (finalText === null) {

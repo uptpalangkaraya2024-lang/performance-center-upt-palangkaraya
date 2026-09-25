@@ -9,10 +9,15 @@ import "server-only";
 // approximated calculation). This is deliberate: src/lib/executive-insights.ts
 // stays rule-based (cheap, instant, runs on every homepage load) precisely
 // because an LLM can be wrong about operational numbers — this Assistant is
-// the separate, opt-in, paid-per-call feature where that risk is acceptable
-// BECAUSE every fact it can state is grounded in a live tool call, never
-// free-form generation, and the system prompt (see the route) requires it to
-// say so explicitly when a tool has no data rather than guess.
+// the separate, opt-in feature where that risk is acceptable BECAUSE every
+// fact it can state is grounded in a live tool call, never free-form
+// generation, and the system prompt (see the route) requires it to say so
+// explicitly when a tool has no data rather than guess.
+//
+// Provider-neutral on purpose: {name, description, parameters} is plain JSON
+// Schema, understood as-is by Gemini's functionDeclarations.parametersJsonSchema
+// (see src/app/api/ai-assistant/route.ts) — kept generic rather than named
+// after one SDK's shape in case the backend model ever changes again.
 //
 // Each tool returns a compact, LLM-sized JSON object — never the full raw
 // arrays some of these services return (e.g. a bare-bay breakdown or a
@@ -45,43 +50,43 @@ import {
 import { buildManagementAttention } from "@/lib/executive-insights";
 import type { AboProgramComputed, DisturbanceCategoryResult } from "@/types";
 
-// --- Tool schemas (Anthropic tool-use format) -----------------------------
+// --- Tool schemas -----------------------------------------------------------
 
 export const AI_ASSISTANT_TOOLS = [
   {
     name: "kinerja_upt",
     description:
       "Kinerja 19 KPI kontrak UPT Palangkaraya (TRAF, CCAF, MTTR, dll) untuk periode berjalan: target, realisasi, pencapaian, status, dan skor bobot keseluruhan.",
-    input_schema: { type: "object" as const, properties: {} },
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "kinerja_ultg",
     description: "Kinerja per ULTG (unit layanan transmisi gardu) — target/realisasi/pencapaian per ULTG.",
-    input_schema: { type: "object" as const, properties: {} },
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "abo",
     description:
       "ABO (Anggaran Belanja Operasi) checklist ruas Proteksi & Hargi untuk minggu berjalan: status tercapai/belum per program, dan daftar item yang perlu perhatian (BA belum diupload, kondisi NOT OK).",
-    input_schema: { type: "object" as const, properties: {} },
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "common_enemy",
     description:
       "CE (Common Enemy) — temuan/anomali aset (elektrik & sipil) yang perlu ditindaklanjuti: total, close/open, breakdown per ULTG dan jenis aset, dan daftar temuan Critical/Alert/terlambat.",
-    input_schema: { type: "object" as const, properties: {} },
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "ahi",
     description:
       "AHI (Asset Health Index) — skor kesehatan MTU, Catu Daya, Trafo, Reaktor, dan daftar temuan anomali kondisi Poor/Critical.",
-    input_schema: { type: "object" as const, properties: {} },
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "gangguan",
     description:
       "Data gangguan Transmisi, Trafo HV, dan Trafo LV untuk bulan tertentu: total kejadian, Trip vs AR Sukses/Reclose, penyebab terbanyak, ULTG/ruas paling terdampak, dan durasi rata-rata.",
-    input_schema: {
+    parameters: {
       type: "object" as const,
       properties: {
         kategori: {
@@ -104,21 +109,21 @@ export const AI_ASSISTANT_TOOLS = [
     name: "wig_4dx",
     description:
       "4DX (Wildly Important Goals / Lead Measure) — target dan realisasi tiap WIG & Lead Measure untuk minggu berjalan, plus pencapaian year-to-date per WIG.",
-    input_schema: { type: "object" as const, properties: {} },
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "renus",
     description:
       "RENUS (rencana pemeliharaan/pekerjaan) — pekerjaan terlambat, hari ini, minggu berjalan (berisiko tinggi), dan rencana bulan depan.",
-    input_schema: { type: "object" as const, properties: {} },
+    parameters: { type: "object" as const, properties: {} },
   },
   {
     name: "management_attention",
     description:
       "Ringkasan lintas-modul 'apa yang perlu perhatian sekarang' — gabungan sinyal dari Kinerja UPT, Gangguan, AHI, ABO, 4DX, dan CE, sama seperti yang tampil di overview beranda.",
-    input_schema: { type: "object" as const, properties: {} },
+    parameters: { type: "object" as const, properties: {} },
   },
-] satisfies { name: string; description: string; input_schema: object }[];
+] satisfies { name: string; description: string; parameters: object }[];
 
 export type AiToolName = (typeof AI_ASSISTANT_TOOLS)[number]["name"];
 
