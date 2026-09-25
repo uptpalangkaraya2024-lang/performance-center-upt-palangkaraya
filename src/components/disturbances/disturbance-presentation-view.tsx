@@ -100,9 +100,21 @@ function useLandscapePrint() {
 
 function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
   return (
-    <div className="rounded-lg border p-4 text-center">
-      <div className={cn("text-2xl font-semibold tabular-nums", className ?? "text-foreground")}>{value}</div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="flex flex-col justify-center rounded-lg border p-5 text-center">
+      <div className={cn("text-3xl font-semibold tabular-nums", className ?? "text-foreground")}>{value}</div>
+      <div className="text-sm text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+/** Like StatTile, but sized for a NAME (e.g. an ULTG or ruas label) instead
+ *  of a short number — a 3xl numeric font would either overflow or force
+ *  awkward wrapping for something like "ULTG PALANGKARAYA". */
+function InfoTile({ label, value, className }: { label: string; value: string; className?: string }) {
+  return (
+    <div className="flex flex-col justify-center rounded-lg border p-5">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div className={cn("mt-1 text-lg font-bold text-foreground", className)}>{value}</div>
     </div>
   );
 }
@@ -111,10 +123,10 @@ function CategoryBadge({ label }: { label: string }) {
   const color = CATEGORY_COLOR[label] ?? "var(--muted-foreground)";
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm font-medium whitespace-nowrap"
       style={{ borderColor: `color-mix(in srgb, ${color} 45%, transparent)`, color }}
     >
-      <span className="size-1.5 rounded-full" style={{ backgroundColor: color }} />
+      <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
       {label}
     </span>
   );
@@ -127,7 +139,7 @@ function ChartTooltip({ contentStyle }: { contentStyle?: React.CSSProperties } =
         background: "var(--card)",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-md)",
-        fontSize: 12,
+        fontSize: 13,
         ...contentStyle,
       }}
     />
@@ -155,10 +167,10 @@ function CombinedCalendarGrid({ days, monthIndex0, year }: { days: CombinedCalen
   const leadingBlanks = (firstWeekday + 6) % 7; // shift to Monday-first
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-7 gap-1.5 text-center">
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-7 gap-2 text-center">
         {DAY_LABELS.map((d) => (
-          <div key={d} className="pb-1 text-xs font-semibold text-muted-foreground">
+          <div key={d} className="pb-1 text-sm font-semibold text-muted-foreground">
             {d}
           </div>
         ))}
@@ -169,18 +181,18 @@ function CombinedCalendarGrid({ days, monthIndex0, year }: { days: CombinedCalen
           <div
             key={d.date}
             className={cn(
-              "flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border p-1",
+              "flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border p-1.5",
               d.total > 0 ? "border-critical/50 bg-critical/10" : "border-success/30 bg-success/5",
             )}
           >
-            <span className={cn("text-sm font-semibold tabular-nums", d.total > 0 ? "text-critical" : "text-foreground")}>
+            <span className={cn("text-lg font-bold tabular-nums", d.total > 0 ? "text-critical" : "text-foreground")}>
               {d.day}
             </span>
             {d.byCategory.flatMap((c) =>
               (c.byKind.length > 0 ? c.byKind : [{ kind: "", count: c.count }]).map((k) => (
                 <span
                   key={`${c.label}-${k.kind}`}
-                  className="rounded px-1 text-[8px] leading-tight font-semibold whitespace-nowrap"
+                  className="rounded px-1.5 py-0.5 text-[11px] leading-tight font-semibold whitespace-nowrap"
                   style={{ backgroundColor: `color-mix(in srgb, ${tagColor(c.label, k.kind)} 20%, transparent)`, color: tagColor(c.label, k.kind) }}
                 >
                   {categoryAbbr(c.label)}
@@ -191,21 +203,21 @@ function CombinedCalendarGrid({ days, monthIndex0, year }: { days: CombinedCalen
           </div>
         ))}
       </div>
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full" style={{ backgroundColor: KIND_COLOR.Trip }} />
+          <span className="size-2.5 rounded-full" style={{ backgroundColor: KIND_COLOR.Trip }} />
           Transmisi · Trip
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full" style={{ backgroundColor: KIND_COLOR["AR Sukses"] }} />
+          <span className="size-2.5 rounded-full" style={{ backgroundColor: KIND_COLOR["AR Sukses"] }} />
           Transmisi · Reclose (AR Sukses)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full" style={{ backgroundColor: CATEGORY_COLOR["Trafo HV"] }} />
+          <span className="size-2.5 rounded-full" style={{ backgroundColor: CATEGORY_COLOR["Trafo HV"] }} />
           Trafo HV
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full" style={{ backgroundColor: CATEGORY_COLOR["Trafo LV"] }} />
+          <span className="size-2.5 rounded-full" style={{ backgroundColor: CATEGORY_COLOR["Trafo LV"] }} />
           Trafo LV
         </span>
       </div>
@@ -221,31 +233,31 @@ function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?
   return (
     <div className="flex flex-col gap-2">
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
+        <table className="w-full text-base">
           <thead>
-            <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">Ruas</th>
-              <th className="px-3 py-2 font-medium">ULTG</th>
-              <th className="px-3 py-2 font-medium">Kategori</th>
-              <th className="px-3 py-2 font-medium text-right">Jumlah</th>
+            <tr className="border-b bg-muted/40 text-left text-sm text-muted-foreground">
+              <th className="px-4 py-2.5 font-medium">Ruas</th>
+              <th className="px-4 py-2.5 font-medium">ULTG</th>
+              <th className="px-4 py-2.5 font-medium">Kategori</th>
+              <th className="px-4 py-2.5 font-medium text-right">Jumlah</th>
             </tr>
           </thead>
           <tbody>
             {shown.map((e, i) => (
               <tr key={`${e.bay}-${i}`} className="border-b last:border-0">
-                <td className="px-3 py-2 text-foreground">{e.bay}</td>
-                <td className="px-3 py-2 text-muted-foreground">{e.ultg}</td>
-                <td className="px-3 py-2">
+                <td className="px-4 py-2.5 text-foreground">{e.bay}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{e.ultg}</td>
+                <td className="px-4 py-2.5">
                   <CategoryBadge label={e.category} />
                 </td>
-                <td className="px-3 py-2 text-right font-semibold tabular-nums text-foreground">{e.count}</td>
+                <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-foreground">{e.count}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       {entries.length > limit ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Menampilkan {limit} dari {entries.length} ruas yang mengalami gangguan bulan ini.
         </p>
       ) : null}
@@ -400,44 +412,83 @@ export function DisturbancePresentationView({
         id: "ringkasan",
         title: "Ringkasan Total Gangguan",
         subtitle: `Periode ${monthLabel} ${year}`,
-        render: () => (
-          <div className="flex flex-col gap-5">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-              <div className="flex flex-col items-center justify-center rounded-lg border-2 border-primary/40 bg-primary/5 p-5 text-center sm:col-span-1">
-                <div className="text-4xl font-bold tabular-nums text-primary">{grandTotal}</div>
-                <div className="text-xs font-medium text-muted-foreground">Total Gangguan</div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:col-span-3 sm:grid-cols-3">
-                {totalByCategory.map((c) => (
-                  <div key={c.label} className="rounded-lg border p-3" style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR[c.label] }}>
-                    <div className="text-xl font-semibold tabular-nums text-foreground">{c.total}</div>
-                    <div className="text-xs text-muted-foreground">{c.label}</div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-                      <span>Trip: {kindCountFor(c.label, "Trip")}</span>
-                      {c.label === "Transmisi" ? <span>AR: {kindCountFor(c.label, "AR Sukses")}</span> : null}
-                      <span>Tidak Trip: {kindCountFor(c.label, "Tidak Trip")}</span>
+        render: () => {
+          const topUltg = combinedUltg[0];
+          const topBay = combinedBay[0];
+          return (
+            <div className="flex h-full flex-col gap-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-primary/40 bg-primary/5 p-6 text-center sm:col-span-1">
+                  <div className="text-5xl font-bold tabular-nums text-primary">{grandTotal}</div>
+                  <div className="text-sm font-medium text-muted-foreground">Total Gangguan</div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:col-span-3 sm:grid-cols-3">
+                  {totalByCategory.map((c) => (
+                    <div key={c.label} className="rounded-lg border p-4" style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR[c.label] }}>
+                      <div className="text-2xl font-semibold tabular-nums text-foreground">{c.total}</div>
+                      <div className="text-sm text-muted-foreground">{c.label}</div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                        <span>Trip: {kindCountFor(c.label, "Trip")}</span>
+                        {c.label === "Transmisi" ? <span>AR: {kindCountFor(c.label, "AR Sukses")}</span> : null}
+                        <span>Tidak Trip: {kindCountFor(c.label, "Tidak Trip")}</span>
+                      </div>
                     </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid flex-1 grid-cols-1 items-center gap-6 lg:grid-cols-2">
+                {donutData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={360}>
+                    <PieChart>
+                      <Pie
+                        data={donutData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={72}
+                        outerRadius={120}
+                        paddingAngle={2}
+                        label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
+                      >
+                        {donutData.map((d) => (
+                          <Cell key={d.name} fill={CATEGORY_COLOR[d.name]} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip />
+                      <Legend wrapperStyle={{ fontSize: 13 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Belum ada gangguan pada periode ini.</p>
+                )}
+
+                <div className="flex h-full flex-col gap-3">
+                  <p className="text-base font-semibold text-foreground">Insight Cepat — {monthLabel} {year}</p>
+                  <div className="grid flex-1 grid-cols-2 gap-3">
+                    <InfoTile
+                      label={topUltg ? `ULTG Terdampak Terbanyak (${topUltg.total} kejadian)` : "ULTG Terdampak Terbanyak"}
+                      value={topUltg ? topUltg.ultg : "—"}
+                    />
+                    <InfoTile
+                      label={topBay ? `Ruas Terdampak Terbanyak (${topBay.count} kejadian)` : "Ruas Terdampak Terbanyak"}
+                      value={topBay ? topBay.bay : "—"}
+                    />
+                    <StatTile
+                      value={formatPercent(combinedCalendarSummary.percentWithoutDisturbance)}
+                      label="Hari Tanpa Gangguan Bulan Ini"
+                      className="text-success"
+                    />
+                    <StatTile
+                      value={formatPercent(combinedCalendarSummary.percentWithDisturbance)}
+                      label="Hari Dengan Gangguan Bulan Ini"
+                      className="text-critical"
+                    />
                   </div>
-                ))}
+                </div>
               </div>
             </div>
-            {donutData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={95} paddingAngle={2}>
-                    {donutData.map((d) => (
-                      <Cell key={d.name} fill={CATEGORY_COLOR[d.name]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground">Belum ada gangguan pada periode ini.</p>
-            )}
-          </div>
-        ),
+          );
+        },
       },
       {
         id: "kalender",
@@ -460,17 +511,17 @@ export function DisturbancePresentationView({
         title: "Kontribusi ULTG & Ruas",
         subtitle: `Transmisi + Trafo HV + Trafo LV — ${monthLabel} ${year}`,
         render: () => (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-6">
             {combinedUltg.length === 0 ? (
               <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={combinedUltg} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" width={150} />
+                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" width={160} />
                   <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 13 }} />
                   <Bar dataKey="Transmisi" stackId="a" fill={CATEGORY_COLOR.Transmisi} />
                   <Bar dataKey="Trafo HV" stackId="a" fill={CATEGORY_COLOR["Trafo HV"]} />
                   <Bar dataKey="Trafo LV" stackId="a" fill={CATEGORY_COLOR["Trafo LV"]} radius={[0, 4, 4, 0]} />
@@ -478,7 +529,7 @@ export function DisturbancePresentationView({
               </ResponsiveContainer>
             )}
             <div>
-              <p className="mb-2 text-sm font-semibold text-foreground">Kontribusi Ruas</p>
+              <p className="mb-2 text-base font-semibold text-foreground">Kontribusi Ruas</p>
               <BayTable entries={combinedBay} />
             </div>
           </div>
@@ -489,37 +540,41 @@ export function DisturbancePresentationView({
         title: "Kumulatif Transmisi & Trafo",
         subtitle: `Tren kumulatif sepanjang tahun ${year}`,
         render: () => (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold text-foreground">Transmisi — AR / Trip</p>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={cumulativeTransmisi} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {Object.keys(KIND_COLOR)
-                    .filter((kind) => cumulativeTransmisi.some((p) => Number(p[kind] ?? 0) > 0))
-                    .map((kind) => (
-                      <Line key={kind} type="monotone" dataKey={kind} name={kind} stroke={KIND_COLOR[kind]} strokeWidth={2.5} dot={{ r: 3 }} />
-                    ))}
-                </LineChart>
-              </ResponsiveContainer>
+          <div className="flex h-full flex-col gap-6">
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <p className="text-base font-semibold text-foreground">Transmisi — AR / Trip</p>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                  <LineChart data={cumulativeTransmisi} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" />
+                    <YAxis tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    {Object.keys(KIND_COLOR)
+                      .filter((kind) => cumulativeTransmisi.some((p) => Number(p[kind] ?? 0) > 0))
+                      .map((kind) => (
+                        <Line key={kind} type="monotone" dataKey={kind} name={kind} stroke={KIND_COLOR[kind]} strokeWidth={3} dot={{ r: 4 }} />
+                      ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold text-foreground">Trafo HV vs LV — Trip</p>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={cumulativeTrafo} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="Trafo HV" stroke={CATEGORY_COLOR["Trafo HV"]} strokeWidth={2.5} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="Trafo LV" stroke={CATEGORY_COLOR["Trafo LV"]} strokeWidth={2.5} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <p className="text-base font-semibold text-foreground">Trafo HV vs LV — Trip</p>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                  <LineChart data={cumulativeTrafo} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" />
+                    <YAxis tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    <Line type="monotone" dataKey="Trafo HV" stroke={CATEGORY_COLOR["Trafo HV"]} strokeWidth={3} dot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="Trafo LV" stroke={CATEGORY_COLOR["Trafo LV"]} strokeWidth={3} dot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         ),
@@ -529,43 +584,47 @@ export function DisturbancePresentationView({
         title: "Kumulatif Penyebab Gangguan",
         subtitle: `Top 5 penyebab — Transmisi dan Trafo dipisah agar tidak rancu — tren kumulatif tahun ${year}`,
         render: () => (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <div className="flex flex-col gap-3">
-              <p className="text-sm font-semibold text-foreground">Penyebab Transmisi</p>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={cumulativeCauseTransmisi} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  {transmisiTopCauses.map((cause, i) => (
-                    <Line key={cause} type="monotone" dataKey={cause} name={cause} stroke={`var(--chart-${(i % 5) + 1})`} strokeWidth={2.5} dot={{ r: 3 }} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+          <div className="flex h-full flex-col gap-6">
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <p className="text-base font-semibold text-foreground">Penyebab Transmisi</p>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                  <LineChart data={cumulativeCauseTransmisi} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" />
+                    <YAxis tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {transmisiTopCauses.map((cause, i) => (
+                      <Line key={cause} type="monotone" dataKey={cause} name={cause} stroke={`var(--chart-${(i % 5) + 1})`} strokeWidth={3} dot={{ r: 4 }} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
               {transmisiCausePareto.length > 0 ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Terbesar: {transmisiCausePareto.slice(0, 5).map((c) => `${c.cause} (${c.count})`).join(", ")}.
                 </p>
               ) : null}
             </div>
-            <div className="flex flex-col gap-3">
-              <p className="text-sm font-semibold text-foreground">Penyebab Trafo (HV + LV)</p>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={cumulativeCauseTrafo} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  {trafoTopCauses.map((cause, i) => (
-                    <Line key={cause} type="monotone" dataKey={cause} name={cause} stroke={`var(--chart-${(i % 5) + 1})`} strokeWidth={2.5} dot={{ r: 3 }} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <p className="text-base font-semibold text-foreground">Penyebab Trafo (HV + LV)</p>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                  <LineChart data={cumulativeCauseTrafo} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" />
+                    <YAxis tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {trafoTopCauses.map((cause, i) => (
+                      <Line key={cause} type="monotone" dataKey={cause} name={cause} stroke={`var(--chart-${(i % 5) + 1})`} strokeWidth={3} dot={{ r: 4 }} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
               {trafoCausePareto.length > 0 ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Terbesar: {trafoCausePareto.slice(0, 5).map((c) => `${c.cause} (${c.count})`).join(", ")}.
                 </p>
               ) : null}
@@ -708,8 +767,8 @@ export function DisturbancePresentationView({
             className="flex min-h-[70vh] flex-col gap-4 rounded-2xl border bg-card p-6 print:min-h-[calc(100vh-24mm)] print:break-after-page print:rounded-none print:border-0 print:shadow-none"
           >
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-foreground">{s.title}</h2>
-              {s.subtitle ? <p className="text-sm text-muted-foreground">{s.subtitle}</p> : null}
+              <h2 className="text-2xl font-bold tracking-tight text-foreground">{s.title}</h2>
+              {s.subtitle ? <p className="text-base text-muted-foreground">{s.subtitle}</p> : null}
             </div>
             <div className="flex-1">{s.render()}</div>
           </section>
@@ -727,14 +786,14 @@ export function DisturbancePresentationView({
             <X className="size-5" />
           </button>
 
-          <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 overflow-y-auto">
             <div>
-              <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{slides[activeSlide].title}</h2>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{slides[activeSlide].title}</h2>
               {slides[activeSlide].subtitle ? (
-                <p className="text-sm text-muted-foreground sm:text-base">{slides[activeSlide].subtitle}</p>
+                <p className="text-base text-muted-foreground sm:text-lg">{slides[activeSlide].subtitle}</p>
               ) : null}
             </div>
-            <div className="flex-1">{slides[activeSlide].render()}</div>
+            <div className="min-h-0 flex-1">{slides[activeSlide].render()}</div>
           </div>
 
           <div className="mx-auto mt-4 flex items-center gap-4">
