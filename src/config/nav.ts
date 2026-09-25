@@ -62,7 +62,7 @@ export const navGroups: NavGroup[] = [
     label: "Data",
     items: [
       { title: "Data & Sync", href: "/dashboard/data-sync", icon: DatabaseZap },
-      { title: "AI Assistant", href: "/dashboard/ai", icon: Sparkles, comingSoon: true },
+      { title: "AI Assistant", href: "/dashboard/ai", icon: Sparkles },
     ],
   },
   {

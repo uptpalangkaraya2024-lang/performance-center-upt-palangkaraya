@@ -9,6 +9,14 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { AiAssistantChat } from "@/components/ai/ai-assistant-chat";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +28,7 @@ import {
 
 export function SiteHeader() {
   const [searchOpen, setSearchOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -41,9 +50,23 @@ export function SiteHeader() {
 
       <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
-        <Button variant="ghost" size="icon" className="size-8" aria-label="AI Assistant">
+        <Button variant="ghost" size="icon" className="size-8" aria-label="AI Assistant" onClick={() => setAiOpen(true)}>
           <Sparkles className="size-4" />
         </Button>
+        <Sheet open={aiOpen} onOpenChange={setAiOpen}>
+          <SheetContent className="flex w-full flex-col gap-3 sm:max-w-lg">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" />
+                AI Assistant
+              </SheetTitle>
+              <SheetDescription>Tanya jawab operasional berbasis data sistem UPT Palangkaraya.</SheetDescription>
+            </SheetHeader>
+            <div className="flex-1 overflow-hidden px-4 pb-4">
+              <AiAssistantChat />
+            </div>
+          </SheetContent>
+        </Sheet>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
