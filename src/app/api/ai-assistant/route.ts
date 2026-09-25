@@ -13,11 +13,13 @@ import { AI_ASSISTANT_TOOLS, runAiTool, type AiToolName } from "@/lib/ai-assista
 //
 // Gemini (not Claude) per the user's own choice — a genuinely free tier
 // (no card required) via a Google AI Studio API key, vs. Anthropic's
-// pay-as-you-go-only Console. gemini-2.5-flash: stable, fast, and the free
-// tier is far more generous on Flash than on Pro-tier models.
+// pay-as-you-go-only Console.
 export const maxDuration = 60;
 
-const MODEL = "gemini-2.5-flash";
+// gemini-2.5-flash was rejected live for a freshly-created API key —
+// "no longer available to new users" (confirmed against the real API, not
+// a guess) — Google's own error pointed at gemini-3.8-flash instead.
+const MODEL = "gemini-3.8-flash";
 
 const SYSTEM_PROMPT = `Anda adalah AI Assistant Performance Center UPT Palangkaraya — asisten operasional untuk tim UPT Palangkaraya (unit transmisi listrik PLN).
 
