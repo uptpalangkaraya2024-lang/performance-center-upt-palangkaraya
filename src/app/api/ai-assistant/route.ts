@@ -16,10 +16,14 @@ import { AI_ASSISTANT_TOOLS, runAiTool, type AiToolName } from "@/lib/ai-assista
 // pay-as-you-go-only Console.
 export const maxDuration = 60;
 
-// gemini-2.5-flash was rejected live for a freshly-created API key —
-// "no longer available to new users" (confirmed against the real API, not
-// a guess) — Google's own error pointed at gemini-3.8-flash instead.
-const MODEL = "gemini-3.8-flash";
+// A hardcoded version number turned out to churn fast: gemini-2.5-flash was
+// rejected live ("no longer available to new users"), and its suggested
+// replacement gemini-3.8-flash then came back 503 "high demand" (a brand-new
+// model's launch-week capacity crunch). "gemini-flash-latest" is Google's
+// own alias for "whichever flash model is currently the recommended,
+// generally-available one" — it sidesteps this exact version-pin churn
+// instead of chasing it again next time a model gets retired/replaced.
+const MODEL = "gemini-flash-latest";
 
 const SYSTEM_PROMPT = `Anda adalah AI Assistant Performance Center UPT Palangkaraya — asisten operasional untuk tim UPT Palangkaraya (unit transmisi listrik PLN).
 
