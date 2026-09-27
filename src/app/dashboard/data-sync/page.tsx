@@ -90,8 +90,8 @@ export default async function DataSyncPage() {
             <Server className="size-5" />
           </span>
           <div className="flex-1">
-            <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">Data Provider</p>
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">Data Provider</p>
+            <p className="text-base font-extrabold text-foreground">
               {provider.name === "apps-script" ? "Google Apps Script Gateway" : "Google Drive API (service account)"}
             </p>
             {lastSyncOverall ? (
@@ -99,8 +99,8 @@ export default async function DataSyncPage() {
             ) : null}
           </div>
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${
-              gatewayHealth.healthy ? "bg-success/10 text-success" : "bg-critical/10 text-critical"
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold ${
+              gatewayHealth.healthy ? "border-success/40 bg-success/20 text-success" : "border-critical/40 bg-critical/20 text-critical"
             }`}
           >
             {gatewayHealth.healthy ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
@@ -111,7 +111,7 @@ export default async function DataSyncPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Sumber Data</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Sumber Data</CardTitle>
         </CardHeader>
         <CardContent>
           <DataSyncTable rows={rows} />

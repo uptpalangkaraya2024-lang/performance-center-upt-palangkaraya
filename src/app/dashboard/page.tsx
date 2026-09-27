@@ -84,7 +84,7 @@ export default function OverviewPage() {
       </Suspense>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold tracking-tight text-foreground">Management Attention</h3>
+        <h3 className="text-lg font-extrabold tracking-tight text-foreground">Management Attention</h3>
         <Suspense fallback={<ManagementAttentionFallback />}>
           <ManagementAttentionAsync
             uptPromise={uptPromise}
@@ -98,7 +98,7 @@ export default function OverviewPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Gap to Target — Kinerja UPT</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Gap to Target — Kinerja UPT</CardTitle>
         </CardHeader>
         <CardContent>
           <Suspense fallback={<Skeleton className="h-48 w-full" />}>
@@ -109,7 +109,7 @@ export default function OverviewPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Pareto Gangguan Transmisi</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Pareto Gangguan Transmisi</CardTitle>
         </CardHeader>
         <CardContent>
           <Suspense fallback={<Skeleton className="h-64 w-full" />}>
@@ -120,7 +120,7 @@ export default function OverviewPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Gangguan &amp; Asset Health per GI</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Gangguan &amp; Asset Health per GI</CardTitle>
           <p className="text-xs text-muted-foreground">
             Gabungan data Gangguan (per bay) dan AHI (per GI) — membantu melihat GI mana yang sekaligus sering
             gangguan dan asset health-nya bermasalah.

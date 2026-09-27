@@ -41,8 +41,8 @@ export function UptCategorySection({
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-semibold tracking-tight">{meta.title}</h2>
-        <p className="text-xs text-muted-foreground">{meta.description}</p>
+        <h2 className="text-lg font-extrabold tracking-tight">{meta.title}</h2>
+        <p className="text-sm text-muted-foreground">{meta.description}</p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((kpi) => (

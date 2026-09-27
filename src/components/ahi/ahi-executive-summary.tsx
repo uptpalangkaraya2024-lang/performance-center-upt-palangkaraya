@@ -33,20 +33,20 @@ export function AhiExecutiveSummary({
           <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             Kondisi Asset Health Keseluruhan
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
+          <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-base">
             <span>
-              <b className="text-success tabular-nums">{tally.good}</b>
+              <b className="text-xl font-extrabold text-success tabular-nums">{tally.good}</b>
               <span className="text-muted-foreground"> dari {categories.length} kategori Sehat</span>
             </span>
             <span>
-              <b className="text-warning-foreground tabular-nums">{tally.warning}</b>
+              <b className="text-xl font-extrabold text-warning-foreground tabular-nums">{tally.warning}</b>
               <span className="text-muted-foreground"> Perlu Perhatian</span>
             </span>
             <span>
-              <b className="text-critical tabular-nums">{tally.critical}</b>
+              <b className="text-xl font-extrabold text-critical tabular-nums">{tally.critical}</b>
               <span className="text-muted-foreground"> Kritis</span>
             </span>
-            <span className="text-muted-foreground">{formatCount(totalAnomalies)} kondisi tercatat di rekap anomali</span>
+            <span className="text-sm text-muted-foreground">{formatCount(totalAnomalies)} kondisi tercatat di rekap anomali</span>
           </div>
         </div>
         {showComparison ? (

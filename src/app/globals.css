@@ -81,8 +81,8 @@
   --accent: #fff1e6;
   --accent-foreground: #c2410c;
   --destructive: #ef4444;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
+  --border: #cbd5e1;
+  --input: #cbd5e1;
   --ring: #183b8f;
   --success: #15803d;
   --success-foreground: #ffffff;
@@ -141,8 +141,14 @@
   --accent: oklch(0.3 0.04 235);
   --accent-foreground: oklch(0.9 0.01 260);
   --destructive: oklch(0.7 0.19 25);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  /* Bumped from 10% -> 18% per user feedback: the previous value was
+     nearly invisible against the dark navy card background, making every
+     bordered section (stat tiles, breakdown cards, table rows) look
+     flat/undivided. This single token drives border-border and the Card
+     ring below across the whole app, so raising it here fixes contrast
+     everywhere at once instead of patching each component individually. */
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 18%);
   --ring: oklch(0.6 0.1 264);
   --success: oklch(0.68 0.14 150);
   --success-foreground: oklch(0.16 0.03 150);

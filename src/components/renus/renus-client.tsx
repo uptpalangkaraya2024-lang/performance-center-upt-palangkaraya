@@ -83,9 +83,9 @@ function WorkListPreview({ rows, limit = 5 }: { rows: RenusRow[]; limit?: number
 
 function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
   return (
-    <div className="rounded-lg border p-3">
-      <div className={`text-xl font-semibold tabular-nums ${className ?? "text-foreground"}`}>{value}</div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="rounded-lg border bg-muted/40 p-3">
+      <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
+      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</div>
     </div>
   );
 }
@@ -257,7 +257,7 @@ export function RenusClient({ data }: { data: RenusData }) {
   return (
     <div className="flex flex-col gap-6">
       {data.reminders.length > 0 ? (
-        <Card className="border-warning/30 bg-warning/5">
+        <Card className="border-warning/50 bg-warning/10">
           <CardContent className="py-4">
             <AiInsightList data={data.reminders} title="Perhatian" icon={Bell} />
           </CardContent>
@@ -274,8 +274,8 @@ export function RenusClient({ data }: { data: RenusData }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-1.5 text-base">
-              <CalendarDays className="size-4 text-primary" />
+            <CardTitle className="flex items-center gap-1.5 text-lg font-extrabold">
+              <CalendarDays className="size-5 text-primary" />
               Periode Kerja Minggu Ini
             </CardTitle>
             <p className="text-xs text-muted-foreground">Jumat–Kamis · {data.weekPeriod.label}</p>
@@ -283,18 +283,18 @@ export function RenusClient({ data }: { data: RenusData }) {
           <CardContent className="flex flex-col gap-3">
             <WorkListPreview rows={weekRows} />
             {weekRows.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <span className="flex items-center gap-1.5 rounded-lg border p-2 text-critical">
-                  <XCircle className="size-3.5 shrink-0" /> {overdueInWeek} Overdue
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="flex items-center gap-1.5 rounded-lg border border-critical/40 bg-critical/10 p-2 font-semibold text-critical">
+                  <XCircle className="size-4 shrink-0" /> {overdueInWeek} Overdue
                 </span>
-                <span className="flex items-center gap-1.5 rounded-lg border p-2 text-warning-foreground">
-                  <AlertTriangle className="size-3.5 shrink-0" /> {highRiskThisWeek} High Risk
+                <span className="flex items-center gap-1.5 rounded-lg border border-warning/50 bg-warning/10 p-2 font-semibold text-warning-foreground">
+                  <AlertTriangle className="size-4 shrink-0" /> {highRiskThisWeek} High Risk
                 </span>
-                <span className="flex items-center gap-1.5 rounded-lg border p-2 text-success">
-                  <CheckCircle2 className="size-3.5 shrink-0" /> {closedThisWeek} Selesai
+                <span className="flex items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 p-2 font-semibold text-success">
+                  <CheckCircle2 className="size-4 shrink-0" /> {closedThisWeek} Selesai
                 </span>
-                <span className="flex items-center gap-1.5 rounded-lg border p-2 text-muted-foreground">
-                  <CircleDashed className="size-3.5 shrink-0" /> {weekRows.length} Total
+                <span className="flex items-center gap-1.5 rounded-lg border bg-muted/30 p-2 font-semibold text-muted-foreground">
+                  <CircleDashed className="size-4 shrink-0" /> {weekRows.length} Total
                 </span>
               </div>
             ) : null}
@@ -313,8 +313,8 @@ export function RenusClient({ data }: { data: RenusData }) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-1.5 text-base">
-              <CalendarDays className="size-4 text-muted-foreground" />
+            <CardTitle className="flex items-center gap-1.5 text-lg font-extrabold">
+              <CalendarDays className="size-5 text-muted-foreground" />
               Periode Kerja Minggu Depan
             </CardTitle>
             <p className="text-xs text-muted-foreground">Jumat–Kamis · {data.nextWeekPeriod.label}</p>
@@ -322,12 +322,12 @@ export function RenusClient({ data }: { data: RenusData }) {
           <CardContent className="flex flex-col gap-3">
             <WorkListPreview rows={data.nextWeekRows} />
             {data.nextWeekRows.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <span className="flex items-center gap-1.5 rounded-lg border p-2 text-warning-foreground">
-                  <AlertTriangle className="size-3.5 shrink-0" /> {data.nextWeekRows.filter((r) => isRenusHighRisk(r)).length} High Risk
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="flex items-center gap-1.5 rounded-lg border border-warning/50 bg-warning/10 p-2 font-semibold text-warning-foreground">
+                  <AlertTriangle className="size-4 shrink-0" /> {data.nextWeekRows.filter((r) => isRenusHighRisk(r)).length} High Risk
                 </span>
-                <span className="flex items-center gap-1.5 rounded-lg border p-2 text-muted-foreground">
-                  <CircleDashed className="size-3.5 shrink-0" /> {data.nextWeekRows.length} Total
+                <span className="flex items-center gap-1.5 rounded-lg border bg-muted/30 p-2 font-semibold text-muted-foreground">
+                  <CircleDashed className="size-4 shrink-0" /> {data.nextWeekRows.length} Total
                 </span>
               </div>
             ) : null}
@@ -342,8 +342,8 @@ export function RenusClient({ data }: { data: RenusData }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-1.5 text-base">
-            <CalendarClock className="size-4 text-primary" />
+          <CardTitle className="flex items-center gap-1.5 text-lg font-extrabold">
+            <CalendarClock className="size-5 text-primary" />
             Rencana Pemeliharaan Bulan Depan
           </CardTitle>
           <p className="text-xs text-muted-foreground">
@@ -366,7 +366,7 @@ export function RenusClient({ data }: { data: RenusData }) {
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-base">Daftar Pekerjaan</CardTitle>
+            <CardTitle className="text-lg font-extrabold">Daftar Pekerjaan</CardTitle>
             <p className="text-xs text-muted-foreground">{filtered.length} dari {data.rows.length} pekerjaan ditampilkan.</p>
           </div>
           <ExportExcelButton

@@ -49,33 +49,33 @@ function formatPercentGap(v: number | null): string {
 }
 
 const KRITERIA_CLASS: Record<string, string> = {
-  critical: "border-critical/40 bg-critical/10 text-critical",
-  poor: "border-destructive/40 bg-destructive/10 text-destructive",
-  fair: "border-warning/40 bg-warning/15 text-warning-foreground",
-  good: "border-success/40 bg-success/10 text-success",
-  "verry good": "border-success/40 bg-success/10 text-success",
+  critical: "border-critical/40 bg-critical/20 text-critical",
+  poor: "border-destructive/40 bg-destructive/20 text-destructive",
+  fair: "border-warning/50 bg-warning/20 text-warning-foreground",
+  good: "border-success/40 bg-success/20 text-success",
+  "verry good": "border-success/40 bg-success/20 text-success",
 };
 
 function KriteriaPill({ value }: { value: string }) {
   if (!value.trim()) return <span className="text-xs text-muted-foreground">—</span>;
-  const cls = KRITERIA_CLASS[value.trim().toLowerCase()] ?? "border-border bg-muted/40 text-muted-foreground";
+  const cls = KRITERIA_CLASS[value.trim().toLowerCase()] ?? "border-border bg-muted/50 text-muted-foreground";
   return (
-    <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", cls)}>
+    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap", cls)}>
       {value.trim()}
     </span>
   );
 }
 
 const STATUS_CLASS: Record<CeProgramRollupEntry["status"], string> = {
-  Finish: "border-success/40 bg-success/10 text-success",
-  "On Target": "border-primary/40 bg-primary/10 text-primary",
-  Lagging: "border-warning/40 bg-warning/15 text-warning-foreground",
+  Finish: "border-success/40 bg-success/20 text-success",
+  "On Target": "border-primary/40 bg-primary/15 text-primary",
+  Lagging: "border-warning/50 bg-warning/20 text-warning-foreground",
 };
 
 const ISSUE_CLASS: Record<CeAttentionItem["issue"], string> = {
-  "Critical & Belum Selesai": "border-critical/40 bg-critical/10 text-critical",
-  Alert: "border-warning/40 bg-warning/15 text-warning-foreground",
-  Terlambat: "border-warning/40 bg-warning/15 text-warning-foreground",
+  "Critical & Belum Selesai": "border-critical/40 bg-critical/20 text-critical",
+  Alert: "border-warning/50 bg-warning/20 text-warning-foreground",
+  Terlambat: "border-warning/50 bg-warning/20 text-warning-foreground",
 };
 
 function ExecutiveSummaryCards({
@@ -91,18 +91,18 @@ function ExecutiveSummaryCards({
 }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div className="flex flex-col gap-1 rounded-lg border border-critical/30 bg-critical/5 p-3">
-        <span className="text-xs font-medium text-muted-foreground">Critical Masih Open</span>
-        <span className="text-xl font-semibold tabular-nums text-critical">{criticalOpen}</span>
+      <div className="flex flex-col gap-1 rounded-lg border border-critical/40 bg-critical/10 p-3">
+        <span className="text-xs font-bold tracking-wide text-muted-foreground uppercase">Critical Masih Open</span>
+        <span className="text-2xl font-extrabold tabular-nums text-critical">{criticalOpen}</span>
         <span className="text-xs text-muted-foreground">
           {formatPercent(criticalOpenPct)} dari {criticalTotal} temuan Critical
         </span>
       </div>
-      <div className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/5 p-3">
-        <span className="text-xs font-medium text-muted-foreground">Backlog Stream Terbesar</span>
+      <div className="flex flex-col gap-1 rounded-lg border border-warning/50 bg-warning/10 p-3">
+        <span className="text-xs font-bold tracking-wide text-muted-foreground uppercase">Backlog Stream Terbesar</span>
         {backlogStream ? (
           <>
-            <span className="text-xl font-semibold text-foreground">{backlogStream.label}</span>
+            <span className="text-2xl font-extrabold text-foreground">{backlogStream.label}</span>
             <span className="text-xs text-muted-foreground">
               {backlogStream.open} open · {backlogStream.criticalOpen} critical aktif
             </span>
@@ -121,10 +121,10 @@ function AttentionTable({ items }: { items: CeAttentionItem[] }) {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <AlertTriangle className="size-4 text-warning-foreground" />
-          <CardTitle className="text-base">Perlu Perhatian</CardTitle>
+          <AlertTriangle className="size-5 text-warning-foreground" />
+          <CardTitle className="text-lg font-extrabold">Perlu Perhatian</CardTitle>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {items.length} item — kondisi Critical belum selesai, ada alert, atau sudah melewati target minggu.
         </p>
       </CardHeader>
@@ -132,11 +132,11 @@ function AttentionTable({ items }: { items: CeAttentionItem[] }) {
         <div className="max-h-80 overflow-y-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card">
-              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="px-3 py-2 font-medium">ULTG / GI</th>
-                <th className="px-3 py-2 font-medium">Program</th>
-                <th className="px-3 py-2 font-medium">Masalah</th>
-                <th className="px-3 py-2 font-medium">Target</th>
+              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+                <th className="px-3 py-2.5 font-bold">ULTG / GI</th>
+                <th className="px-3 py-2.5 font-bold">Program</th>
+                <th className="px-3 py-2.5 font-bold">Masalah</th>
+                <th className="px-3 py-2.5 font-bold">Target</th>
               </tr>
             </thead>
             <tbody>
@@ -166,12 +166,12 @@ function AttentionTable({ items }: { items: CeAttentionItem[] }) {
 function BreakdownGrid({ title, entries }: { title: string; entries: { label: string; total: number; close: number; open: number }[] }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs font-medium text-foreground">{title}</p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <p className="text-sm font-bold tracking-wide text-foreground uppercase">{title}</p>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {entries.map((entry) => (
-          <div key={entry.label} className="flex flex-col gap-1 rounded-lg border p-3">
-            <span className="text-sm font-medium text-foreground">{entry.label}</span>
-            <p className="text-xs text-muted-foreground">
+          <div key={entry.label} className="flex flex-col gap-1 rounded-lg border bg-muted/30 p-3">
+            <span className="text-sm font-bold text-foreground">{entry.label}</span>
+            <p className="text-sm text-muted-foreground">
               Close:{entry.close} / Open:{entry.open} · Total:{entry.total}
             </p>
           </div>
@@ -184,17 +184,17 @@ function BreakdownGrid({ title, entries }: { title: string; entries: { label: st
 function StreamBreakdownTable({ entries }: { entries: ReturnType<typeof buildCeStreamBreakdown> }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs font-medium text-foreground">Breakdown per Stream</p>
+      <p className="text-sm font-bold tracking-wide text-foreground uppercase">Breakdown per Stream</p>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">Stream</th>
-              <th className="px-3 py-2 font-medium">Sub Bidang</th>
-              <th className="px-3 py-2 font-medium text-right">Total</th>
-              <th className="px-3 py-2 font-medium text-right">Close</th>
-              <th className="px-3 py-2 font-medium text-right">Open</th>
-              <th className="px-3 py-2 font-medium text-right">%</th>
+            <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+              <th className="px-3 py-2.5 font-bold">Stream</th>
+              <th className="px-3 py-2.5 font-bold">Sub Bidang</th>
+              <th className="px-3 py-2.5 font-bold text-right">Total</th>
+              <th className="px-3 py-2.5 font-bold text-right">Close</th>
+              <th className="px-3 py-2.5 font-bold text-right">Open</th>
+              <th className="px-3 py-2.5 font-bold text-right">%</th>
             </tr>
           </thead>
           <tbody>
@@ -220,7 +220,7 @@ function StreamBreakdownTable({ entries }: { entries: ReturnType<typeof buildCeS
 function MonthlyTrendChart({ data }: { data: ReturnType<typeof buildCeMonthlyTrend> }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs font-medium text-foreground">Target vs Realisasi per Bulan</p>
+      <p className="text-sm font-bold tracking-wide text-foreground uppercase">Target vs Realisasi per Bulan</p>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -246,20 +246,20 @@ function MonthlyTrendChart({ data }: { data: ReturnType<typeof buildCeMonthlyTre
 function UltgIdealTable({ entries }: { entries: CeUltgIdealEntry[] }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs font-medium text-foreground">
+      <p className="text-sm font-bold tracking-wide text-foreground uppercase">
         Ringkasan per ULTG — Aktual vs Pace Ideal ({formatPercent((entries[0]?.idealPercent ?? 0) / 100)} minggu berjalan)
       </p>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">ULTG</th>
-              <th className="px-3 py-2 font-medium text-right">Total</th>
-              <th className="px-3 py-2 font-medium text-right">Close</th>
-              <th className="px-3 py-2 font-medium text-right">On Target</th>
-              <th className="px-3 py-2 font-medium text-right">Lagging</th>
-              <th className="px-3 py-2 font-medium text-right">Aktual</th>
-              <th className="px-3 py-2 font-medium text-right">Gap vs Ideal</th>
+            <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+              <th className="px-3 py-2.5 font-bold">ULTG</th>
+              <th className="px-3 py-2.5 font-bold text-right">Total</th>
+              <th className="px-3 py-2.5 font-bold text-right">Close</th>
+              <th className="px-3 py-2.5 font-bold text-right">On Target</th>
+              <th className="px-3 py-2.5 font-bold text-right">Lagging</th>
+              <th className="px-3 py-2.5 font-bold text-right">Aktual</th>
+              <th className="px-3 py-2.5 font-bold text-right">Gap vs Ideal</th>
             </tr>
           </thead>
           <tbody>
@@ -293,7 +293,7 @@ function ProgramRollupCard({ entries }: { entries: CeProgramRollupEntry[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Program Aktif — Realisasi 3 Minggu Terakhir</CardTitle>
+        <CardTitle className="text-lg font-extrabold">Program Aktif — Realisasi 3 Minggu Terakhir</CardTitle>
         <p className="text-xs text-muted-foreground">
           {entries.length} program punya realisasi dalam 3 minggu terakhir.
         </p>
@@ -302,13 +302,13 @@ function ProgramRollupCard({ entries }: { entries: CeProgramRollupEntry[] }) {
         <div className="max-h-72 overflow-y-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card">
-              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Program</th>
-                <th className="px-3 py-2 font-medium text-right">Target</th>
-                <th className="px-3 py-2 font-medium text-right">Realisasi</th>
-                <th className="px-3 py-2 font-medium text-right">Capaian</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium text-right">3 Minggu</th>
+              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+                <th className="px-3 py-2.5 font-bold">Program</th>
+                <th className="px-3 py-2.5 font-bold text-right">Target</th>
+                <th className="px-3 py-2.5 font-bold text-right">Realisasi</th>
+                <th className="px-3 py-2.5 font-bold text-right">Capaian</th>
+                <th className="px-3 py-2.5 font-bold">Status</th>
+                <th className="px-3 py-2.5 font-bold text-right">3 Minggu</th>
               </tr>
             </thead>
             <tbody>
@@ -339,16 +339,16 @@ function RecentActivityCard({ activity }: { activity: ReturnType<typeof buildCeR
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Kegiatan Terealisasi (3 Minggu Terakhir)</CardTitle>
+        <CardTitle className="text-lg font-extrabold">Kegiatan Terealisasi (3 Minggu Terakhir)</CardTitle>
         <p className="text-xs text-muted-foreground">{activity.length} temuan direalisasi dalam 3 minggu terakhir.</p>
       </CardHeader>
       <CardContent>
         <ul className="max-h-72 space-y-2 overflow-y-auto">
           {activity.map(({ item, tanggalRealisasi }) => (
-            <li key={item.id} className="flex items-start gap-2 rounded-lg border p-2 text-sm">
+            <li key={item.id} className="flex items-start gap-2 rounded-lg border bg-muted/20 p-2.5 text-sm">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
               <div className="flex flex-col">
-                <span className="font-medium text-foreground">{item.namaProgram || item.gardu}</span>
+                <span className="font-semibold text-foreground">{item.namaProgram || item.gardu}</span>
                 <span className="text-xs text-muted-foreground">
                   {item.gardu} · {item.ultg} · {tanggalRealisasi}
                 </span>
@@ -369,12 +369,12 @@ function ItemTable({ items }: { items: CeItem[] }) {
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-            <th className="px-3 py-2 font-medium">Status</th>
-            <th className="px-3 py-2 font-medium">ULTG / GI / Bay</th>
-            <th className="px-3 py-2 font-medium">Program</th>
-            <th className="px-3 py-2 font-medium">Kriteria</th>
-            <th className="px-3 py-2 font-medium">Target</th>
+          <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2.5 font-bold">Status</th>
+            <th className="px-3 py-2.5 font-bold">ULTG / GI / Bay</th>
+            <th className="px-3 py-2.5 font-bold">Program</th>
+            <th className="px-3 py-2.5 font-bold">Kriteria</th>
+            <th className="px-3 py-2.5 font-bold">Target</th>
           </tr>
         </thead>
         <tbody>
@@ -497,21 +497,21 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border p-3">
-          <div className="text-lg font-semibold tabular-nums text-foreground">{summary.total}</div>
-          <div className="text-xs text-muted-foreground">Total Temuan</div>
+        <div className="rounded-lg border bg-muted/40 p-3">
+          <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{summary.total}</div>
+          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Total Temuan</div>
         </div>
-        <div className="rounded-lg border p-3">
-          <div className="text-lg font-semibold tabular-nums text-foreground">{summary.close}</div>
-          <div className="text-xs text-muted-foreground">Close</div>
+        <div className="rounded-lg border border-success/40 bg-success/10 p-3">
+          <div className="text-xl font-bold tabular-nums text-success sm:text-2xl">{summary.close}</div>
+          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Close</div>
         </div>
-        <div className="rounded-lg border p-3">
-          <div className="text-lg font-semibold tabular-nums text-foreground">{summary.open}</div>
-          <div className="text-xs text-muted-foreground">Open</div>
+        <div className="rounded-lg border border-warning/50 bg-warning/10 p-3">
+          <div className="text-xl font-bold tabular-nums text-warning-foreground sm:text-2xl">{summary.open}</div>
+          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Open</div>
         </div>
-        <div className="rounded-lg border p-3">
-          <div className="text-lg font-semibold tabular-nums text-foreground">{formatPercent(summary.percentAchieve)}</div>
-          <div className="text-xs text-muted-foreground">% Achieve</div>
+        <div className="rounded-lg border bg-muted/40 p-3">
+          <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{formatPercent(summary.percentAchieve)}</div>
+          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">% Achieve</div>
         </div>
       </div>
 
@@ -537,7 +537,7 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
       <RecentActivityCard activity={recentActivity} />
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold tracking-tight text-foreground">
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">
           Item Periode {CE_MONTH_FULL_ID[ceMonthAbbrIndex(monthAbbr)]}-M{weekOfMonth}
         </h3>
         <p className="text-xs text-muted-foreground">

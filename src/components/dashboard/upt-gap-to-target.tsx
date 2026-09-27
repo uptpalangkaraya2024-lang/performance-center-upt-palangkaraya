@@ -12,6 +12,11 @@ const GAP_TONE: Record<string, string> = {
   warning: "text-warning-foreground",
 };
 
+const CARD_TONE: Record<string, string> = {
+  critical: "border-critical/40 bg-critical/[0.06]",
+  warning: "border-warning/50 bg-warning/[0.06]",
+};
+
 // Only KPIs that missed target this period — the point is "what needs
 // attention", not a full re-listing of all 19 (that's Kinerja UPT itself).
 export function UptGapToTarget({ kpis }: { kpis: UptKpi[] }) {
@@ -29,31 +34,31 @@ export function UptGapToTarget({ kpis }: { kpis: UptKpi[] }) {
       {gaps.map((kpi) => {
         const gap = computeGap(kpi.targetValue, kpi.actualValue, kpi.direction, kpi.unit);
         return (
-          <div key={kpi.key} className="rounded-lg border px-3 py-2.5">
+          <div key={kpi.key} className={cn("rounded-lg border px-3 py-3", CARD_TONE[kpi.status] ?? "")}>
             <div className="flex items-start justify-between gap-3">
-              <p className="truncate text-sm font-semibold text-foreground">{kpi.abbreviation ?? kpi.displayName}</p>
+              <p className="truncate text-base font-extrabold text-foreground">{kpi.abbreviation ?? kpi.displayName}</p>
               <UptStatusBadge status={kpi.status} className="shrink-0" />
             </div>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{kpi.displayName}</p>
 
-            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-4">
+            <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-4">
               <div>
-                <p className="text-muted-foreground">Target</p>
-                <p className="font-medium tabular-nums text-foreground">{kpi.targetLabel ?? "-"}</p>
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target</p>
+                <p className="font-bold tabular-nums text-foreground">{kpi.targetLabel ?? "-"}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Realisasi</p>
-                <p className="font-medium tabular-nums text-foreground">{kpi.actualLabel ?? "-"}</p>
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Realisasi</p>
+                <p className="font-bold tabular-nums text-foreground">{kpi.actualLabel ?? "-"}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Achievement</p>
-                <p className="font-medium tabular-nums text-foreground">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Achievement</p>
+                <p className="font-bold tabular-nums text-foreground">
                   {kpi.achievement !== null ? `${kpi.achievement.toFixed(1)}%` : "-"}
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground">Gap</p>
-                <p className={cn("font-medium tabular-nums", GAP_TONE[kpi.status] ?? "text-foreground")}>
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Gap</p>
+                <p className={cn("font-bold tabular-nums", GAP_TONE[kpi.status] ?? "text-foreground")}>
                   {gap.label}
                 </p>
               </div>

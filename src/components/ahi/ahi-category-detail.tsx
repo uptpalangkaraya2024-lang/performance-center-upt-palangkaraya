@@ -32,36 +32,36 @@ function CategoryCard({ category }: { category: AhiCategory }) {
     <Card className="gap-0 py-0">
       <CardHeader className="flex-row items-center justify-between gap-2 px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-foreground">{category.displayName}</p>
+          <p className="text-base font-extrabold text-foreground">{category.displayName}</p>
           <p className="text-xs text-muted-foreground">
             {formatCount(category.jumlahDataTercatat)} data · Kualitas {formatPercent(category.kualitasData)}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold tabular-nums text-foreground">{formatPercent(category.score)}</span>
+          <span className="text-2xl font-extrabold tabular-nums text-foreground">{formatPercent(category.score)}</span>
           <AhiStatusBadge status={category.status} />
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 border-t px-4 py-3">
         <div className="grid grid-cols-5 gap-2 text-center text-xs">
-          <div className="rounded-md bg-muted/50 py-1.5">
-            <div className="font-semibold text-foreground">{formatCount(distribution.best)}</div>
+          <div className="rounded-md border bg-muted/40 py-2">
+            <div className="text-sm font-bold text-foreground">{formatCount(distribution.best)}</div>
             <div className="text-muted-foreground">1-Best</div>
           </div>
-          <div className="rounded-md bg-muted/50 py-1.5">
-            <div className="font-semibold text-foreground">{formatCount(distribution.good)}</div>
+          <div className="rounded-md border bg-muted/40 py-2">
+            <div className="text-sm font-bold text-foreground">{formatCount(distribution.good)}</div>
             <div className="text-muted-foreground">2-Good</div>
           </div>
-          <div className="rounded-md bg-muted/50 py-1.5">
-            <div className="font-semibold text-foreground">{formatCount(distribution.fair)}</div>
+          <div className="rounded-md border bg-muted/40 py-2">
+            <div className="text-sm font-bold text-foreground">{formatCount(distribution.fair)}</div>
             <div className="text-muted-foreground">3-Fair</div>
           </div>
-          <div className="rounded-md bg-warning/10 py-1.5">
-            <div className="font-semibold text-warning-foreground">{formatCount(distribution.poor)}</div>
+          <div className="rounded-md border border-warning/50 bg-warning/20 py-2">
+            <div className="text-sm font-bold text-warning-foreground">{formatCount(distribution.poor)}</div>
             <div className="text-muted-foreground">4-Poor</div>
           </div>
-          <div className="rounded-md bg-critical/10 py-1.5">
-            <div className="font-semibold text-critical">{formatCount(distribution.critical)}</div>
+          <div className="rounded-md border border-critical/40 bg-critical/20 py-2">
+            <div className="text-sm font-bold text-critical">{formatCount(distribution.critical)}</div>
             <div className="text-muted-foreground">5-Critical</div>
           </div>
         </div>

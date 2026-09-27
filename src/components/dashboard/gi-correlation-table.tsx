@@ -55,10 +55,10 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{row.gangguanTrafo || "-"}</TableCell>
                 <TableCell className="text-right tabular-nums">{row.gangguanTransmisi || "-"}</TableCell>
-                <TableCell className={cn("text-right tabular-nums", row.ahiPoor > 0 && "text-warning-foreground font-medium")}>
+                <TableCell className={cn("text-right text-sm tabular-nums", row.ahiPoor > 0 && "text-warning-foreground font-bold")}>
                   {row.ahiPoor || "-"}
                 </TableCell>
-                <TableCell className={cn("text-right tabular-nums", row.ahiCritical > 0 && "text-critical font-medium")}>
+                <TableCell className={cn("text-right text-sm tabular-nums", row.ahiCritical > 0 && "text-critical font-bold")}>
                   {row.ahiCritical || "-"}
                 </TableCell>
               </TableRow>

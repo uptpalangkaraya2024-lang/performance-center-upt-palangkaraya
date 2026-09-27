@@ -47,9 +47,9 @@ function formatTime(date: Date | null): string | null {
 
 function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
   return (
-    <div className="rounded-lg border p-3">
-      <div className={`text-xl font-semibold tabular-nums ${className ?? "text-foreground"}`}>{value}</div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="rounded-lg border bg-muted/40 p-3">
+      <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
+      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</div>
     </div>
   );
 }
@@ -79,7 +79,7 @@ function CategoryBanner({ title, subtitle, latest }: { title: string; subtitle?:
         <div className="flex items-center gap-2.5">
           <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">{title}</h2>
+            <h2 className="text-xl font-extrabold tracking-tight text-foreground">{title}</h2>
             {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
           </div>
         </div>
@@ -110,34 +110,34 @@ function CategoryResumeCard({
   return (
     <a
       href={`#${anchorId}`}
-      className="flex flex-col gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/30"
+      className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 transition-colors hover:bg-muted/30"
       style={{ borderLeft: `4px solid ${accent}` }}
     >
       <div className="flex items-center gap-2">
         <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
-        <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">{title}</h3>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div>
-          <div className="text-lg font-semibold tabular-nums text-critical">
+        <div className="rounded-md border bg-card p-2">
+          <div className="text-xl font-extrabold tabular-nums text-critical">
             {data.summary.trip.toLocaleString("id-ID")}
             {!isTrafo ? (
-              <span className="ml-1 text-sm text-primary">/ {data.summary.arSukses.toLocaleString("id-ID")}</span>
+              <span className="ml-1 text-sm font-bold text-primary">/ {data.summary.arSukses.toLocaleString("id-ID")}</span>
             ) : null}
           </div>
-          <div className="text-xs text-muted-foreground">{isTrafo ? "Trip" : "Trip / AR Sukses"}</div>
+          <div className="text-xs font-medium text-muted-foreground">{isTrafo ? "Trip" : "Trip / AR Sukses"}</div>
         </div>
-        <div>
-          <div className="text-lg font-semibold tabular-nums text-critical">
+        <div className="rounded-md border bg-card p-2">
+          <div className="text-xl font-extrabold tabular-nums text-critical">
             {data.followUp.open.toLocaleString("id-ID")}
           </div>
-          <div className="text-xs text-muted-foreground">Open Case</div>
+          <div className="text-xs font-medium text-muted-foreground">Open Case</div>
         </div>
       </div>
 
       <div>
-        <p className="mb-1 text-[11px] text-muted-foreground">Penyebab Terbesar</p>
+        <p className="mb-1 text-xs font-semibold text-muted-foreground">Penyebab Terbesar</p>
         {topCauses.length === 0 ? (
           <span className="text-xs text-muted-foreground">Belum ada data.</span>
         ) : (
@@ -145,7 +145,7 @@ function CategoryResumeCard({
             {topCauses.map((c) => (
               <span
                 key={c.cause}
-                className="rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground"
+                className="rounded-full border bg-muted/50 px-2.5 py-1 text-xs font-bold text-foreground"
               >
                 {c.cause} <span className="tabular-nums text-muted-foreground">({c.count})</span>
               </span>
@@ -205,36 +205,36 @@ function CategorySection({
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="flex items-center gap-2.5 rounded-lg border p-3">
-          <CheckCircle2 className="size-4 shrink-0 text-success" />
+        <div className="flex items-center gap-2.5 rounded-lg border border-success/40 bg-success/10 p-3">
+          <CheckCircle2 className="size-5 shrink-0 text-success" />
           <div>
-            <div className="text-lg font-semibold tabular-nums text-foreground">{data.followUp.closed}</div>
-            <div className="text-xs text-muted-foreground">Tindak Lanjut Selesai</div>
+            <div className="text-xl font-extrabold tabular-nums text-foreground">{data.followUp.closed}</div>
+            <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Tindak Lanjut Selesai</div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5 rounded-lg border p-3">
-          <XCircle className="size-4 shrink-0 text-critical" />
+        <div className="flex items-center gap-2.5 rounded-lg border border-critical/40 bg-critical/10 p-3">
+          <XCircle className="size-5 shrink-0 text-critical" />
           <div>
-            <div className="text-lg font-semibold tabular-nums text-foreground">{data.followUp.open}</div>
-            <div className="text-xs text-muted-foreground">Masih Open</div>
+            <div className="text-xl font-extrabold tabular-nums text-foreground">{data.followUp.open}</div>
+            <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Masih Open</div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5 rounded-lg border p-3">
-          <CircleDashed className="size-4 shrink-0 text-muted-foreground" />
+        <div className="flex items-center gap-2.5 rounded-lg border bg-muted/30 p-3">
+          <CircleDashed className="size-5 shrink-0 text-muted-foreground" />
           <div>
-            <div className="text-lg font-semibold tabular-nums text-foreground">{data.followUp.unknown}</div>
-            <div className="text-xs text-muted-foreground">Belum Diketahui</div>
+            <div className="text-xl font-extrabold tabular-nums text-foreground">{data.followUp.unknown}</div>
+            <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Belum Diketahui</div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-lg border p-3">
-        <p className="mb-2 text-xs text-muted-foreground">Penyebab Gangguan Keseluruhan</p>
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <p className="mb-2 text-xs font-bold tracking-wide text-foreground uppercase">Penyebab Gangguan Keseluruhan</p>
         <div className="flex flex-wrap gap-2">
           {data.causePareto.map((c) => (
             <span
               key={c.cause}
-              className="rounded-full border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground"
+              className="rounded-full border bg-muted/50 px-2.5 py-1 text-xs font-bold text-foreground"
             >
               {c.cause} <span className="tabular-nums text-muted-foreground">
                 ({c.count} · {Math.round((c.count / data.summary.total) * 100)}%)
@@ -253,7 +253,7 @@ function CategorySection({
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Pareto Penyebab Gangguan</CardTitle>
+            <CardTitle className="text-lg font-extrabold">Pareto Penyebab Gangguan</CardTitle>
           </CardHeader>
           <CardContent>
             <DisturbanceParetoChart data={data.causePareto} />
@@ -262,7 +262,7 @@ function CategorySection({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Pareto Jenis Gangguan{isTrafo ? " (Trip)" : " (Trip / AR)"}</CardTitle>
+            <CardTitle className="text-lg font-extrabold">Pareto Jenis Gangguan{isTrafo ? " (Trip)" : " (Trip / AR)"}</CardTitle>
           </CardHeader>
           <CardContent>
             <DisturbanceParetoChart data={kindBreakdownForChart} />
@@ -272,7 +272,7 @@ function CategorySection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Gangguan per Bulan — Year-on-Year</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Gangguan per Bulan — Year-on-Year</CardTitle>
         </CardHeader>
         <CardContent>
           <DisturbanceYoyMonthlyChart
@@ -287,7 +287,7 @@ function CategorySection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Gangguan per ULTG</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Gangguan per ULTG</CardTitle>
           <p className="text-xs text-muted-foreground">
             Kinerja relay (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) dan status tindak lanjut per ULTG.
           </p>
@@ -299,7 +299,7 @@ function CategorySection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Penyebab Gangguan per ULTG</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Penyebab Gangguan per ULTG</CardTitle>
           <p className="text-xs text-muted-foreground">
             Sebaran penyebab tiap ULTG dalam satu bar — filter satu ULTG dan/atau satu penyebab untuk fokus ke
             kombinasi yang ingin dibandingkan.
@@ -312,7 +312,7 @@ function CategorySection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Gangguan per Ruas / Bay</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Gangguan per Ruas / Bay</CardTitle>
           <p className="text-xs text-muted-foreground">
             Kinerja relay tiap ruas/bay — filter jenis (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) atau status
             tindak lanjut (Open / Selesai / Belum Diketahui) untuk meranking ulang ruas yang paling terdampak.
@@ -325,7 +325,7 @@ function CategorySection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Penyebab Gangguan per Ruas / Bay</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Penyebab Gangguan per Ruas / Bay</CardTitle>
           <p className="text-xs text-muted-foreground">
             Sebaran penyebab tiap ruas/bay dalam satu bar — filter satu penyebab untuk meranking ulang ruas mana yang
             paling terdampak.
@@ -338,7 +338,7 @@ function CategorySection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Durasi Pemulihan Gangguan (Trip)</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Durasi Pemulihan Gangguan (Trip)</CardTitle>
           <p className="text-xs text-muted-foreground">
             Dari kolom DURASI GGN pada sumber data — hanya gangguan Trip (padam nyata), tidak termasuk AR Sukses
             &amp; Tidak Trip yang durasinya memang 0.
@@ -351,11 +351,11 @@ function CategorySection({
             </p>
           ) : (
             <>
-              <div className="rounded-lg border p-3">
-                <div className="text-xl font-semibold tabular-nums text-foreground">
+              <div className="rounded-lg border bg-muted/40 p-3">
+                <div className="text-2xl font-extrabold tabular-nums text-foreground">
                   {formatDurationMinutes(data.avgDurationMinutes)}
                 </div>
-                <div className="text-xs text-muted-foreground">Rata-rata Durasi Pemulihan (Trip)</div>
+                <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Rata-rata Durasi Pemulihan (Trip)</div>
               </div>
 
               {data.longestDisturbances.length > 0 ? (
@@ -572,7 +572,7 @@ export default async function DisturbancesPage() {
         <>
           <section className="flex flex-col gap-3">
             <div>
-              <h2 className="text-base font-semibold tracking-tight">Resume Gangguan</h2>
+              <h2 className="text-lg font-extrabold tracking-tight">Resume Gangguan</h2>
               <p className="text-xs text-muted-foreground">
                 Trip/AR, open case, dan penyebab terbesar tiap kategori — klik kartu untuk lompat ke detailnya.
               </p>

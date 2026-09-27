@@ -76,10 +76,10 @@ function formatPercent(v: number | null): string {
 function StatusPill({ status }: { status: FourDxLm["status"] }) {
   const cls =
     status === "tercapai"
-      ? "border-success/40 bg-success/10 text-success"
-      : "border-warning/40 bg-warning/15 text-warning-foreground";
+      ? "border-success/40 bg-success/20 text-success"
+      : "border-warning/50 bg-warning/20 text-warning-foreground";
   return (
-    <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", cls)}>
+    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap", cls)}>
       {status === "tercapai" ? "Tercapai" : "Belum"}
     </span>
   );
@@ -90,12 +90,12 @@ function ResumeTable({ wigs }: { wigs: FourDxWig[] }) {
     <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-            <th className="px-3 py-2 font-medium">WIG / Lead Measure</th>
-            <th className="px-3 py-2 font-medium">Target Mingguan</th>
-            <th className="px-3 py-2 font-medium">Realisasi Mingguan</th>
-            <th className="px-3 py-2 font-medium">%</th>
-            <th className="px-3 py-2 font-medium">Status</th>
+          <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2.5 font-bold">WIG / Lead Measure</th>
+            <th className="px-3 py-2.5 font-bold">Target Mingguan</th>
+            <th className="px-3 py-2.5 font-bold">Realisasi Mingguan</th>
+            <th className="px-3 py-2.5 font-bold">%</th>
+            <th className="px-3 py-2.5 font-bold">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -144,7 +144,7 @@ function WigBanner({ wig }: { wig: FourDxWig }) {
     >
       <div className="flex items-center gap-2">
         <span className="size-2 shrink-0 rounded-full print:hidden" style={{ backgroundColor: accent }} />
-        <h3 className="text-base font-bold tracking-tight text-foreground">
+        <h3 className="text-lg font-extrabold tracking-tight text-foreground">
           WIG {wig.number}. {wig.title.replace(/^WIG\s*\d+\.\s*/i, "")}
         </h3>
       </div>
@@ -157,55 +157,55 @@ function LmCard({ lm }: { lm: FourDxLm }) {
     <Card id={lmAnchorId(lm.code)} className="scroll-mt-16 print:break-inside-avoid print:border print:shadow-none">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">LM {lm.code}</CardTitle>
+          <CardTitle className="text-lg font-extrabold">LM {lm.code}</CardTitle>
           <StatusPill status={lm.status} />
         </div>
-        <p className="text-xs text-muted-foreground">{lm.description}</p>
+        <p className="text-sm text-muted-foreground">{lm.description}</p>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-4">
         <div>
-          <p className="mb-1.5 text-xs font-medium text-foreground">
+          <p className="mb-1.5 text-sm font-bold tracking-wide text-foreground uppercase">
             Target &amp; Realisasi UPT
-            <span className="ml-1 font-normal text-muted-foreground">
+            <span className="ml-1 text-xs font-normal tracking-normal text-muted-foreground normal-case">
               — menentukan status tercapai/belum, walau breakdown di bawah masih ada yang kurang
             </span>
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border p-3">
-              <div className="text-lg font-semibold tabular-nums text-foreground">{lm.targetBulanan}</div>
-              <div className="text-xs text-muted-foreground">Target Bulanan</div>
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{lm.targetBulanan}</div>
+              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target Bulanan</div>
             </div>
-            <div className="rounded-lg border p-3">
-              <div className="text-lg font-semibold tabular-nums text-foreground">{lm.targetMingguan}</div>
-              <div className="text-xs text-muted-foreground">Target Mingguan</div>
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{lm.targetMingguan}</div>
+              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target Mingguan</div>
             </div>
-            <div className="rounded-lg border p-3">
-              <div className="text-lg font-semibold tabular-nums text-foreground">{lm.realisasiMingguan}</div>
-              <div className="text-xs text-muted-foreground">Realisasi Mingguan</div>
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{lm.realisasiMingguan}</div>
+              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Realisasi Mingguan</div>
             </div>
-            <div className="rounded-lg border p-3">
-              <div className="text-lg font-semibold tabular-nums text-foreground">
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">
                 {formatPercent(lm.percentRealisasiMingguan)}
               </div>
-              <div className="text-xs text-muted-foreground">% Realisasi Mingguan</div>
+              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">% Realisasi Mingguan</div>
             </div>
           </div>
         </div>
 
         {lm.assets.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Tidak ada aset yang dijadwalkan pada periode ini.</p>
+          <p className="text-sm text-muted-foreground">Tidak ada aset yang dijadwalkan pada periode ini.</p>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-medium text-foreground">Breakdown per ULTG / Ruas</p>
-            <ul className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/20 p-2.5">
+            <p className="text-xs font-bold text-muted-foreground uppercase">Breakdown per ULTG / Ruas</p>
+            <ul className="flex flex-col gap-1.5">
               {lm.assets.map((asset) => (
-                <li key={asset.asset} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
+                <li key={asset.asset} className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm">
                   {asset.done ? (
                     <CheckCircle2 className="size-4 shrink-0 text-success" />
                   ) : (
                     <Circle className="size-4 shrink-0 text-muted-foreground" />
                   )}
-                  <span className={cn("flex-1", asset.done ? "text-foreground" : "text-muted-foreground")}>
+                  <span className={cn("flex-1 font-medium", asset.done ? "text-foreground" : "text-muted-foreground")}>
                     {asset.asset}
                   </span>
                   {asset.targetThisWeek > 1 ? (
@@ -224,9 +224,9 @@ function LmCard({ lm }: { lm: FourDxLm }) {
 }
 
 const OUTCOME_STATUS_CLASS: Record<FourDxOutcomeStatus["status"], string> = {
-  aman: "border-success/40 bg-success/10 text-success",
-  "lewat-target": "border-critical/40 bg-critical/10 text-critical",
-  unknown: "border-border bg-muted/40 text-muted-foreground",
+  aman: "border-success/40 bg-success/20 text-success",
+  "lewat-target": "border-critical/40 bg-critical/20 text-critical",
+  unknown: "border-border bg-muted/50 text-muted-foreground",
 };
 
 const OUTCOME_STATUS_LABEL: Record<FourDxOutcomeStatus["status"], string> = {
@@ -305,8 +305,8 @@ function OutcomeCorrelationBanner({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Korelasi Antar WIG — Target vs Realisasi Aktual</CardTitle>
-        <p className="text-xs text-muted-foreground">
+        <CardTitle className="text-lg font-extrabold">Korelasi Antar WIG — Target vs Realisasi Aktual</CardTitle>
+        <p className="text-sm text-muted-foreground">
           Realisasi kumulatif tahun berjalan dari data gangguan aktual, dibandingkan target tahunan tiap WIG.
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
@@ -392,18 +392,18 @@ function OutcomeCorrelationBanner({
             const unit = s.wigNumber === 3 ? "Jam" : "kali";
             const chart = (charts[s.wigNumber] ?? []).slice(fromMonth, toMonth + 1);
             return (
-              <div key={s.wigNumber} className="flex flex-col gap-2 rounded-lg border p-3" style={{ borderLeft: `4px solid ${accent}` }}>
+              <div key={s.wigNumber} className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3" style={{ borderLeft: `4px solid ${accent}` }}>
                 <button
                   type="button"
                   onClick={() => jumpTo(wigAnchorId(s.wigNumber))}
                   className="flex flex-col gap-1.5 text-left"
                 >
-                  <span className="text-xs font-semibold tracking-tight text-foreground">WIG {s.wigNumber} — {s.label}</span>
-                  <span className="text-lg font-semibold tabular-nums text-foreground">
+                  <span className="text-sm font-bold tracking-tight text-foreground">WIG {s.wigNumber} — {s.label}</span>
+                  <span className="text-xl font-extrabold tabular-nums text-foreground sm:text-2xl">
                     {s.realisasiKumulatif ?? "—"}{" "}
                     <span className="text-xs font-normal text-muted-foreground">/ target {s.target ?? "—"} {unit}</span>
                   </span>
-                  <span className={cn("inline-flex w-fit rounded-full border px-2 py-0.5 text-xs font-medium", OUTCOME_STATUS_CLASS[s.status])}>
+                  <span className={cn("inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-bold", OUTCOME_STATUS_CLASS[s.status])}>
                     {OUTCOME_STATUS_LABEL[s.status]}
                   </span>
                 </button>
@@ -440,7 +440,7 @@ function AchievementSummaryCards({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold tracking-tight text-foreground">Ringkasan Pencapaian</h3>
+      <h3 className="text-base font-extrabold tracking-tight text-foreground">Ringkasan Pencapaian</h3>
       <p className="text-xs text-muted-foreground">
         &quot;Periode dipilih&quot; mengikuti filter bulan/minggu di atas. &quot;Rata-rata tahun ini&quot; selalu dihitung
         dari seluruh minggu yang sudah berjalan tahun ini, terlepas dari filter.
@@ -451,13 +451,13 @@ function AchievementSummaryCards({
           const evaluable = wig.lms.filter((lm) => lm.targetMingguan > 0);
           const tercapai = evaluable.filter((lm) => lm.status === "tercapai").length;
           return (
-            <div key={wig.number} className="flex flex-col gap-1.5 rounded-lg border p-3">
-              <span className="text-xs font-semibold tracking-tight text-foreground">WIG {wig.number} — {wigLabels[wig.number]}</span>
+            <div key={wig.number} className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-3">
+              <span className="text-sm font-bold tracking-tight text-foreground">WIG {wig.number} — {wigLabels[wig.number]}</span>
               <span className="text-sm text-muted-foreground">
-                Periode dipilih: <span className="font-medium text-foreground">{evaluable.length > 0 ? `${tercapai}/${evaluable.length}` : "—"}</span> LM tercapai
+                Periode dipilih: <span className="font-bold text-foreground">{evaluable.length > 0 ? `${tercapai}/${evaluable.length}` : "—"}</span> LM tercapai
               </span>
               <span className="text-sm text-muted-foreground">
-                Rata-rata tahun ini: <span className="font-medium text-foreground">{formatPercentSigned(summary?.ytdPercent ?? null)}</span>
+                Rata-rata tahun ini: <span className="font-bold text-foreground">{formatPercentSigned(summary?.ytdPercent ?? null)}</span>
               </span>
               <div className="flex items-end gap-0.5" title="Tren 8 minggu terakhir">
                 {(summary?.recentWeeks ?? []).map((w, i) => (
@@ -694,8 +694,8 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
         </div>
       </div>
 
-      <div className="rounded-lg border bg-muted/20 p-3 print:border-0 print:bg-transparent print:p-0">
-        <p className="text-sm font-semibold text-foreground">
+      <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 print:border-0 print:bg-transparent print:p-0">
+        <p className="text-base font-extrabold text-foreground">
           Periode {MONTH_FULL_ID[monthAbbrIndex(monthAbbr)]}-M{weekOfMonth}
         </p>
         <p className="text-xs text-muted-foreground">
@@ -706,7 +706,7 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
       <AchievementSummaryCards wigs={wigs} summaries={achievementSummaries} wigLabels={wigLabels} />
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold tracking-tight text-foreground">Resume Semua Lead Measure</h3>
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">Resume Semua Lead Measure</h3>
         <ResumeTable wigs={wigs} />
       </div>
 

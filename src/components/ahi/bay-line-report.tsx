@@ -34,16 +34,16 @@ const SECTION_COLORS = [
 ];
 
 function klasifikasiClass(k: AhiKlasifikasi): string {
-  if (k === "CRITICAL") return "border-critical/40 bg-critical/10 text-critical";
-  if (k === "POOR") return "border-warning/40 bg-warning/15 text-warning-foreground";
+  if (k === "CRITICAL") return "border-critical/40 bg-critical/20 text-critical";
+  if (k === "POOR") return "border-warning/50 bg-warning/20 text-warning-foreground";
   if (k === "FAIR") return "border-border bg-muted text-muted-foreground";
-  if (k === "GOOD" || k === "BEST") return "border-success/40 bg-success/10 text-success";
+  if (k === "GOOD" || k === "BEST") return "border-success/40 bg-success/20 text-success";
   return "border-border text-muted-foreground"; // NO DATA
 }
 
 function KlasifikasiPill({ value }: { value: AhiKlasifikasi }) {
   return (
-    <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", klasifikasiClass(value))}>
+    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap", klasifikasiClass(value))}>
       {value}
     </span>
   );
@@ -51,8 +51,8 @@ function KlasifikasiPill({ value }: { value: AhiKlasifikasi }) {
 
 function FlagPill({ active, label, tone }: { active: boolean; label: string; tone: "warning" | "critical" }) {
   if (!active) return <span className="text-xs text-muted-foreground">—</span>;
-  const cls = tone === "critical" ? "border-critical/40 bg-critical/10 text-critical" : "border-warning/40 bg-warning/15 text-warning-foreground";
-  return <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium", cls)}>✔️ {label}</span>;
+  const cls = tone === "critical" ? "border-critical/40 bg-critical/20 text-critical" : "border-warning/50 bg-warning/20 text-warning-foreground";
+  return <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", cls)}>✔️ {label}</span>;
 }
 
 function formatValue(v: string | number | null): string {
@@ -80,23 +80,23 @@ function QualityScoreCard({ units }: { units: BayEquipmentUnit[] }) {
   return (
     <Card className="print:break-inside-avoid print:border print:shadow-none">
       <CardHeader>
-        <CardTitle className="text-base">Kualitas Data &amp; Skor AHI</CardTitle>
+        <CardTitle className="text-lg font-extrabold">Kualitas Data &amp; Skor AHI</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {units.map((unit, idx) => (
-            <div key={`${unit.role}-${idx}`} className="rounded-lg border p-3">
-              <p className="truncate text-xs text-muted-foreground" title={unit.role}>
+            <div key={`${unit.role}-${idx}`} className="rounded-lg border bg-muted/30 p-3">
+              <p className="truncate text-xs font-semibold text-muted-foreground" title={unit.role}>
                 {unit.role}
               </p>
               <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="text-lg font-semibold tabular-nums text-foreground">
+                <span className="text-xl font-bold tabular-nums text-foreground">
                   {formatPercent(unit.kualitasData)}
                 </span>
                 <span className="text-xs text-muted-foreground">Kualitas Data</span>
               </div>
               <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="text-lg font-semibold tabular-nums text-foreground">{unit.skorAhi ?? "—"}</span>
+                <span className="text-xl font-bold tabular-nums text-foreground">{unit.skorAhi ?? "—"}</span>
                 <KlasifikasiPill value={unit.klasifikasi} />
               </div>
             </div>
@@ -195,11 +195,11 @@ function ResumeTable({ units }: { units: BayEquipmentUnit[] }) {
     <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-            <th className="px-3 py-2 font-medium">Peralatan / Item Pengujian</th>
-            <th className="px-3 py-2 font-medium">Klasifikasi</th>
-            <th className="px-3 py-2 font-medium">Mandatory Pengujian</th>
-            <th className="px-3 py-2 font-medium">Pengujian Ulang</th>
+          <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2.5 font-bold">Peralatan / Item Pengujian</th>
+            <th className="px-3 py-2.5 font-bold">Klasifikasi</th>
+            <th className="px-3 py-2.5 font-bold">Mandatory Pengujian</th>
+            <th className="px-3 py-2.5 font-bold">Pengujian Ulang</th>
           </tr>
         </thead>
         <tbody>
@@ -231,7 +231,7 @@ function SectionBanner({ id, role, accent }: { id: string; role: string; accent:
     >
       <div className="flex items-center gap-2">
         <span className="size-2 shrink-0 rounded-full print:hidden" style={{ backgroundColor: accent }} />
-        <h3 className="text-base font-bold tracking-tight text-foreground">{role}</h3>
+        <h3 className="text-lg font-extrabold tracking-tight text-foreground">{role}</h3>
       </div>
     </div>
   );
@@ -261,8 +261,8 @@ function BayHistorySection({ units }: { units: BayEquipmentUnit[] }) {
   return (
     <Card className="print:break-inside-avoid print:border print:shadow-none">
       <CardHeader>
-        <CardTitle className="text-base">Riwayat Pengujian</CardTitle>
-        <p className="text-xs text-muted-foreground">
+        <CardTitle className="text-lg font-extrabold">Riwayat Pengujian</CardTitle>
+        <p className="text-sm text-muted-foreground">
           Trend Skor AHI dari waktu ke waktu — pilih peralatan dan item pengujian untuk melihat riwayatnya.
         </p>
       </CardHeader>
@@ -347,13 +347,13 @@ function ParameterRawHistoryTable({ history }: { history: EquipmentParameterHist
     <div className="overflow-x-auto rounded-md border">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b bg-muted/40 text-left text-muted-foreground">
-            <th className="px-2 py-1.5 font-medium">Tanggal</th>
-            <th className="px-2 py-1.5 font-medium">Titik Ukur</th>
-            <th className="px-2 py-1.5 font-medium">R</th>
-            <th className="px-2 py-1.5 font-medium">S</th>
-            <th className="px-2 py-1.5 font-medium">T</th>
-            <th className="px-2 py-1.5 font-medium">Klasifikasi</th>
+          <tr className="border-b bg-muted/50 text-left text-muted-foreground uppercase">
+            <th className="px-2 py-2 font-bold">Tanggal</th>
+            <th className="px-2 py-2 font-bold">Titik Ukur</th>
+            <th className="px-2 py-2 font-bold">R</th>
+            <th className="px-2 py-2 font-bold">S</th>
+            <th className="px-2 py-2 font-bold">T</th>
+            <th className="px-2 py-2 font-bold">Klasifikasi</th>
           </tr>
         </thead>
         <tbody>
@@ -381,15 +381,15 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
     <Card className="print:break-inside-avoid print:border print:shadow-none">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">{unit.role}</CardTitle>
+          <CardTitle className="text-lg font-extrabold">{unit.role}</CardTitle>
           <div className="flex items-center gap-2">
             <KlasifikasiPill value={unit.klasifikasi} />
             {unit.skorAhi !== null ? (
-              <span className="text-xs text-muted-foreground">Skor AHI: {unit.skorAhi}</span>
+              <span className="text-sm font-semibold text-muted-foreground">Skor AHI: {unit.skorAhi}</span>
             ) : null}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {unit.merk ?? "—"} {unit.type ?? ""} · Nomor Seri {unit.nomorSeri ?? "—"} · Techident {unit.techident ?? "—"}
           {unit.tanggalPemeliharaanTerakhir ? ` · Pemeliharaan terakhir ${unit.tanggalPemeliharaanTerakhir}` : ""}
         </p>
@@ -398,12 +398,12 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Parameter / Hasil Uji</th>
-                <th className="px-3 py-2 font-medium">R</th>
-                <th className="px-3 py-2 font-medium">S</th>
-                <th className="px-3 py-2 font-medium">T</th>
-                <th className="px-3 py-2 font-medium">Klasifikasi</th>
+              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+                <th className="px-3 py-2.5 font-bold">Parameter / Hasil Uji</th>
+                <th className="px-3 py-2.5 font-bold">R</th>
+                <th className="px-3 py-2.5 font-bold">S</th>
+                <th className="px-3 py-2.5 font-bold">T</th>
+                <th className="px-3 py-2.5 font-bold">Klasifikasi</th>
               </tr>
             </thead>
             <tbody>
@@ -558,8 +558,8 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
         </p>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg border bg-muted/20 p-3 print:border-0 print:bg-transparent print:p-0">
-            <p className="text-sm font-semibold text-foreground">{selected.bay}</p>
+          <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 print:border-0 print:bg-transparent print:p-0">
+            <p className="text-base font-extrabold text-foreground">{selected.bay}</p>
             <p className="text-xs text-muted-foreground">
               {selected.ultg} · GI {selected.gi} · {selected.units.length} unit peralatan
             </p>
@@ -571,7 +571,7 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
               <QualityScoreCard units={selected.units} />
 
               <div className="flex flex-col gap-2">
-                <h3 className="text-sm font-semibold tracking-tight text-foreground">Resume Semua Peralatan</h3>
+                <h3 className="text-base font-extrabold tracking-tight text-foreground">Resume Semua Peralatan</h3>
                 <ResumeTable units={selected.units} />
               </div>
 

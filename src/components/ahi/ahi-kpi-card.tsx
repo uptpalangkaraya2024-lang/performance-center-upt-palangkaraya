@@ -17,11 +17,11 @@ export function AhiKpiCard({ section }: { section: AhiSectionSummary }) {
 
   return (
     <Card className="gap-3 overflow-hidden py-0">
-      <div className={cn("h-1 w-full", ACCENT_BY_STATUS[section.status])} />
+      <div className={cn("h-1.5 w-full", ACCENT_BY_STATUS[section.status])} />
       <CardContent className="flex items-center gap-4 px-5 py-5">
         <AhiRadial value={section.score} status={section.status} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="text-sm font-semibold text-foreground">{section.displayName}</span>
+          <span className="text-base font-extrabold text-foreground">{section.displayName}</span>
           <span className="text-xs text-muted-foreground">Healthy Index</span>
           <div className="mt-1">
             <AhiStatusBadge status={section.status} />

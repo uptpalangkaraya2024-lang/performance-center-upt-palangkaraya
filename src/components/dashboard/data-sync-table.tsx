@@ -80,9 +80,9 @@ const STATUS_LABEL: Record<
   DataSourceHealth["status"],
   { label: string; pillClassName: string; dotClassName: string }
 > = {
-  healthy: { label: "Active", pillClassName: "bg-success/10 text-success", dotClassName: "bg-success" },
-  error: { label: "Gagal sinkronisasi", pillClassName: "bg-critical/10 text-critical", dotClassName: "bg-critical" },
-  pending: { label: "Coming Soon", pillClassName: "bg-info/10 text-info", dotClassName: "bg-info" },
+  healthy: { label: "Active", pillClassName: "border border-success/40 bg-success/20 text-success", dotClassName: "bg-success" },
+  error: { label: "Gagal sinkronisasi", pillClassName: "border border-critical/40 bg-critical/20 text-critical", dotClassName: "bg-critical" },
+  pending: { label: "Coming Soon", pillClassName: "border border-info/40 bg-info/20 text-info", dotClassName: "bg-info" },
 };
 
 export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
@@ -184,7 +184,7 @@ export function DataSyncTable({ rows }: { rows: DataSourceHealth[] }) {
                     <span className="inline-flex items-center">
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold",
                           status.pillClassName,
                         )}
                       >

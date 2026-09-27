@@ -40,10 +40,10 @@ function formatPercent(v: number): string {
 function StatusPill({ status }: { status: AboProgramComputed["status"] }) {
   const cls =
     status === "tercapai"
-      ? "border-success/40 bg-success/10 text-success"
-      : "border-warning/40 bg-warning/15 text-warning-foreground";
+      ? "border-success/40 bg-success/20 text-success"
+      : "border-warning/50 bg-warning/20 text-warning-foreground";
   return (
-    <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", cls)}>
+    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap", cls)}>
       {status === "tercapai" ? "Tercapai" : "Belum"}
     </span>
   );
@@ -68,10 +68,10 @@ function AttentionCard({ items, onJump }: { items: AboAttentionItem[]; onJump: (
     <Card className="print:break-inside-avoid">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <AlertTriangle className="size-4 text-warning-foreground" />
-          <CardTitle className="text-base">Perlu Perhatian</CardTitle>
+          <AlertTriangle className="size-5 text-warning-foreground" />
+          <CardTitle className="text-lg font-extrabold">Perlu Perhatian</CardTitle>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {items.length} hal yang perlu ditindaklanjuti — ULTG belum tercapai, ruas terlambat, atau BA belum diupload.
         </p>
       </CardHeader>
@@ -79,12 +79,12 @@ function AttentionCard({ items, onJump }: { items: AboAttentionItem[]; onJump: (
         <div className="max-h-80 overflow-y-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card">
-              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Program</th>
-                <th className="px-3 py-2 font-medium">ULTG</th>
-                <th className="px-3 py-2 font-medium">Item</th>
-                <th className="px-3 py-2 font-medium">Masalah</th>
-                <th className="px-3 py-2 font-medium">Info</th>
+              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+                <th className="px-3 py-2.5 font-bold">Program</th>
+                <th className="px-3 py-2.5 font-bold">ULTG</th>
+                <th className="px-3 py-2.5 font-bold">Item</th>
+                <th className="px-3 py-2.5 font-bold">Masalah</th>
+                <th className="px-3 py-2.5 font-bold">Info</th>
               </tr>
             </thead>
             <tbody>
@@ -120,12 +120,12 @@ function ResumeTable({ programs }: { programs: AboProgramComputed[] }) {
     <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-            <th className="px-3 py-2 font-medium">Program</th>
-            <th className="px-3 py-2 font-medium">Target s.d. Periode</th>
-            <th className="px-3 py-2 font-medium">Realisasi s.d. Periode</th>
-            <th className="px-3 py-2 font-medium">% Realisasi</th>
-            <th className="px-3 py-2 font-medium">Status</th>
+          <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2.5 font-bold">Program</th>
+            <th className="px-3 py-2.5 font-bold">Target s.d. Periode</th>
+            <th className="px-3 py-2.5 font-bold">Realisasi s.d. Periode</th>
+            <th className="px-3 py-2.5 font-bold">% Realisasi</th>
+            <th className="px-3 py-2.5 font-bold">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -160,33 +160,33 @@ function StatGrid({
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div className="rounded-lg border p-3">
-        <div className="text-lg font-semibold tabular-nums text-foreground">{stats.master}</div>
-        <div className="text-xs text-muted-foreground">Target UPT</div>
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.master}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target UPT</div>
       </div>
-      <div className="rounded-lg border p-3">
-        <div className="text-lg font-semibold tabular-nums text-foreground">{stats.targetRencana}</div>
-        <div className="text-xs text-muted-foreground">Target Rencana</div>
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.targetRencana}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target Rencana</div>
       </div>
-      <div className="rounded-lg border p-3">
-        <div className="text-lg font-semibold tabular-nums text-foreground">{stats.targetToDate}</div>
-        <div className="text-xs text-muted-foreground">Target s.d. Periode</div>
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.targetToDate}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target s.d. Periode</div>
       </div>
-      <div className="rounded-lg border p-3">
-        <div className="text-lg font-semibold tabular-nums text-foreground">{stats.realisasiToDate}</div>
-        <div className="text-xs text-muted-foreground">Realisasi s.d. Periode</div>
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.realisasiToDate}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Realisasi s.d. Periode</div>
       </div>
-      <div className="rounded-lg border p-3">
-        <div className="text-lg font-semibold tabular-nums text-foreground">{formatPercent(stats.percentTarget)}</div>
-        <div className="text-xs text-muted-foreground">% Target (s.d. Periode/Total)</div>
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{formatPercent(stats.percentTarget)}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">% Target (s.d. Periode/Total)</div>
       </div>
-      <div className="rounded-lg border p-3">
-        <div className="text-lg font-semibold tabular-nums text-foreground">{formatPercent(stats.percentRealisasi)}</div>
-        <div className="text-xs text-muted-foreground">% Realisasi (thd Total)</div>
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{formatPercent(stats.percentRealisasi)}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">% Realisasi (thd Total)</div>
       </div>
-      <div className="rounded-lg border p-3">
-        <div className="text-lg font-semibold tabular-nums text-foreground">{stats.gap}</div>
-        <div className="text-xs text-muted-foreground">GAP</div>
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.gap}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">GAP</div>
       </div>
     </div>
   );
@@ -195,18 +195,18 @@ function StatGrid({
 function UltgBreakdown({ ultgBreakdown }: { ultgBreakdown: AboUltgComputed[] }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs font-medium text-foreground">Breakdown per ULTG</p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <p className="text-sm font-bold tracking-wide text-foreground uppercase">Breakdown per ULTG</p>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {ultgBreakdown.map((u) => (
-          <div key={u.ultg} className="flex flex-col gap-1 rounded-lg border p-3">
+          <div key={u.ultg} className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-foreground">{u.ultg}</span>
+              <span className="text-sm font-bold text-foreground">{u.ultg}</span>
               <StatusPill status={u.status} />
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               R:{u.realisasiToDate}/T:{u.targetToDate} s.d. periode · {formatPercent(u.percentRealisasi)}
             </p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Target ULTG: {u.master} · Target Rencana: {u.targetRencana}
             </p>
           </div>
@@ -239,37 +239,37 @@ function RuasChecklist({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-medium text-foreground">
+      <p className="text-sm font-bold tracking-wide text-foreground uppercase">
         Breakdown per Ruas
-        <span className="ml-1 font-normal text-muted-foreground">
+        <span className="ml-1 text-xs font-normal tracking-normal text-muted-foreground normal-case">
           — termasuk ruas dari periode sebelumnya yang belum direalisasi
         </span>
       </p>
       {grouped.map(([ultg, items]) => (
-        <div key={ultg} className="flex flex-col gap-1.5">
-          <p className="text-xs font-semibold text-muted-foreground">{ultg}</p>
-          <ul className="flex flex-col gap-1">
+        <div key={ultg} className="flex flex-col gap-1.5 rounded-lg border bg-muted/20 p-2.5">
+          <p className="text-xs font-bold text-muted-foreground uppercase">{ultg}</p>
+          <ul className="flex flex-col gap-1.5">
             {items.map((item, i) => {
               const overdue = !item.done && item.targetWeekLabel !== selectedWeekLabel;
               const notOk = item.kondisi.trim().toUpperCase() === "NOT OK";
               return (
-                <li key={`${item.asset}-${i}`} className="flex flex-col gap-1 rounded-md border px-2.5 py-1.5 text-sm">
+                <li key={`${item.asset}-${i}`} className="flex flex-col gap-1 rounded-md border bg-card px-3 py-2 text-sm">
                   <div className="flex items-center gap-2">
                     {item.done ? (
                       <CheckCircle2 className="size-4 shrink-0 text-success" />
                     ) : (
                       <Circle className="size-4 shrink-0 text-muted-foreground" />
                     )}
-                    <span className={cn("flex-1", item.done ? "text-foreground" : "text-muted-foreground")}>
+                    <span className={cn("flex-1 font-medium", item.done ? "text-foreground" : "text-muted-foreground")}>
                       {item.asset}
                     </span>
                     {overdue ? (
-                      <span className="inline-flex rounded-full border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground">
+                      <span className="inline-flex rounded-full border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-xs font-medium text-warning-foreground">
                         Terlambat
                       </span>
                     ) : null}
                     {notOk ? (
-                      <span className="inline-flex rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                      <span className="inline-flex rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
                         NOT OK
                       </span>
                     ) : null}
@@ -278,12 +278,12 @@ function RuasChecklist({
                     ) : null}
                   </div>
                   {item.baMissing ? (
-                    <p className="pl-6 text-[11px] text-warning-foreground">
+                    <p className="pl-6 text-xs text-warning-foreground">
                       Sudah direalisasi — BA belum diupload/belum ada
                     </p>
                   ) : null}
                   {item.catatan ? (
-                    <p className="pl-6 text-[11px] text-muted-foreground">Catatan: {item.catatan}</p>
+                    <p className="pl-6 text-xs text-muted-foreground">Catatan: {item.catatan}</p>
                   ) : null}
                 </li>
               );
@@ -300,14 +300,14 @@ function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComput
     <Card id={programAnchorId(program.code)} className="scroll-mt-16 print:break-inside-avoid print:border print:shadow-none">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">{program.code}</CardTitle>
+          <CardTitle className="text-lg font-extrabold">{program.code}</CardTitle>
           <StatusPill status={program.status} />
         </div>
-        <p className="text-xs text-muted-foreground">{program.description}</p>
+        <p className="text-sm text-muted-foreground">{program.description}</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div>
-          <p className="mb-1.5 text-xs font-medium text-foreground">Target &amp; Realisasi UPT</p>
+          <p className="mb-1.5 text-sm font-bold tracking-wide text-foreground uppercase">Target &amp; Realisasi UPT</p>
           <StatGrid stats={program} />
         </div>
         <UltgBreakdown ultgBreakdown={program.ultgBreakdown} />
@@ -389,8 +389,8 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
         </div>
       </div>
 
-      <div className="rounded-lg border bg-muted/20 p-3 print:border-0 print:bg-transparent print:p-0">
-        <p className="text-sm font-semibold text-foreground">
+      <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 print:border-0 print:bg-transparent print:p-0">
+        <p className="text-base font-extrabold text-foreground">
           Periode {ABO_MONTH_FULL[aboMonthAbbrIndex(monthAbbr)]}-M{weekOfMonth}
         </p>
         <p className="text-xs text-muted-foreground">Target &amp; realisasi kumulatif sejak Jan-M1 s.d. periode ini.</p>
@@ -399,7 +399,7 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
       <AttentionCard items={attentionItems} onJump={(code) => jumpTo(programAnchorId(code))} />
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold tracking-tight text-foreground">Resume Semua Program</h3>
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">Resume Semua Program</h3>
         <ResumeTable programs={filteredPrograms} />
       </div>
 

@@ -124,7 +124,7 @@ export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnaps
       ) : (
         <>
           <section className="flex flex-col gap-3">
-            <h2 className="text-base font-semibold tracking-tight">Overall Performance</h2>
+            <h2 className="text-lg font-extrabold tracking-tight">Overall Performance</h2>
             <UptOverallPerformanceSummary overall={snapshot.overall} />
           </section>
 
@@ -139,7 +139,7 @@ export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnaps
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Kinerja UPT — Historical Trend</CardTitle>
+              <CardTitle className="text-lg font-extrabold">Kinerja UPT — Historical Trend</CardTitle>
             </CardHeader>
             <CardContent>
               <UptTrendChart kpis={snapshot.kpis} />

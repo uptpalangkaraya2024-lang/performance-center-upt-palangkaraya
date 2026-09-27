@@ -29,8 +29,8 @@ export function AiInsightList({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-        <Icon className="size-3.5" />
+      <div className="flex items-center gap-1.5 text-sm font-bold tracking-wide text-foreground uppercase">
+        <Icon className="size-4" />
         {title}
       </div>
       {data.length === 0 ? (

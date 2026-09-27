@@ -100,9 +100,9 @@ function useLandscapePrint() {
 
 function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
   return (
-    <div className="flex flex-col justify-center rounded-lg border p-5 text-center">
-      <div className={cn("text-3xl font-semibold tabular-nums", className ?? "text-foreground")}>{value}</div>
-      <div className="text-sm text-muted-foreground">{label}</div>
+    <div className="flex flex-col justify-center rounded-lg border bg-muted/30 p-5 text-center">
+      <div className={cn("text-3xl font-extrabold tabular-nums", className ?? "text-foreground")}>{value}</div>
+      <div className="text-sm font-medium text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -112,9 +112,9 @@ function StatTile({ value, label, className }: { value: string; label: string; c
  *  awkward wrapping for something like "ULTG PALANGKARAYA". */
 function InfoTile({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div className="flex flex-col justify-center rounded-lg border p-5">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 text-lg font-bold text-foreground", className)}>{value}</div>
+    <div className="flex flex-col justify-center rounded-lg border bg-muted/30 p-5">
+      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
+      <div className={cn("mt-1 text-xl font-extrabold text-foreground", className)}>{value}</div>
     </div>
   );
 }
@@ -235,11 +235,11 @@ function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-base">
           <thead>
-            <tr className="border-b bg-muted/40 text-left text-sm text-muted-foreground">
-              <th className="px-4 py-2.5 font-medium">Ruas</th>
-              <th className="px-4 py-2.5 font-medium">ULTG</th>
-              <th className="px-4 py-2.5 font-medium">Kategori</th>
-              <th className="px-4 py-2.5 font-medium text-right">Jumlah</th>
+            <tr className="border-b bg-muted/50 text-left text-sm text-muted-foreground uppercase">
+              <th className="px-4 py-2.5 font-bold">Ruas</th>
+              <th className="px-4 py-2.5 font-bold">ULTG</th>
+              <th className="px-4 py-2.5 font-bold">Kategori</th>
+              <th className="px-4 py-2.5 font-bold text-right">Jumlah</th>
             </tr>
           </thead>
           <tbody>
@@ -424,8 +424,8 @@ export function DisturbancePresentationView({
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:col-span-3 sm:grid-cols-3">
                   {totalByCategory.map((c) => (
-                    <div key={c.label} className="rounded-lg border p-4" style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR[c.label] }}>
-                      <div className="text-2xl font-semibold tabular-nums text-foreground">{c.total}</div>
+                    <div key={c.label} className="rounded-lg border bg-muted/30 p-4" style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR[c.label] }}>
+                      <div className="text-2xl font-extrabold tabular-nums text-foreground">{c.total}</div>
                       <div className="text-sm text-muted-foreground">{c.label}</div>
                       <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                         <span>Trip: {kindCountFor(c.label, "Trip")}</span>

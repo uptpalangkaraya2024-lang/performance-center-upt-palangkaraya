@@ -6,13 +6,13 @@ import type { StatusLevel } from "@/types";
 // Critical findings in the sheet's own distribution, not a scored threshold
 // (none is stated in the source — see src/services/ahi-performance.ts).
 const STATUS_CONFIG: Record<StatusLevel, { label: string; icon: typeof CheckCircle2; className: string }> = {
-  good: { label: "Sehat", icon: CheckCircle2, className: "bg-success/10 text-success border-success/20" },
+  good: { label: "Sehat", icon: CheckCircle2, className: "bg-success/20 text-success border-success/40" },
   warning: {
     label: "Perlu Perhatian",
     icon: AlertTriangle,
-    className: "bg-warning/15 text-warning-foreground border-warning/30",
+    className: "bg-warning/20 text-warning-foreground border-warning/50",
   },
-  critical: { label: "Kritis", icon: XCircle, className: "bg-critical/10 text-critical border-critical/20" },
+  critical: { label: "Kritis", icon: XCircle, className: "bg-critical/20 text-critical border-critical/40" },
   none: { label: "No Data", icon: CircleDashed, className: "bg-muted text-muted-foreground border-border" },
 };
 
@@ -22,12 +22,12 @@ export function AhiStatusBadge({ status, className }: { status: StatusLevel; cla
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold",
         config.className,
         className,
       )}
     >
-      <Icon className="size-3" />
+      <Icon className="size-3.5" />
       {config.label}
     </span>
   );

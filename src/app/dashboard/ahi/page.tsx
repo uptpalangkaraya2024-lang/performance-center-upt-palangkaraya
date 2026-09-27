@@ -108,7 +108,7 @@ export default async function AhiPage() {
 
           <section className="flex flex-col gap-3">
             <div>
-              <h2 className="text-base font-semibold tracking-tight">Asset Health Breakdown</h2>
+              <h2 className="text-lg font-extrabold tracking-tight">Asset Health Breakdown</h2>
               <p className="text-xs text-muted-foreground">
                 Healthy Index per KPI utama — MTU, Catu Daya, Trafo, dan Reaktor.
               </p>
@@ -122,7 +122,7 @@ export default async function AhiPage() {
 
           <section id="ahi-detail" className="flex scroll-mt-20 flex-col gap-3">
             <div>
-              <h2 className="text-base font-semibold tracking-tight">Detail per Kategori</h2>
+              <h2 className="text-lg font-extrabold tracking-tight">Detail per Kategori</h2>
               <p className="text-xs text-muted-foreground">
                 Rincian tiap kategori AHI per kelompok — skor, distribusi hasil pengujian, dan parameter pemeriksaan.
               </p>
@@ -133,7 +133,7 @@ export default async function AhiPage() {
 
           <Card id="ahi-anomaly" className="scroll-mt-20">
             <CardHeader>
-              <CardTitle className="text-base">Anomaly Perlu Perhatian</CardTitle>
+              <CardTitle className="text-lg font-extrabold">Anomaly Perlu Perhatian</CardTitle>
               <p className="text-xs text-muted-foreground">
                 Rekap anomali Poor &amp; Critical MTU &amp; Trafo — hasil rekapan langsung dari sumber data (AM:BA).
               </p>
@@ -155,7 +155,7 @@ export default async function AhiPage() {
               neutralizes position: sticky for every descendant). */}
           <Card className="overflow-visible">
             <CardHeader className="print:hidden">
-              <CardTitle className="text-base">Report Bay Line</CardTitle>
+              <CardTitle className="text-lg font-extrabold">Report Bay Line</CardTitle>
               <p className="text-xs text-muted-foreground">
                 Pilih satu bay line untuk melihat resume, hasil uji, dan hasil evaluasi AHI tiap peralatan (LA, DS
                 Line/Bus, CVT, PMT, CT).

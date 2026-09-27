@@ -53,7 +53,7 @@ export function AhiRadial({
         ) : null}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-lg font-bold tabular-nums text-foreground">
+        <span className="text-xl font-extrabold tabular-nums text-foreground">
           {value === null ? "-" : `${Math.round(value * 100)}%`}
         </span>
       </div>
