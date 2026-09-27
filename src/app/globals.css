@@ -130,16 +130,19 @@
 }
 
 .dark {
-  /* "Deep Ocean Blue" — chosen by the user from 4 mocked-up options (see
-     the "Palet Tema Dashboard" artifact shared in chat) after the previous
-     brighter-but-still-neutral-gray pass still read as flat. This variant
-     keeps the same brightness LADDER as that pass (background -> card ->
-     muted each still ~0.05-0.08 lighter than the last) but moves the hue
-     from a near-neutral 260° (chroma ~0.02-0.03) to a richer, more
-     saturated 255° (chroma ~0.05-0.06) — matching the sidebar's own navy
-     for a stronger "branded blue" identity instead of flat graphite. */
-  --background: oklch(0.27 0.05 255);
+  /* Page background reverted to the original pre-redesign value per user
+     feedback — the "Deep Ocean Blue" hue/chroma bump was liked for cards
+     and stat boxes (kept below) but tinting the PAGE background the same
+     rich blue made the whole scene read as one uniform wash instead of
+     letting cards visibly float above a plain, receding backdrop. Cards
+     now carry all of the color; the page canvas stays neutral and dark. */
+  --background: oklch(0.19 0.02 260);
   --foreground: oklch(0.97 0.008 255);
+  /* "Deep Ocean Blue" card tone the user picked from the 4 mocked-up
+     options — richer/more saturated (255°, chroma ~0.06) than the app's
+     original near-neutral card. Against the now-darker --background above,
+     this creates a wide, clearly visible lift (cards read as distinctly
+     colored and raised, not just "a bit lighter than the page"). */
   --card: oklch(0.35 0.06 255);
   --card-foreground: oklch(0.97 0.008 255);
   --popover: oklch(0.35 0.06 255);
