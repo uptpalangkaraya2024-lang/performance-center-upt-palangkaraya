@@ -130,29 +130,35 @@
 }
 
 .dark {
-  --background: oklch(0.19 0.02 260);
-  --foreground: oklch(0.96 0.005 260);
-  /* Bumped from 0.23 -> 0.27 per user feedback (screenshot: consecutive ABO
-     program cards were nearly indistinguishable from the page and from each
-     other). Only a 0.04 lightness gap from --background before, which read
-     as one continuous slab rather than separate floating cards — widened to
-     a clearly visible 0.08 gap. --popover mirrors it since both are "raised
-     surface" tokens. */
-  --card: oklch(0.27 0.028 260);
-  --card-foreground: oklch(0.96 0.005 260);
-  --popover: oklch(0.27 0.028 260);
-  --popover-foreground: oklch(0.96 0.005 260);
-  --primary: oklch(0.72 0.12 258);
+  /* Whole dark scale shifted lighter (~+0.05 lightness across the board,
+     relative gaps between steps preserved) per user feedback: the previous
+     near-black navy read as "too dark" overall, even after the
+     card-vs-background gap was widened. Reference point was an external
+     tool with a much brighter (orange-accented) dashboard — explicitly NOT
+     adopted here since the user called that palette "a bit gaudy" and
+     asked to keep this app's restrained navy/blue look, just brighter. */
+  --background: oklch(0.24 0.02 260);
+  --foreground: oklch(0.97 0.005 260);
+  /* Bumped from 0.23 -> 0.27 -> 0.32 (this pass) per user feedback
+     (screenshot: consecutive ABO program cards were nearly indistinguishable
+     from the page and from each other). Kept as a clearly visible 0.08
+     lightness gap above --background at every step. --popover mirrors it
+     since both are "raised surface" tokens. */
+  --card: oklch(0.32 0.028 260);
+  --card-foreground: oklch(0.97 0.005 260);
+  --popover: oklch(0.32 0.028 260);
+  --popover-foreground: oklch(0.97 0.005 260);
+  --primary: oklch(0.74 0.12 258);
   --primary-foreground: oklch(0.18 0.03 258);
-  --secondary: oklch(0.29 0.025 260);
-  --secondary-foreground: oklch(0.9 0.01 260);
+  --secondary: oklch(0.34 0.025 260);
+  --secondary-foreground: oklch(0.92 0.01 260);
   /* Bumped alongside --card so the bg-muted/NN "inset stat tile" pattern
      used throughout the app still reads as visibly lighter than the card
      it sits on, not swallowed by the lighter card background above. */
-  --muted: oklch(0.32 0.022 260);
-  --muted-foreground: oklch(0.7 0.02 260);
-  --accent: oklch(0.3 0.04 235);
-  --accent-foreground: oklch(0.9 0.01 260);
+  --muted: oklch(0.37 0.022 260);
+  --muted-foreground: oklch(0.72 0.02 260);
+  --accent: oklch(0.35 0.045 235);
+  --accent-foreground: oklch(0.92 0.01 260);
   --destructive: oklch(0.7 0.19 25);
   /* Bumped from 10% -> 18% per user feedback: the previous value was
      nearly invisible against the dark navy card background, making every
@@ -160,9 +166,9 @@
      flat/undivided. This single token drives border-border and the Card
      ring below across the whole app, so raising it here fixes contrast
      everywhere at once instead of patching each component individually. */
-  --border: oklch(1 0 0 / 18%);
-  --input: oklch(1 0 0 / 18%);
-  --ring: oklch(0.6 0.1 264);
+  --border: oklch(1 0 0 / 20%);
+  --input: oklch(1 0 0 / 20%);
+  --ring: oklch(0.62 0.1 264);
   --success: oklch(0.68 0.14 150);
   --success-foreground: oklch(0.16 0.03 150);
   --warning: oklch(0.78 0.15 80);
