@@ -32,8 +32,7 @@ function normalizeFileName(name) {
   return name.replace(SPREADSHEET_EXTENSION_PATTERN, '').trim().toLowerCase();
 }
 
-function findFileByName(fileName) {
-  var files = listFilesInFolder();
+function matchFileByName(files, fileName) {
   var target = normalizeFileName(fileName);
   var matches = files.filter(function (file) {
     return normalizeFileName(file.name) === target;
@@ -51,4 +50,28 @@ function findFileByName(fileName) {
     };
   }
   return matches[0];
+}
+
+function findFileByName(fileName) {
+  return matchFileByName(listFilesInFolder(), fileName);
+}
+
+// Resolves several configured file names against ONE folder listing instead
+// of one DriveApp folder scan per name — added after the dashboard's own
+// perf investigation found every findFile call re-scanning the whole
+// monitoring folder from scratch, even though a single page load often
+// needs several distinct files (Kinerja UPT, Gangguan, AHI, ABO, 4DX, CE,
+// RENUS, ...). One bad name doesn't fail the rest — same partial-result
+// principle as handleReadSheets in Code.gs.
+function findFilesByNames(fileNames) {
+  var files = listFilesInFolder();
+  var result = {};
+  fileNames.forEach(function (fileName) {
+    try {
+      result[fileName] = { ok: true, file: matchFileByName(files, fileName) };
+    } catch (error) {
+      result[fileName] = { ok: false, error: normalizeError(error) };
+    }
+  });
+  return result;
 }

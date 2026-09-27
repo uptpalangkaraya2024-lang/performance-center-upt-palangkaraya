@@ -39,6 +39,10 @@ function handleAction(request) {
         requireField(request, 'fileName');
         return jsonResponse({ success: true, data: findFileByName(request.fileName) });
 
+      case 'findFiles':
+        requireField(request, 'fileNames');
+        return jsonResponse({ success: true, data: findFilesByNames(request.fileNames) });
+
       case 'listSheets':
         requireField(request, 'fileName');
         return jsonResponse({ success: true, data: listSheetNames(findFileByName(request.fileName)) });

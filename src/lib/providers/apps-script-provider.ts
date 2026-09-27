@@ -154,6 +154,74 @@ async function findFile(fileName: string): Promise<DriveFileRef> {
   return { id: cached.value.id, name: cached.value.name };
 }
 
+interface BatchFileResult {
+  ok: boolean;
+  file?: { id: string; name: string };
+  error?: { code: string; message: string };
+}
+
+/** Resolves several names against ONE Apps Script execution (one folder
+ *  scan server-side — see apps-script/drive-service.gs's findFilesByNames)
+ *  instead of one findFile gateway call per name. Caches each resolved name
+ *  individually, same fileIdCache as findFile(), so a later single findFile()
+ *  call for one of these names is still a cache hit. */
+async function fetchAndCacheFileIdsBatch(fileNames: string[]): Promise<Map<string, { id: string; name: string } | string>> {
+  const data = await callGateway<Record<string, BatchFileResult>>(
+    { action: "findFiles", fileNames },
+    { file: fileNames.join(", ") },
+  );
+  const out = new Map<string, { id: string; name: string } | string>();
+  await Promise.all(
+    fileNames.map(async (fileName) => {
+      const entry = data[fileName];
+      if (entry?.ok && entry.file) {
+        await fileIdCache.set(fileName, entry.file);
+        out.set(fileName, entry.file);
+      } else {
+        out.set(fileName, entry?.error?.message ?? `Gagal resolve file "${fileName}".`);
+      }
+    }),
+  );
+  return out;
+}
+
+async function findFilesBatch(fileNames: string[]): Promise<Map<string, BatchOutcome<DriveFileRef>>> {
+  const out = new Map<string, BatchOutcome<DriveFileRef>>();
+  const toResolve: string[] = [];
+  const toRevalidate: string[] = [];
+
+  await Promise.all(
+    fileNames.map(async (fileName) => {
+      const cached = await fileIdCache.get(fileName);
+      if (!cached) {
+        toResolve.push(fileName);
+        return;
+      }
+      out.set(fileName, { ok: true, value: { id: cached.value.id, name: cached.value.name } });
+      if (Date.now() - cached.fetchedAt >= DRIVE_DISCOVERY_CACHE_TTL_MS) toRevalidate.push(fileName);
+    }),
+  );
+
+  if (toRevalidate.length > 0) {
+    after(() => fetchAndCacheFileIdsBatch(toRevalidate).catch(() => {}));
+  }
+  if (toResolve.length === 0) return out;
+
+  try {
+    const resolved = await fetchAndCacheFileIdsBatch(toResolve);
+    for (const [name, result] of resolved) {
+      out.set(name, typeof result === "string" ? { ok: false, message: result } : { ok: true, value: result });
+    }
+  } catch (error) {
+    // The whole batch call failed at the network/gateway level (not a
+    // per-file error) — every still-unresolved name fails together, same
+    // as a plain findFile() throwing for each of them individually.
+    const message = error instanceof Error ? error.message : String(error);
+    for (const name of toResolve) out.set(name, { ok: false, message });
+  }
+  return out;
+}
+
 function rowsToRecords(headers: string[], rows: unknown[][]): Record<string, string>[] {
   return rows.map((row) => {
     const record: Record<string, string> = {};
@@ -268,6 +336,7 @@ async function health(): Promise<{ healthy: boolean; message?: string }> {
 export const appsScriptProvider: SpreadsheetDataProvider = {
   name: "apps-script",
   findFile,
+  findFilesBatch,
   readSheet,
   readSheetRaw,
   readSheetsBatch,

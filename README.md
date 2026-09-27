@@ -185,6 +185,16 @@ Untuk **modul yang belum ada** (Gangguan, Open Case, ABO, dst.), mengikuti pola 
 
 Isi hanya baris yang relevan dengan provider yang Anda pakai — tidak masalah kalau baris provider lain dibiarkan kosong di `.env.local`.
 
+## Pola performa — wajib diikuti untuk halaman/modul baru
+
+Investigasi langsung (Sep 2026) menemukan penyebab sebenarnya di balik halaman yang terasa lambat: bukan platform hosting, tapi **panggilan Apps Script yang tidak di-cache** dan **halaman yang menunggu semua sumber data sekaligus sebelum menampilkan apa pun**. Setelah diperbaiki, beranda turun dari ~18 detik (cold) menjadi konsisten di bawah 1 detik. Dua pola di bawah ini yang membuatnya begitu — **ikuti untuk setiap modul/halaman baru** supaya tidak mengulang masalah yang sama seiring aplikasi bertambah besar:
+
+1. **Stale-while-revalidate untuk semua data eksternal.** Jangan pernah `await` sebuah fetch yang bisa lambat (Apps Script, Google API, API pihak ketiga) langsung memblokir response — kalau ada versi cache yang sudah ada (walau sudah lewat TTL-nya), **kembalikan itu dulu**, lalu jadwalkan refresh di belakang layar lewat `after()` dari `next/server`. Lihat `src/lib/data-connector.ts` (cache data sheet) dan `src/lib/providers/apps-script-provider.ts` (`findFile`, cache resolusi file) sebagai contoh polanya. Hanya permintaan pertama yang benar-benar belum pernah di-cache sama sekali yang boleh blocking.
+
+2. **Suspense streaming untuk halaman yang menggabungkan banyak sumber data.** Jangan `await Promise.all([...banyak service...])` di paling atas sebuah Server Component sebelum me-render apa pun — itu membuat seluruh halaman menunggu sumber data yang PALING LAMBAT. Sebagai gantinya: panggil tiap service TANPA `await` di bagian atas komponen (memulai semuanya paralel), lalu oper `Promise`-nya ke komponen async kecil terpisah yang masing-masing dibungkus `<Suspense fallback={...}>` sendiri — lihat `src/app/dashboard/page.tsx` sebagai contoh lengkapnya. Setiap bagian akan langsung tampil begitu sumber datanya sendiri selesai, tidak menunggu yang lain. Meng-oper `Promise` yang sama ke beberapa komponen aman — tidak akan fetch dua kali.
+
+**Catatan soal referensi "AGENTS.md section N" di komentar kode**: banyak komentar di kode ini merujuk ke "AGENTS.md section N" untuk penjelasan konvensi arsitektur — tapi file `AGENTS.md` di root project **ditulis ulang otomatis oleh `next dev`** (isinya cuma catatan generik Next.js, lihat komentar di dalam file itu sendiri) dan tidak lagi berisi section bernomor tersebut. Referensi itu sekarang jadi dead link ke dokumen yang sudah hilang — kalau menemukan salah satu, jangan heran section-nya tidak ada; catatan konvensi yang MASIH berlaku dan bisa dicari sekarang ada di README ini.
+
 ## Deploy
 
 Bisa dideploy ke [Vercel](https://vercel.com/new) atau platform Node.js lain (tidak butuh VPS/server sendiri — Apps Script sudah jadi managed gateway kalau pakai Cara B). Pastikan environment variable yang relevan dari `.env.local` juga diisi di pengaturan environment platform tersebut — jangan pernah commit `.env.local` ke git.

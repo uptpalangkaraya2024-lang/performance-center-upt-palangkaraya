@@ -120,6 +120,42 @@ async function revalidateRawInBackground(
   }
 }
 
+/** Resolves every file a source config references, batching the lookup
+ *  (one Apps Script execution/folder scan instead of one per file — see
+ *  SpreadsheetDataProvider.findFilesBatch's own doc comment) whenever the
+ *  active provider supports it and there's more than one file to resolve.
+ *  A provider without that capability (or a source with just one file, the
+ *  common case) falls back to calling findFile() per file via Promise.all,
+ *  exactly as before findFilesBatch existed. */
+async function resolveSourceFiles(
+  source: DataSourceConfig,
+  provider: SpreadsheetDataProvider,
+): Promise<Map<string, DriveFileRef | Error>> {
+  const fileNames = source.sources.filter((f) => f.enabled !== false).map((f) => f.file);
+  const out = new Map<string, DriveFileRef | Error>();
+  if (fileNames.length === 0) return out;
+
+  if (fileNames.length > 1 && provider.findFilesBatch) {
+    const batch = await provider.findFilesBatch(fileNames);
+    for (const name of fileNames) {
+      const outcome = batch.get(name);
+      out.set(name, outcome?.ok ? outcome.value : new Error(outcome?.message ?? `File "${name}" tidak ditemukan.`));
+    }
+    return out;
+  }
+
+  await Promise.all(
+    fileNames.map(async (name) => {
+      try {
+        out.set(name, await provider.findFile(name));
+      } catch (error) {
+        out.set(name, error instanceof Error ? error : new Error(String(error)));
+      }
+    }),
+  );
+  return out;
+}
+
 /**
  * Reads every configured file+sheet for one data source, through whichever
  * SpreadsheetDataProvider is active (see src/lib/data-provider-registry.ts —
@@ -133,6 +169,7 @@ async function revalidateRawInBackground(
  */
 export async function readConfiguredSource(source: DataSourceConfig): Promise<SheetReadResult[]> {
   const provider = getDataProvider();
+  const resolvedFiles = await resolveSourceFiles(source, provider);
 
   // Every (file, sheet) pair is an independent network call to the same
   // gateway. Reading them one at a time via a sequential for-await loop was
@@ -151,16 +188,14 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
     source.sources.map(async (fileSource): Promise<SheetReadResult[]> => {
       if (fileSource.enabled === false) return []; // not a failure — deliberately not ready yet
 
-      let file;
-      try {
-        file = await provider.findFile(fileSource.file);
-      } catch (error) {
+      const resolved = resolvedFiles.get(fileSource.file);
+      if (!resolved || resolved instanceof Error) {
         // A config/auth failure (missing GOOGLE_DRIVE_FOLDER_ID / GOOGLE_APPS_SCRIPT_URL,
         // bad credentials, ...) is not the same problem as a genuinely missing
         // file — surface its real message instead of a generic "not found", or
         // an admin ends up hunting through Drive for a file that was never the
         // actual issue.
-        const message = error instanceof Error ? error.message : String(error);
+        const message = resolved instanceof Error ? resolved.message : "File tidak ditemukan.";
         for (const sheetRef of fileSource.sheets) {
           recordSyncError({
             module: source.label,
@@ -172,6 +207,7 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
         }
         return [];
       }
+      const file = resolved;
 
       const hits: SheetReadResult[] = [];
       const misses: (typeof fileSource.sheets)[number][] = [];
@@ -295,6 +331,7 @@ const rawRowsCache = new SharedCache<unknown[][]>("raw-rows");
  */
 export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise<RawSheetReadResult[]> {
   const provider = getDataProvider();
+  const resolvedFiles = await resolveSourceFiles(source, provider);
 
   // Same reasoning as readConfiguredSource above: prefer one batched Apps
   // Script execution (provider.readSheetsRawBatch) over one HTTP round trip
@@ -306,11 +343,9 @@ export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise
     source.sources.map(async (fileSource): Promise<RawSheetReadResult[]> => {
       if (fileSource.enabled === false) return [];
 
-      let file;
-      try {
-        file = await provider.findFile(fileSource.file);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+      const resolved = resolvedFiles.get(fileSource.file);
+      if (!resolved || resolved instanceof Error) {
+        const message = resolved instanceof Error ? resolved.message : "File tidak ditemukan.";
         for (const sheetRef of fileSource.sheets) {
           recordSyncError({
             module: source.label,
@@ -322,6 +357,7 @@ export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise
         }
         return [];
       }
+      const file = resolved;
 
       const hits: RawSheetReadResult[] = [];
       const misses: (typeof fileSource.sheets)[number][] = [];

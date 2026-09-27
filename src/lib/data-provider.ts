@@ -22,6 +22,18 @@ export interface SpreadsheetDataProvider {
   readonly name: "google-api" | "apps-script";
   /** Resolves a configured file name to a concrete file. Throws DataSourceError("FILE_NOT_FOUND" | "AMBIGUOUS_SOURCE", ...) on failure. */
   findFile(fileName: string): Promise<DriveFileRef>;
+  /**
+   * Optional: resolves several file names against ONE folder listing
+   * instead of one findFile() call (and one full folder scan) per name —
+   * same "batch instead of N round trips" idea as readSheetsBatch below,
+   * added after direct measurement found every findFile() call re-scanning
+   * the whole Drive folder from scratch (see apps-script/drive-service.gs's
+   * findFilesByNames). A name that fails independently comes back with its
+   * own `{ ok: false }` outcome, never silently dropped. A provider without
+   * this falls back to calling findFile() per name via Promise.all, exactly
+   * as before.
+   */
+  findFilesBatch?(fileNames: string[]): Promise<Map<string, BatchOutcome<DriveFileRef>>>;
   /** Reads one sheet/tab from a file already resolved by findFile(). Throws DataSourceError("SHEET_NOT_FOUND" | "UNSUPPORTED_FORMAT", ...) on failure. */
   readSheet(file: DriveFileRef, sheet: SheetRef): Promise<Record<string, string>[]>;
   /**
