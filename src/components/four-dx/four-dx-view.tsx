@@ -713,7 +713,7 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
       {wigs.map((wig) => (
         <div key={wig.number} className="flex flex-col gap-2">
           <WigBanner wig={wig} />
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-5">
             {wig.lms.map((lm) => (
               <LmCard key={lm.code} lm={lm} />
             ))}

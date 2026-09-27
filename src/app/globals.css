@@ -66,7 +66,11 @@
  * for where each is meant to appear.
  */
 :root {
-  --background: #f6f8fc;
+  /* Bumped from #f6f8fc per user feedback: consecutive cards/sections (e.g.
+     stacked ABO program cards) were hard to tell apart because the page
+     background sat too close to the white card surface. A cooler, slightly
+     darker page background makes every card visibly "float" above it. */
+  --background: #eaeef6;
   --foreground: #172033;
   --card: #ffffff;
   --card-foreground: #172033;
@@ -128,16 +132,25 @@
 .dark {
   --background: oklch(0.19 0.02 260);
   --foreground: oklch(0.96 0.005 260);
-  --card: oklch(0.23 0.025 260);
+  /* Bumped from 0.23 -> 0.27 per user feedback (screenshot: consecutive ABO
+     program cards were nearly indistinguishable from the page and from each
+     other). Only a 0.04 lightness gap from --background before, which read
+     as one continuous slab rather than separate floating cards — widened to
+     a clearly visible 0.08 gap. --popover mirrors it since both are "raised
+     surface" tokens. */
+  --card: oklch(0.27 0.028 260);
   --card-foreground: oklch(0.96 0.005 260);
-  --popover: oklch(0.23 0.025 260);
+  --popover: oklch(0.27 0.028 260);
   --popover-foreground: oklch(0.96 0.005 260);
   --primary: oklch(0.72 0.12 258);
   --primary-foreground: oklch(0.18 0.03 258);
   --secondary: oklch(0.29 0.025 260);
   --secondary-foreground: oklch(0.9 0.01 260);
-  --muted: oklch(0.27 0.02 260);
-  --muted-foreground: oklch(0.68 0.02 260);
+  /* Bumped alongside --card so the bg-muted/NN "inset stat tile" pattern
+     used throughout the app still reads as visibly lighter than the card
+     it sits on, not swallowed by the lighter card background above. */
+  --muted: oklch(0.32 0.022 260);
+  --muted-foreground: oklch(0.7 0.02 260);
   --accent: oklch(0.3 0.04 235);
   --accent-foreground: oklch(0.9 0.01 260);
   --destructive: oklch(0.7 0.19 25);

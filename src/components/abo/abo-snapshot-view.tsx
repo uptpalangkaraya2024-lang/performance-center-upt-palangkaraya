@@ -403,7 +403,7 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
         <ResumeTable programs={filteredPrograms} />
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-5">
         {filteredPrograms.map((p) => (
           <Fragment key={p.code}>
             <ProgramCard program={p} selectedWeekLabel={weekLabel} />
