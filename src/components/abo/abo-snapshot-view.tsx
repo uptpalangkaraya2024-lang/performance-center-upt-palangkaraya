@@ -79,7 +79,7 @@ function AttentionCard({ items, onJump }: { items: AboAttentionItem[]; onJump: (
         <div className="max-h-80 overflow-y-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card">
-              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+              <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
                 <th className="px-3 py-2.5 font-bold">Program</th>
                 <th className="px-3 py-2.5 font-bold">ULTG</th>
                 <th className="px-3 py-2.5 font-bold">Item</th>
@@ -120,7 +120,7 @@ function ResumeTable({ programs }: { programs: AboProgramComputed[] }) {
     <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
             <th className="px-3 py-2.5 font-bold">Program</th>
             <th className="px-3 py-2.5 font-bold">Target s.d. Periode</th>
             <th className="px-3 py-2.5 font-bold">Realisasi s.d. Periode</th>
@@ -402,7 +402,7 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
         </div>
       </div>
 
-      <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 print:border-0 print:bg-transparent print:p-0">
+      <div className="rounded-lg border border-primary/30 bg-primary/15 p-3 print:border-0 print:bg-transparent print:p-0">
         <p className="text-base font-extrabold text-foreground">
           Periode {ABO_MONTH_FULL[aboMonthAbbrIndex(monthAbbr)]}-M{weekOfMonth}
         </p>

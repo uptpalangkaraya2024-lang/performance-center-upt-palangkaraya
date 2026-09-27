@@ -132,7 +132,7 @@ function AttentionTable({ items }: { items: CeAttentionItem[] }) {
         <div className="max-h-80 overflow-y-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card">
-              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+              <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
                 <th className="px-3 py-2.5 font-bold">ULTG / GI</th>
                 <th className="px-3 py-2.5 font-bold">Program</th>
                 <th className="px-3 py-2.5 font-bold">Masalah</th>
@@ -188,7 +188,7 @@ function StreamBreakdownTable({ entries }: { entries: ReturnType<typeof buildCeS
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+            <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
               <th className="px-3 py-2.5 font-bold">Stream</th>
               <th className="px-3 py-2.5 font-bold">Sub Bidang</th>
               <th className="px-3 py-2.5 font-bold text-right">Total</th>
@@ -252,7 +252,7 @@ function UltgIdealTable({ entries }: { entries: CeUltgIdealEntry[] }) {
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+            <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
               <th className="px-3 py-2.5 font-bold">ULTG</th>
               <th className="px-3 py-2.5 font-bold text-right">Total</th>
               <th className="px-3 py-2.5 font-bold text-right">Close</th>
@@ -302,7 +302,7 @@ function ProgramRollupCard({ entries }: { entries: CeProgramRollupEntry[] }) {
         <div className="max-h-72 overflow-y-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-card">
-              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+              <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
                 <th className="px-3 py-2.5 font-bold">Program</th>
                 <th className="px-3 py-2.5 font-bold text-right">Target</th>
                 <th className="px-3 py-2.5 font-bold text-right">Realisasi</th>
@@ -369,7 +369,7 @@ function ItemTable({ items }: { items: CeItem[] }) {
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
             <th className="px-3 py-2.5 font-bold">Status</th>
             <th className="px-3 py-2.5 font-bold">ULTG / GI / Bay</th>
             <th className="px-3 py-2.5 font-bold">Program</th>

@@ -205,7 +205,7 @@ function ResumeTable({ units }: { units: BayEquipmentUnit[] }) {
     <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
             <th className="px-3 py-2.5 font-bold">Peralatan / Item Pengujian</th>
             <th className="px-3 py-2.5 font-bold">Klasifikasi</th>
             <th className="px-3 py-2.5 font-bold">Mandatory Pengujian</th>
@@ -357,7 +357,7 @@ function ParameterRawHistoryTable({ history }: { history: EquipmentParameterHist
     <div className="overflow-x-auto rounded-md border">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b bg-muted/50 text-left text-muted-foreground uppercase">
+          <tr className="border-b bg-muted/70 text-left text-muted-foreground uppercase">
             <th className="px-2 py-2 font-bold">Tanggal</th>
             <th className="px-2 py-2 font-bold">Titik Ukur</th>
             <th className="px-2 py-2 font-bold">R</th>
@@ -408,7 +408,7 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+              <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
                 <th className="px-3 py-2.5 font-bold">Parameter / Hasil Uji</th>
                 <th className="px-3 py-2.5 font-bold">R</th>
                 <th className="px-3 py-2.5 font-bold">S</th>
@@ -568,7 +568,7 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
         </p>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 print:border-0 print:bg-transparent print:p-0">
+          <div className="rounded-lg border border-primary/30 bg-primary/15 p-3 print:border-0 print:bg-transparent print:p-0">
             <p className="text-base font-extrabold text-foreground">{selected.bay}</p>
             <p className="text-xs text-muted-foreground">
               {selected.ultg} · GI {selected.gi} · {selected.units.length} unit peralatan

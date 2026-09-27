@@ -90,7 +90,7 @@ function ResumeTable({ wigs }: { wigs: FourDxWig[] }) {
     <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground uppercase">
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
             <th className="px-3 py-2.5 font-bold">WIG / Lead Measure</th>
             <th className="px-3 py-2.5 font-bold">Target Mingguan</th>
             <th className="px-3 py-2.5 font-bold">Realisasi Mingguan</th>
@@ -703,7 +703,7 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
         </div>
       </div>
 
-      <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 print:border-0 print:bg-transparent print:p-0">
+      <div className="rounded-lg border border-primary/30 bg-primary/15 p-3 print:border-0 print:bg-transparent print:p-0">
         <p className="text-base font-extrabold text-foreground">
           Periode {MONTH_FULL_ID[monthAbbrIndex(monthAbbr)]}-M{weekOfMonth}
         </p>

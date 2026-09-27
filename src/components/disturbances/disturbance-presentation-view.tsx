@@ -235,7 +235,7 @@ function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-base">
           <thead>
-            <tr className="border-b bg-muted/50 text-left text-sm text-muted-foreground uppercase">
+            <tr className="border-b bg-muted/70 text-left text-sm text-muted-foreground uppercase">
               <th className="px-4 py-2.5 font-bold">Ruas</th>
               <th className="px-4 py-2.5 font-bold">ULTG</th>
               <th className="px-4 py-2.5 font-bold">Kategori</th>

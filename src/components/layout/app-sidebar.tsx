@@ -127,7 +127,7 @@ export function AppSidebar() {
                           tooltip={item.comingSoon ? `${item.title} (Coming Soon)` : item.title}
                           className={cn(
                             "rounded-md border-l-2 border-transparent transition-colors",
-                            item.comingSoon ? "text-sidebar-foreground/50" : "text-sidebar-foreground/80",
+                            item.comingSoon ? "text-sidebar-foreground/50" : "text-sidebar-foreground",
                             "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                             isActive &&
                               "border-brand bg-sidebar-accent text-sidebar-accent-foreground font-semibold",
