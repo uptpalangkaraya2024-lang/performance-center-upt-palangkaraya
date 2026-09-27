@@ -81,11 +81,29 @@ function WorkListPreview({ rows, limit = 5 }: { rows: RenusRow[]; limit?: number
   );
 }
 
-function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
+// Colored top accent per tile — same "each card section clearly readable
+// at a glance" idea used on ProgramCard/LmCard, applied here to the
+// page-level summary row. barClassName defaults to a neutral primary
+// accent so every tile gets a stripe even when the metric itself has no
+// inherent good/bad meaning (e.g. "Total Pekerjaan").
+function StatTile({
+  value,
+  label,
+  className,
+  barClassName = "bg-primary",
+}: {
+  value: string;
+  label: string;
+  className?: string;
+  barClassName?: string;
+}) {
   return (
-    <div className="rounded-lg border bg-muted/40 p-3">
-      <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
-      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</div>
+    <div className="overflow-hidden rounded-lg border bg-muted/40">
+      <div className={`h-1.5 w-full ${barClassName}`} />
+      <div className="p-3">
+        <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</div>
+      </div>
     </div>
   );
 }
@@ -265,10 +283,10 @@ export function RenusClient({ data }: { data: RenusData }) {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile value={summary.total.toLocaleString("id-ID")} label="Total Pekerjaan" />
-        <StatTile value={summary.thisWeek.toLocaleString("id-ID")} label="Minggu Ini" />
-        <StatTile value={summary.highRisk.toLocaleString("id-ID")} label="High Risk (Semua Periode)" className="text-critical" />
-        <StatTile value={summary.upcoming.toLocaleString("id-ID")} label="Upcoming" />
+        <StatTile value={summary.total.toLocaleString("id-ID")} label="Total Pekerjaan" barClassName="bg-primary" />
+        <StatTile value={summary.thisWeek.toLocaleString("id-ID")} label="Minggu Ini" barClassName="bg-info" />
+        <StatTile value={summary.highRisk.toLocaleString("id-ID")} label="High Risk (Semua Periode)" className="text-critical" barClassName="bg-critical" />
+        <StatTile value={summary.upcoming.toLocaleString("id-ID")} label="Upcoming" barClassName="bg-brand" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

@@ -497,21 +497,33 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border bg-muted/40 p-3">
-          <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{summary.total}</div>
-          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Total Temuan</div>
+        <div className="overflow-hidden rounded-lg border bg-muted/40">
+          <div className="h-1.5 w-full bg-primary" />
+          <div className="p-3">
+            <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{summary.total}</div>
+            <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Total Temuan</div>
+          </div>
         </div>
-        <div className="rounded-lg border border-success/40 bg-success/10 p-3">
-          <div className="text-xl font-bold tabular-nums text-success sm:text-2xl">{summary.close}</div>
-          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Close</div>
+        <div className="overflow-hidden rounded-lg border border-success/40 bg-success/10">
+          <div className="h-1.5 w-full bg-success" />
+          <div className="p-3">
+            <div className="text-xl font-bold tabular-nums text-success sm:text-2xl">{summary.close}</div>
+            <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Close</div>
+          </div>
         </div>
-        <div className="rounded-lg border border-warning/50 bg-warning/10 p-3">
-          <div className="text-xl font-bold tabular-nums text-warning-foreground sm:text-2xl">{summary.open}</div>
-          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Open</div>
+        <div className="overflow-hidden rounded-lg border border-warning/50 bg-warning/10">
+          <div className="h-1.5 w-full bg-warning" />
+          <div className="p-3">
+            <div className="text-xl font-bold tabular-nums text-warning-foreground sm:text-2xl">{summary.open}</div>
+            <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Open</div>
+          </div>
         </div>
-        <div className="rounded-lg border bg-muted/40 p-3">
-          <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{formatPercent(summary.percentAchieve)}</div>
-          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">% Achieve</div>
+        <div className="overflow-hidden rounded-lg border bg-muted/40">
+          <div className="h-1.5 w-full bg-info" />
+          <div className="p-3">
+            <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{formatPercent(summary.percentAchieve)}</div>
+            <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">% Achieve</div>
+          </div>
         </div>
       </div>
 

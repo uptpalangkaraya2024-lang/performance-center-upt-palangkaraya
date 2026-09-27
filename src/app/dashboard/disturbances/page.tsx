@@ -45,11 +45,26 @@ function formatTime(date: Date | null): string | null {
   return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB";
 }
 
-function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
+// Colored top accent per tile — a scannable status stripe before reading
+// any number, same idea used on ProgramCard/LmCard and RENUS's summary row.
+function StatTile({
+  value,
+  label,
+  className,
+  barClassName = "bg-primary",
+}: {
+  value: string;
+  label: string;
+  className?: string;
+  barClassName?: string;
+}) {
   return (
-    <div className="rounded-lg border bg-muted/40 p-3">
-      <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
-      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</div>
+    <div className="overflow-hidden rounded-lg border bg-muted/40">
+      <div className={`h-1.5 w-full ${barClassName}`} />
+      <div className="p-3">
+        <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
+        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</div>
+      </div>
     </div>
   );
 }
@@ -196,12 +211,12 @@ function CategorySection({
       <CategoryBanner title={title} subtitle={subtitle} latest={data.summary.latestDisturbance} />
 
       <div className={`grid grid-cols-2 gap-3 ${isTrafo ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
-        <StatTile value={data.summary.total.toLocaleString("id-ID")} label="Total (Masuk Kinerja)" />
-        <StatTile value={data.summary.trip.toLocaleString("id-ID")} label="Trip" className="text-critical" />
+        <StatTile value={data.summary.total.toLocaleString("id-ID")} label="Total (Masuk Kinerja)" barClassName="bg-primary" />
+        <StatTile value={data.summary.trip.toLocaleString("id-ID")} label="Trip" className="text-critical" barClassName="bg-critical" />
         {!isTrafo ? (
-          <StatTile value={data.summary.arSukses.toLocaleString("id-ID")} label="AR Sukses" className="text-primary" />
+          <StatTile value={data.summary.arSukses.toLocaleString("id-ID")} label="AR Sukses" className="text-success" barClassName="bg-success" />
         ) : null}
-        <StatTile value={data.summary.tidakTrip.toLocaleString("id-ID")} label="Tidak Trip" className="text-muted-foreground" />
+        <StatTile value={data.summary.tidakTrip.toLocaleString("id-ID")} label="Tidak Trip" className="text-muted-foreground" barClassName="bg-border" />
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

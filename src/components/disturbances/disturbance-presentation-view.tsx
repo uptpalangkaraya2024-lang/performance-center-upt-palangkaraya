@@ -439,25 +439,35 @@ export function DisturbancePresentationView({
 
               <div className="grid flex-1 grid-cols-1 items-center gap-6 lg:grid-cols-2">
                 {donutData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={360}>
-                    <PieChart>
-                      <Pie
-                        data={donutData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={72}
-                        outerRadius={120}
-                        paddingAngle={2}
-                        label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
-                      >
-                        {donutData.map((d) => (
-                          <Cell key={d.name} fill={CATEGORY_COLOR[d.name]} />
-                        ))}
-                      </Pie>
-                      <ChartTooltip />
-                      <Legend wrapperStyle={{ fontSize: 13 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <div className="relative">
+                    <ResponsiveContainer width="100%" height={360}>
+                      <PieChart>
+                        <Pie
+                          data={donutData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={72}
+                          outerRadius={120}
+                          paddingAngle={2}
+                          label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
+                        >
+                          {donutData.map((d) => (
+                            <Cell key={d.name} fill={CATEGORY_COLOR[d.name]} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip />
+                        <Legend wrapperStyle={{ fontSize: 13 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* Center total — the donut's own radius leaves a big
+                        empty hole in the middle; putting the grand total
+                        there (same idea as the reference site's donuts)
+                        gives that space a job instead of wasting it. */}
+                    <div className="pointer-events-none absolute left-1/2 top-[45%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
+                      <span className="text-3xl font-extrabold tabular-nums text-foreground">{grandTotal}</span>
+                      <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Event</span>
+                    </div>
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">Belum ada gangguan pada periode ini.</p>
                 )}

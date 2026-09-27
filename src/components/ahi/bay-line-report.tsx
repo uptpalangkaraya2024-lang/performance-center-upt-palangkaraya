@@ -41,6 +41,14 @@ function klasifikasiClass(k: AhiKlasifikasi): string {
   return "border-border text-muted-foreground"; // NO DATA
 }
 
+function klasifikasiBarClass(k: AhiKlasifikasi): string {
+  if (k === "CRITICAL") return "bg-critical";
+  if (k === "POOR") return "bg-warning";
+  if (k === "FAIR") return "bg-border";
+  if (k === "GOOD" || k === "BEST") return "bg-success";
+  return "bg-border"; // NO DATA
+}
+
 function KlasifikasiPill({ value }: { value: AhiKlasifikasi }) {
   return (
     <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap", klasifikasiClass(value))}>
@@ -378,8 +386,9 @@ function ParameterRawHistoryTable({ history }: { history: EquipmentParameterHist
 function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
   const [showRaw, setShowRaw] = useState(false);
   return (
-    <Card className="print:break-inside-avoid print:border print:shadow-none">
-      <CardHeader>
+    <Card className="gap-3 overflow-hidden py-0 print:break-inside-avoid print:border print:shadow-none">
+      <div className={cn("h-1.5 w-full", klasifikasiBarClass(unit.klasifikasi))} />
+      <CardHeader className="pt-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-lg font-extrabold">{unit.role}</CardTitle>
           <div className="flex items-center gap-2">
@@ -394,7 +403,7 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
           {unit.tanggalPemeliharaanTerakhir ? ` · Pemeliharaan terakhir ${unit.tanggalPemeliharaanTerakhir}` : ""}
         </p>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-3 pb-4">
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>

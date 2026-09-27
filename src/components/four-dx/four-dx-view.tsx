@@ -153,16 +153,19 @@ function WigBanner({ wig }: { wig: FourDxWig }) {
 }
 
 function LmCard({ lm }: { lm: FourDxLm }) {
+  // Colored top accent per card (tercapai/belum), same purpose as ABO's
+  // ProgramCard — a scannable status signal before reading any text.
   return (
-    <Card id={lmAnchorId(lm.code)} className="scroll-mt-16 print:break-inside-avoid print:border print:shadow-none">
-      <CardHeader>
+    <Card id={lmAnchorId(lm.code)} className="gap-3 overflow-hidden py-0 scroll-mt-16 print:break-inside-avoid print:border print:shadow-none">
+      <div className={cn("h-1.5 w-full", lm.status === "tercapai" ? "bg-success" : "bg-warning")} />
+      <CardHeader className="pt-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-lg font-extrabold">LM {lm.code}</CardTitle>
           <StatusPill status={lm.status} />
         </div>
         <p className="text-sm text-muted-foreground">{lm.description}</p>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-4 pb-4">
         <div>
           <p className="mb-1.5 text-sm font-bold tracking-wide text-foreground uppercase">
             Target &amp; Realisasi UPT

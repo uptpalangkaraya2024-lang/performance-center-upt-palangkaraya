@@ -107,18 +107,27 @@ export function UptPerformanceStatus({
           </p>
         ) : null}
 
-        <div className="grid shrink-0 grid-cols-3 gap-2 sm:w-80 sm:gap-2.5 text-center">
-          <div className="rounded-lg border border-success/40 bg-success/15 py-2.5 sm:py-3">
-            <div className="text-xl font-extrabold text-success sm:text-2xl">{overall.achieved}</div>
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase sm:text-xs">Achieved</div>
+        <div className="grid shrink-0 grid-cols-3 gap-2 overflow-hidden sm:w-80 sm:gap-2.5 text-center">
+          <div className="overflow-hidden rounded-lg border border-success/40 bg-success/15">
+            <div className="h-1.5 w-full bg-success" />
+            <div className="py-2 sm:py-2.5">
+              <div className="text-xl font-extrabold text-success sm:text-2xl">{overall.achieved}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase sm:text-xs">Achieved</div>
+            </div>
           </div>
-          <div className="rounded-lg border border-warning/50 bg-warning/15 py-2.5 sm:py-3">
-            <div className="text-xl font-extrabold text-warning-foreground sm:text-2xl">{overall.warning}</div>
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase sm:text-xs">Warning</div>
+          <div className="overflow-hidden rounded-lg border border-warning/50 bg-warning/15">
+            <div className="h-1.5 w-full bg-warning" />
+            <div className="py-2 sm:py-2.5">
+              <div className="text-xl font-extrabold text-warning-foreground sm:text-2xl">{overall.warning}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase sm:text-xs">Warning</div>
+            </div>
           </div>
-          <div className="rounded-lg border border-critical/40 bg-critical/15 py-2.5 sm:py-3">
-            <div className="text-xl font-extrabold text-critical sm:text-2xl">{overall.critical}</div>
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase sm:text-xs">Critical</div>
+          <div className="overflow-hidden rounded-lg border border-critical/40 bg-critical/15">
+            <div className="h-1.5 w-full bg-critical" />
+            <div className="py-2 sm:py-2.5">
+              <div className="text-xl font-extrabold text-critical sm:text-2xl">{overall.critical}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase sm:text-xs">Critical</div>
+            </div>
           </div>
         </div>
       </CardContent>
