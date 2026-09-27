@@ -1,9 +1,12 @@
 import "server-only";
 
+import { after } from "next/server";
+
 import { DATA_CACHE_TTL_MS } from "@/config/cache";
-import type { DataSourceConfig } from "@/config/data-sources";
+import type { DataSourceConfig, SheetRef } from "@/config/data-sources";
 import { getDataProvider } from "@/lib/data-provider-registry";
 import { DataSourceError } from "@/lib/errors";
+import type { DriveFileRef, SpreadsheetDataProvider } from "@/lib/data-provider";
 import { SharedCache } from "@/lib/shared-cache";
 import { recordSyncError, recordSyncSuccess } from "@/lib/sync-status";
 
@@ -30,6 +33,91 @@ const rawCache = new SharedCache<Record<string, string>[]>("raw");
 
 function cacheKey(provider: string, file: string, sheet: string): string {
   return `${provider}::${file}::${sheet}`;
+}
+
+// Stale-while-revalidate: a cache entry past DATA_CACHE_TTL_MS but still
+// present (Redis's own 24h hard expiry hasn't hit) is served to the CURRENT
+// request immediately instead of blocking on a live re-fetch — Apps
+// Script's own latency is measured at 5-30s per call (see
+// src/app/dashboard/data-sync/page.tsx), so waiting on it inline is exactly
+// the "18-second cold load" problem this exists to fix. The refresh itself
+// still happens, just after this response is already on its way to the
+// browser (via Next's after()), so the NEXT request sees fresh data without
+// any request ever having to pay that latency synchronously except the
+// very first one for a given sheet (a true cache miss, nothing to serve
+// yet, so that one has no choice but to block).
+async function revalidateRecordsInBackground(
+  source: DataSourceConfig,
+  fileSource: DataSourceConfig["sources"][number],
+  file: DriveFileRef,
+  staleSheets: SheetRef[],
+  provider: SpreadsheetDataProvider,
+) {
+  try {
+    if (staleSheets.length > 1 && provider.readSheetsBatch) {
+      const batch = await provider.readSheetsBatch(file, staleSheets);
+      for (const sheetRef of staleSheets) {
+        const outcome = batch.get(sheetRef.name);
+        if (outcome?.ok) {
+          await rawCache.set(cacheKey(provider.name, fileSource.file, sheetRef.name), outcome.value);
+          recordSyncSuccess({ module: source.label, file: fileSource.file, sheet: sheetRef.name, provider: provider.name, rows: outcome.value.length });
+        }
+        // A failed background revalidation leaves the still-usable stale entry in
+        // place untouched — the next request just tries again later, no need to
+        // record an error here (the foreground path already did when this same
+        // sheet was last read live).
+      }
+    } else {
+      await Promise.all(
+        staleSheets.map(async (sheetRef) => {
+          try {
+            const records = await provider.readSheet(file, sheetRef);
+            await rawCache.set(cacheKey(provider.name, fileSource.file, sheetRef.name), records);
+            recordSyncSuccess({ module: source.label, file: fileSource.file, sheet: sheetRef.name, provider: provider.name, rows: records.length });
+          } catch {
+            // Best-effort — keep serving the stale value already cached.
+          }
+        }),
+      );
+    }
+  } catch {
+    // Batch call itself failed — keep serving the stale values already cached.
+  }
+}
+
+async function revalidateRawInBackground(
+  source: DataSourceConfig,
+  fileSource: DataSourceConfig["sources"][number],
+  file: DriveFileRef,
+  staleSheets: SheetRef[],
+  provider: SpreadsheetDataProvider,
+) {
+  try {
+    if (staleSheets.length > 1 && provider.readSheetsRawBatch) {
+      const batch = await provider.readSheetsRawBatch(file, staleSheets);
+      for (const sheetRef of staleSheets) {
+        const outcome = batch.get(sheetRef.name);
+        if (outcome?.ok) {
+          await rawRowsCache.set(cacheKey(provider.name, fileSource.file, sheetRef.name), outcome.value);
+          recordSyncSuccess({ module: source.label, file: fileSource.file, sheet: sheetRef.name, provider: provider.name, rows: outcome.value.length });
+        }
+      }
+    } else {
+      await Promise.all(
+        staleSheets.map(async (sheetRef) => {
+          try {
+            const rows = await provider.readSheetRaw(file, sheetRef);
+            await rawRowsCache.set(cacheKey(provider.name, fileSource.file, sheetRef.name), rows);
+            recordSyncSuccess({ module: source.label, file: fileSource.file, sheet: sheetRef.name, provider: provider.name, rows: rows.length });
+          } catch {
+            // Best-effort — keep serving the stale value already cached.
+          }
+        }),
+      );
+    }
+  } catch {
+    // Batch call itself failed — keep serving the stale values already cached.
+  }
 }
 
 /**
@@ -87,17 +175,27 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
 
       const hits: SheetReadResult[] = [];
       const misses: (typeof fileSource.sheets)[number][] = [];
+      const staleToRevalidate: (typeof fileSource.sheets)[number][] = [];
       await Promise.all(
         fileSource.sheets.map(async (sheetRef) => {
           const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
           const cached = await rawCache.get(key);
-          if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
-            hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.value });
-          } else {
-            misses.push(sheetRef);
+          if (!cached) {
+            misses.push(sheetRef); // nothing to serve yet — has to block
+            return;
           }
+          // Stale-while-revalidate: an entry past its freshness window is
+          // still served right away (Apps Script's own 5-30s latency makes
+          // blocking on a live re-fetch here the exact slowness this is
+          // meant to avoid) — a background refresh is scheduled below so the
+          // *next* request gets fresh data instead.
+          hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: cached.value });
+          if (Date.now() - cached.fetchedAt >= DATA_CACHE_TTL_MS) staleToRevalidate.push(sheetRef);
         }),
       );
+      if (staleToRevalidate.length > 0) {
+        after(() => revalidateRecordsInBackground(source, fileSource, file, staleToRevalidate, provider));
+      }
       if (misses.length === 0) return hits;
 
       let fetched: SheetReadResult[];
@@ -227,17 +325,23 @@ export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise
 
       const hits: RawSheetReadResult[] = [];
       const misses: (typeof fileSource.sheets)[number][] = [];
+      const staleToRevalidate: (typeof fileSource.sheets)[number][] = [];
       await Promise.all(
         fileSource.sheets.map(async (sheetRef) => {
           const key = cacheKey(provider.name, fileSource.file, sheetRef.name);
           const cached = await rawRowsCache.get(key);
-          if (cached && Date.now() - cached.fetchedAt < DATA_CACHE_TTL_MS) {
-            hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.value });
-          } else {
-            misses.push(sheetRef);
+          if (!cached) {
+            misses.push(sheetRef); // nothing to serve yet — has to block
+            return;
           }
+          // Stale-while-revalidate — see the same comment in readConfiguredSource above.
+          hits.push({ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: cached.value });
+          if (Date.now() - cached.fetchedAt >= DATA_CACHE_TTL_MS) staleToRevalidate.push(sheetRef);
         }),
       );
+      if (staleToRevalidate.length > 0) {
+        after(() => revalidateRawInBackground(source, fileSource, file, staleToRevalidate, provider));
+      }
       if (misses.length === 0) return hits;
 
       let fetched: RawSheetReadResult[];
