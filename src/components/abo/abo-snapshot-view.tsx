@@ -296,22 +296,29 @@ function RuasChecklist({
 }
 
 function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComputed; selectedWeekLabel: string }) {
-  // A colored top accent per card — tercapai (success) vs belum (warning) —
-  // so scrolling through a long list of programs shows which ones need
-  // attention without reading any text first, same purpose as the
-  // reference site's colored card stripes but tied to real status instead
-  // of an arbitrary per-card color.
+  // A colored LEFT-edge accent (tercapai/belum), not a full-width top
+  // stripe — a thin border reads as a status accent; a solid bar spanning
+  // the whole card width started looking like "the whole card is green"
+  // once every Tercapai program in a list carried the identical stripe,
+  // which is exactly the look the enterprise color spec says to avoid.
+  // The existing "Tercapai/Belum" badge already carries this same signal,
+  // so this is a restrained reinforcement, not the only cue.
   return (
-    <Card id={programAnchorId(program.code)} className="gap-3 overflow-hidden py-0 scroll-mt-16 print:break-inside-avoid print:border print:shadow-none">
-      <div className={cn("h-1.5 w-full", program.status === "tercapai" ? "bg-success" : "bg-warning")} />
-      <CardHeader className="pt-4">
+    <Card
+      id={programAnchorId(program.code)}
+      className={cn(
+        "border-l-4 scroll-mt-16 print:break-inside-avoid print:border print:shadow-none",
+        program.status === "tercapai" ? "border-l-success" : "border-l-warning",
+      )}
+    >
+      <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-lg font-extrabold">{program.code}</CardTitle>
           <StatusPill status={program.status} />
         </div>
         <p className="text-sm text-muted-foreground">{program.description}</p>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4 pb-4">
+      <CardContent className="flex flex-col gap-4">
         <div>
           <p className="mb-1.5 text-sm font-bold tracking-wide text-foreground uppercase">Target &amp; Realisasi UPT</p>
           <StatGrid stats={program} />

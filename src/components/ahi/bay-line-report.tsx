@@ -41,12 +41,14 @@ function klasifikasiClass(k: AhiKlasifikasi): string {
   return "border-border text-muted-foreground"; // NO DATA
 }
 
+// A colored LEFT-edge accent, not a full-width top stripe — see the
+// matching comment on ABO's ProgramCard for why.
 function klasifikasiBarClass(k: AhiKlasifikasi): string {
-  if (k === "CRITICAL") return "bg-critical";
-  if (k === "POOR") return "bg-warning";
-  if (k === "FAIR") return "bg-border";
-  if (k === "GOOD" || k === "BEST") return "bg-success";
-  return "bg-border"; // NO DATA
+  if (k === "CRITICAL") return "border-l-critical";
+  if (k === "POOR") return "border-l-warning";
+  if (k === "FAIR") return "border-l-border";
+  if (k === "GOOD" || k === "BEST") return "border-l-success";
+  return "border-l-border"; // NO DATA
 }
 
 function KlasifikasiPill({ value }: { value: AhiKlasifikasi }) {
@@ -386,9 +388,8 @@ function ParameterRawHistoryTable({ history }: { history: EquipmentParameterHist
 function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
   const [showRaw, setShowRaw] = useState(false);
   return (
-    <Card className="gap-3 overflow-hidden py-0 print:break-inside-avoid print:border print:shadow-none">
-      <div className={cn("h-1.5 w-full", klasifikasiBarClass(unit.klasifikasi))} />
-      <CardHeader className="pt-4">
+    <Card className={cn("border-l-4 print:break-inside-avoid print:border print:shadow-none", klasifikasiBarClass(unit.klasifikasi))}>
+      <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-lg font-extrabold">{unit.role}</CardTitle>
           <div className="flex items-center gap-2">
@@ -403,7 +404,7 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
           {unit.tanggalPemeliharaanTerakhir ? ` · Pemeliharaan terakhir ${unit.tanggalPemeliharaanTerakhir}` : ""}
         </p>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3 pb-4">
+      <CardContent className="flex flex-col gap-3">
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>
