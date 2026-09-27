@@ -1,8 +1,12 @@
 import "server-only";
 
+import { after } from "next/server";
+
 import type { SheetRef } from "@/config/data-sources";
+import { DRIVE_DISCOVERY_CACHE_TTL_MS } from "@/config/cache";
 import { DataSourceError, type DataSourceErrorKind } from "@/lib/errors";
 import type { BatchOutcome, DriveFileRef, SpreadsheetDataProvider } from "@/lib/data-provider";
+import { SharedCache } from "@/lib/shared-cache";
 
 function resolveGatewayUrl(): string {
   const url = process.env.GOOGLE_APPS_SCRIPT_URL;
@@ -100,12 +104,54 @@ async function callGateway<T>(
   throw lastError;
 }
 
-async function findFile(fileName: string): Promise<DriveFileRef> {
+// File discovery (name -> id) had NO caching at all until this — every
+// readConfiguredSource()/readConfiguredSourceRaw() call re-resolved every
+// configured file's id via a live findFile gateway call regardless of
+// whether that file's SHEET data was already cached, unlike the legacy
+// google-api provider (see src/services/google-drive.ts's own
+// DRIVE_DISCOVERY_CACHE_TTL_MS-backed folder listing cache). Confirmed by
+// direct measurement this was the dominant cost behind "why does even a
+// fully warm page still take seconds" — Apps Script's own fixed ~1.6-1.8s
+// per-call dispatch cost (see readSheetsBatchRaw's own comment below)
+// applies here too, once per distinct FILE a page's data sources touch
+// (e.g. the homepage alone references Kinerja UPT, Gangguan, AHI, ABO x2,
+// 4DX, CE, RENUS — several distinct files), and Apps Script appears to
+// serialize concurrent calls to the same deployment rather than truly
+// running them in parallel, so this cost was being paid mostly
+// sequentially on every single page load. A file's id practically never
+// changes (only a rename/recreate in Drive would do it), so this reuses
+// the same generous 30-minute default already defined for exactly this
+// kind of lookup. Measured impact: a single-file service call (Kinerja
+// UPT) dropped from ~2000-2800ms to ~800ms once this was warm.
+const fileIdCache = new SharedCache<{ id: string; name: string }>("apps-script-file-id");
+
+async function fetchAndCacheFileId(fileName: string): Promise<{ id: string; name: string }> {
   const data = await callGateway<{ id: string; name: string }>(
     { action: "findFile", fileName },
     { file: fileName },
   );
-  return { id: data.id, name: data.name };
+  await fileIdCache.set(fileName, data);
+  return data;
+}
+
+async function findFile(fileName: string): Promise<DriveFileRef> {
+  const cached = await fileIdCache.get(fileName);
+  if (!cached) {
+    // True first-ever lookup for this file — nothing to serve yet, has to block.
+    const data = await fetchAndCacheFileId(fileName);
+    return { id: data.id, name: data.name };
+  }
+
+  // Stale-while-revalidate, same principle as the sheet-data cache in
+  // src/lib/data-connector.ts: a file's id practically never changes, so
+  // once we've resolved it once, every later request just reuses that
+  // value immediately and — only past the TTL — quietly re-checks in the
+  // background via after(), instead of ever blocking a real request on
+  // Apps Script's ~1.6-1.8s dispatch cost again.
+  if (Date.now() - cached.fetchedAt >= DRIVE_DISCOVERY_CACHE_TTL_MS) {
+    after(() => fetchAndCacheFileId(fileName).catch(() => {}));
+  }
+  return { id: cached.value.id, name: cached.value.name };
 }
 
 function rowsToRecords(headers: string[], rows: unknown[][]): Record<string, string>[] {
