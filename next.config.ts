@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
+// Lets `next dev` reach the same Cloudflare bindings (env vars, etc.) that
+// production Workers gets, instead of only ever seeing them for real when
+// running `wrangler dev`/`opennextjs-cloudflare preview`.
+initOpenNextCloudflareForDev();
 
 const nextConfig: NextConfig = {
   // ABO/4DX/CE/AHI moved out of /dashboard/kpi/* to /dashboard/* directly —
@@ -13,6 +19,14 @@ const nextConfig: NextConfig = {
       { source: "/dashboard/kpi/ce", destination: "/dashboard/ce", permanent: true },
       { source: "/dashboard/kpi/ahi", destination: "/dashboard/ahi", permanent: true },
     ];
+  },
+  // Cloudflare Workers deployment (OpenNext) — the app only ever renders one
+  // small static logo (36x36) via next/image, so Next's server-side image
+  // optimization endpoint isn't worth the extra Cloudflare Images binding it
+  // would need; serving the original file straight from /public is simpler
+  // and just as fast for something this small.
+  images: {
+    unoptimized: true,
   },
 };
 
