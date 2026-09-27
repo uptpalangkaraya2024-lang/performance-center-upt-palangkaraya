@@ -26,8 +26,14 @@ import {
 // programs or 4DX Lead Measures are currently "belum" — so a user can tell
 // where to look without opening every module first. See src/lib/nav-badges.ts.
 function NavBadge({ count }: { count: number }) {
+  // Solid fill, not the translucent bg-warning/NN pattern used for status
+  // pills elsewhere — this is a plain count chip with no status meaning of
+  // its own, so there's no "warning-foreground equals warning" legibility
+  // trap to avoid here (that convention only applies when the TEXT itself
+  // needs to be the tone color). text-background gives it a dark, readable
+  // numeral against the solid amber fill.
   return (
-    <span className="ml-auto inline-flex min-w-4.5 items-center justify-center rounded-full bg-warning/25 px-1.5 py-0.5 text-[10px] font-semibold text-warning-foreground group-data-[collapsible=icon]:hidden">
+    <span className="ml-auto inline-flex min-w-4.5 items-center justify-center rounded-full bg-warning px-1.5 py-0.5 text-[10px] font-bold text-background group-data-[collapsible=icon]:hidden">
       {count}
     </span>
   );
@@ -174,6 +180,36 @@ export function AppSidebar() {
             </SidebarGroup>
           ))}
         </SidebarContent>
+
+        {/* Decorative wave accent in the empty space below the last nav
+            item — blue fading to orange, the same two accent colors used
+            for the "Section Accent" icon badges elsewhere, just as a
+            background flourish here rather than an icon. Purely visual:
+            pointer-events-none, negative z-index (sits behind the nav
+            list), and absolutely positioned so it never pushes layout or
+            competes with real content for space. */}
+        <svg
+          className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-28 w-full"
+          viewBox="0 0 300 120"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="sidebar-wave-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.55" />
+              <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.8" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M0,95 C70,60 130,115 200,80 C240,58 270,90 300,75 L300,120 L0,120 Z"
+            fill="var(--primary)"
+            fillOpacity="0.22"
+          />
+          <path
+            d="M0,80 C60,40 120,100 180,60 C220,35 260,70 300,50 L300,120 L0,120 Z"
+            fill="url(#sidebar-wave-gradient)"
+          />
+        </svg>
       </div>
     </Sidebar>
   );

@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Circle, RotateCcw, Search } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle2, Circle, Route, RotateCcw, Search, ShieldCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import {
   Select,
@@ -35,6 +36,24 @@ function jumpTo(id: string) {
 
 function formatPercent(v: number): string {
   return `${Math.round(v * 100)}%`;
+}
+
+// A small colored icon badge before a card/section title — alternating
+// blue (primary) and orange (brand) per the color spec's own "Section
+// Accent" rule (orange/blue alternating, subtle, never every section the
+// same color). Purely decorative/identifying, distinct from the
+// success/warning left-border accent which carries the real status signal.
+function SectionIcon({ icon: Icon, tone }: { icon: LucideIcon; tone: "primary" | "brand" }) {
+  return (
+    <span
+      className={cn(
+        "flex size-8 shrink-0 items-center justify-center rounded-lg",
+        tone === "primary" ? "bg-primary text-primary-foreground" : "bg-brand text-brand-foreground",
+      )}
+    >
+      <Icon className="size-4" />
+    </span>
+  );
 }
 
 function StatusPill({ status }: { status: AboProgramComputed["status"] }) {
@@ -195,7 +214,10 @@ function StatGrid({
 function UltgBreakdown({ ultgBreakdown }: { ultgBreakdown: AboUltgComputed[] }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm font-bold tracking-wide text-foreground uppercase">Breakdown per ULTG</p>
+      <div className="flex items-center gap-2">
+        <SectionIcon icon={Building2} tone="primary" />
+        <p className="text-sm font-bold tracking-wide text-foreground uppercase">Breakdown per ULTG</p>
+      </div>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {ultgBreakdown.map((u) => (
           <div key={u.ultg} className="flex flex-col gap-1.5 rounded-lg border bg-secondary p-3">
@@ -239,12 +261,15 @@ function RuasChecklist({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm font-bold tracking-wide text-foreground uppercase">
-        Breakdown per Ruas
-        <span className="ml-1 text-xs font-normal tracking-normal text-muted-foreground normal-case">
-          — termasuk ruas dari periode sebelumnya yang belum direalisasi
-        </span>
-      </p>
+      <div className="flex items-center gap-2">
+        <SectionIcon icon={Route} tone="primary" />
+        <p className="text-sm font-bold tracking-wide text-foreground uppercase">
+          Breakdown per Ruas
+          <span className="ml-1 text-xs font-normal tracking-normal text-muted-foreground normal-case">
+            — termasuk ruas dari periode sebelumnya yang belum direalisasi
+          </span>
+        </p>
+      </div>
       {grouped.map(([ultg, items]) => (
         <div key={ultg} className="flex flex-col gap-1.5 rounded-lg border bg-secondary p-2.5">
           <p className="text-xs font-bold text-muted-foreground uppercase">{ultg}</p>
@@ -295,14 +320,25 @@ function RuasChecklist({
   );
 }
 
-function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComputed; selectedWeekLabel: string }) {
+function ProgramCard({
+  program,
+  selectedWeekLabel,
+  accentIndex,
+}: {
+  program: AboProgramComputed;
+  selectedWeekLabel: string;
+  accentIndex: number;
+}) {
   // A colored LEFT-edge accent (tercapai/belum), not a full-width top
   // stripe — a thin border reads as a status accent; a solid bar spanning
   // the whole card width started looking like "the whole card is green"
   // once every Tercapai program in a list carried the identical stripe,
   // which is exactly the look the enterprise color spec says to avoid.
   // The existing "Tercapai/Belum" badge already carries this same signal,
-  // so this is a restrained reinforcement, not the only cue.
+  // so this is a restrained reinforcement, not the only cue. The icon
+  // badge next to the title is separate and purely decorative — alternating
+  // blue/orange per the spec's own "Section Accent" rule, never tied to
+  // status (that would just repeat the left-border signal a second time).
   return (
     <Card
       id={programAnchorId(program.code)}
@@ -313,7 +349,10 @@ function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComput
     >
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-lg font-extrabold">{program.code}</CardTitle>
+          <div className="flex items-center gap-2">
+            <SectionIcon icon={ShieldCheck} tone={accentIndex % 2 === 0 ? "primary" : "brand"} />
+            <CardTitle className="text-lg font-extrabold">{program.code}</CardTitle>
+          </div>
           <StatusPill status={program.status} />
         </div>
         <p className="text-sm text-muted-foreground">{program.description}</p>
@@ -417,9 +456,9 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
       </div>
 
       <div className="flex flex-col gap-5">
-        {filteredPrograms.map((p) => (
+        {filteredPrograms.map((p, index) => (
           <Fragment key={p.code}>
-            <ProgramCard program={p} selectedWeekLabel={weekLabel} />
+            <ProgramCard program={p} selectedWeekLabel={weekLabel} accentIndex={index} />
           </Fragment>
         ))}
       </div>
