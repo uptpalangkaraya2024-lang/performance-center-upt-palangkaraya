@@ -10,11 +10,49 @@ import type { AiInsight } from "@/types";
 // card — spreading the module breakdown across 4 separate small cards
 // (instead of one long nested list) keeps it scannable without turning
 // into one long scroll. Per user feedback.
-const TONE_META: Record<AiInsight["tone"], { label: string; icon: typeof CheckCircle2; className: string; dotClassName: string }> = {
-  critical: { label: "CRITICAL", icon: XCircle, className: "text-critical", dotClassName: "bg-critical" },
-  warning: { label: "ATTENTION", icon: AlertTriangle, className: "text-warning-foreground", dotClassName: "bg-warning" },
-  good: { label: "GOOD", icon: CheckCircle2, className: "text-success", dotClassName: "bg-success" },
-  none: { label: "INFO", icon: Info, className: "text-muted-foreground", dotClassName: "bg-muted-foreground" },
+// Each quadrant gets its own tinted card background (not just a thin top
+// bar) plus a solid-fill badge pill for its count — the same
+// translucent-fill-only rule as upt-performance-status.tsx applies here too
+// (--warning-foreground equals --warning itself in dark mode by design, so
+// warning's badge stays translucent+bordered like the others rather than a
+// solid fill, for a consistent look across all four rather than one
+// visually odd one out).
+const TONE_META: Record<
+  AiInsight["tone"],
+  { label: string; icon: typeof CheckCircle2; className: string; dotClassName: string; cardClassName: string; badgeClassName: string }
+> = {
+  critical: {
+    label: "CRITICAL",
+    icon: XCircle,
+    className: "text-critical",
+    dotClassName: "bg-critical",
+    cardClassName: "border-critical/30 bg-critical/[0.06]",
+    badgeClassName: "border border-critical/40 bg-critical/20 text-critical",
+  },
+  warning: {
+    label: "ATTENTION",
+    icon: AlertTriangle,
+    className: "text-warning-foreground",
+    dotClassName: "bg-warning",
+    cardClassName: "border-warning/40 bg-warning/[0.06]",
+    badgeClassName: "border border-warning/50 bg-warning/20 text-warning-foreground",
+  },
+  good: {
+    label: "GOOD",
+    icon: CheckCircle2,
+    className: "text-success",
+    dotClassName: "bg-success",
+    cardClassName: "border-success/30 bg-success/[0.06]",
+    badgeClassName: "border border-success/40 bg-success/20 text-success",
+  },
+  none: {
+    label: "INFO",
+    icon: Info,
+    className: "text-muted-foreground",
+    dotClassName: "bg-muted-foreground",
+    cardClassName: "border-border bg-muted/40",
+    badgeClassName: "border border-border bg-muted text-muted-foreground",
+  },
 };
 
 const TONE_ORDER: AiInsight["tone"][] = ["critical", "warning", "good", "none"];
@@ -53,25 +91,27 @@ export function AttentionCards({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {groups.map((group) => {
         const meta = TONE_META[group.tone];
         const Icon = meta.icon;
         return (
-          <Card key={group.tone} className="gap-3 overflow-hidden py-0">
-            <div className={cn("h-1 w-full", meta.dotClassName)} />
-            <CardContent className="flex flex-col gap-2 pt-3 pb-4">
-              <div className={cn("flex items-center gap-1.5 text-xs font-bold tracking-widest", meta.className)}>
-                <Icon className="size-3.5" />
-                {meta.label}
-                <span className="font-medium text-muted-foreground">({group.items.length})</span>
+          <Card key={group.tone} className={cn("gap-3 overflow-hidden border py-0", meta.cardClassName)}>
+            <div className={cn("h-1.5 w-full", meta.dotClassName)} />
+            <CardContent className="flex flex-col gap-2.5 pt-3 pb-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className={cn("flex items-center gap-1.5 text-xs font-extrabold tracking-wide sm:text-sm", meta.className)}>
+                  <Icon className="size-4 shrink-0" />
+                  {meta.label}
+                </div>
+                <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums sm:text-sm", meta.badgeClassName)}>
+                  {group.items.length}
+                </span>
               </div>
-              <div className="flex max-h-56 flex-col gap-2.5 overflow-y-auto pr-1">
+              <div className="flex max-h-64 flex-col gap-2.5 overflow-y-auto pr-1">
                 {groupByModule(group.items).map((moduleGroup) => (
                   <div key={moduleGroup.module} className="flex flex-col gap-1">
-                    <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                      {moduleGroup.module}
-                    </p>
+                    <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">{moduleGroup.module}</p>
                     <ul className="flex flex-col gap-1.5">
                       {moduleGroup.items.map((item) =>
                         item.href ? (
