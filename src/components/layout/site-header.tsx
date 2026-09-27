@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Bell, Search, Sparkles } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { AiAssistantChat } from "@/components/ai/ai-assistant-chat";
+import type { AppNotification } from "@/lib/notifications";
 import {
   Sheet,
   SheetContent,
@@ -29,6 +31,26 @@ import {
 export function SiteHeader() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+
+  // Fetched client-side after mount, same non-blocking pattern as the
+  // sidebar's nav badges (see src/components/layout/app-sidebar.tsx) —
+  // starts empty so the header renders instantly, real notifications pop
+  // in once /api/notifications resolves.
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/notifications")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (!cancelled) setNotifications(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        // A notification failing to load must never break the header.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -72,25 +94,32 @@ export function SiteHeader() {
             render={
               <Button variant="ghost" size="icon" className="relative size-8" aria-label="Notifikasi">
                 <Bell className="size-4" />
-                <span className="absolute top-1 right-1 size-1.5 rounded-full bg-critical" />
+                {notifications.length > 0 && (
+                  <span
+                    className={
+                      "absolute top-1 right-1 size-1.5 rounded-full " +
+                      (notifications.some((n) => n.severity === "critical") ? "bg-critical" : "bg-warning")
+                    }
+                  />
+                )}
               </Button>
             }
           />
           <DropdownMenuContent align="end" className="w-72">
             <DropdownMenuLabel>Notifikasi</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex-col items-start gap-0.5">
-              <span className="text-sm">3 Open Case overdue</span>
-              <span className="text-xs text-muted-foreground">10 menit lalu</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex-col items-start gap-0.5">
-              <span className="text-sm">2 aset masuk kategori Critical</span>
-              <span className="text-xs text-muted-foreground">1 jam lalu</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex-col items-start gap-0.5">
-              <span className="text-sm">Data gangguan belum diperbarui 6 jam</span>
-              <span className="text-xs text-muted-foreground">2 jam lalu</span>
-            </DropdownMenuItem>
+            {notifications.length === 0 ? (
+              <DropdownMenuItem disabled className="text-muted-foreground">
+                Tidak ada notifikasi saat ini
+              </DropdownMenuItem>
+            ) : (
+              notifications.map((n) => (
+                <DropdownMenuItem key={n.id} render={<Link href={n.href} />} className="flex-col items-start gap-0.5">
+                  <span className="text-sm">{n.text}</span>
+                  <span className="text-xs text-muted-foreground">{n.detail}</span>
+                </DropdownMenuItem>
+              ))
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
         <DropdownMenu>
