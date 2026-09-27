@@ -1,5 +1,7 @@
 import "server-only";
 
+import { after } from "next/server";
+
 import type { SheetRef } from "@/config/data-sources";
 import { DRIVE_DISCOVERY_CACHE_TTL_MS } from "@/config/cache";
 import { DataSourceError, type DataSourceErrorKind } from "@/lib/errors";
@@ -119,30 +121,37 @@ async function callGateway<T>(
 // sequentially on every single page load. A file's id practically never
 // changes (only a rename/recreate in Drive would do it), so this reuses
 // the same generous 30-minute default already defined for exactly this
-// kind of lookup.
+// kind of lookup. Measured impact: a single-file service call (Kinerja
+// UPT) dropped from ~2000-2800ms to ~800ms once this was warm.
 const fileIdCache = new SharedCache<{ id: string; name: string }>("apps-script-file-id");
+
+async function fetchAndCacheFileId(fileName: string): Promise<{ id: string; name: string }> {
+  const data = await callGateway<{ id: string; name: string }>(
+    { action: "findFile", fileName },
+    { file: fileName },
+  );
+  await fileIdCache.set(fileName, data);
+  return data;
+}
 
 async function findFile(fileName: string): Promise<DriveFileRef> {
   const cached = await fileIdCache.get(fileName);
-  if (cached && Date.now() - cached.fetchedAt < DRIVE_DISCOVERY_CACHE_TTL_MS) {
-    return { id: cached.value.id, name: cached.value.name };
+  if (!cached) {
+    // True first-ever lookup for this file — nothing to serve yet, has to block.
+    const data = await fetchAndCacheFileId(fileName);
+    return { id: data.id, name: data.name };
   }
 
-  try {
-    const data = await callGateway<{ id: string; name: string }>(
-      { action: "findFile", fileName },
-      { file: fileName },
-    );
-    await fileIdCache.set(fileName, data);
-    return { id: data.id, name: data.name };
-  } catch (error) {
-    // A transient failure shouldn't take down every page that references
-    // this file if we already know its id from a moment ago — same
-    // stale-fallback principle already used for sheet data in
-    // src/lib/data-connector.ts.
-    if (cached) return { id: cached.value.id, name: cached.value.name };
-    throw error;
+  // Stale-while-revalidate, same principle as the sheet-data cache in
+  // src/lib/data-connector.ts: a file's id practically never changes, so
+  // once we've resolved it once, every later request just reuses that
+  // value immediately and — only past the TTL — quietly re-checks in the
+  // background via after(), instead of ever blocking a real request on
+  // Apps Script's ~1.6-1.8s dispatch cost again.
+  if (Date.now() - cached.fetchedAt >= DRIVE_DISCOVERY_CACHE_TTL_MS) {
+    after(() => fetchAndCacheFileId(fileName).catch(() => {}));
   }
+  return { id: cached.value.id, name: cached.value.name };
 }
 
 function rowsToRecords(headers: string[], rows: unknown[][]): Record<string, string>[] {
