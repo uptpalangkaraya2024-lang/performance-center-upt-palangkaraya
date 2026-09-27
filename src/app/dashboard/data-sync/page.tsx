@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function DataSyncPage() {
-  const provider = getDataProvider();
+  const provider = await getDataProvider();
 
   // Triggers (or reuses the cached result of) the one real sync so its
   // status below reflects this page load, not whatever the Overview page

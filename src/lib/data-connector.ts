@@ -132,7 +132,7 @@ async function revalidateRawInBackground(
  * result is still usable for its shape — see hasAllRequiredSheets() below.
  */
 export async function readConfiguredSource(source: DataSourceConfig): Promise<SheetReadResult[]> {
-  const provider = getDataProvider();
+  const provider = await getDataProvider();
 
   // Every (file, sheet) pair is an independent network call to the same
   // gateway. Reading them one at a time via a sequential for-await loop was
@@ -294,7 +294,7 @@ const rawRowsCache = new SharedCache<unknown[][]>("raw-rows");
  * just returning the untouched grid instead of Record<string,string>[].
  */
 export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise<RawSheetReadResult[]> {
-  const provider = getDataProvider();
+  const provider = await getDataProvider();
 
   // Same reasoning as readConfiguredSource above: prefer one batched Apps
   // Script execution (provider.readSheetsRawBatch) over one HTTP round trip
