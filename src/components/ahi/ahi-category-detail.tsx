@@ -44,15 +44,15 @@ function CategoryCard({ category }: { category: AhiCategory }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3 border-t px-4 py-3">
         <div className="grid grid-cols-5 gap-2 text-center text-xs">
-          <div className="rounded-md border bg-muted/40 py-2">
+          <div className="rounded-md border bg-muted py-2">
             <div className="text-sm font-bold text-foreground">{formatCount(distribution.best)}</div>
             <div className="text-muted-foreground">1-Best</div>
           </div>
-          <div className="rounded-md border bg-muted/40 py-2">
+          <div className="rounded-md border bg-muted py-2">
             <div className="text-sm font-bold text-foreground">{formatCount(distribution.good)}</div>
             <div className="text-muted-foreground">2-Good</div>
           </div>
-          <div className="rounded-md border bg-muted/40 py-2">
+          <div className="rounded-md border bg-muted py-2">
             <div className="text-sm font-bold text-foreground">{formatCount(distribution.fair)}</div>
             <div className="text-muted-foreground">3-Fair</div>
           </div>

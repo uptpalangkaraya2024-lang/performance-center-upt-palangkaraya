@@ -95,7 +95,7 @@ function QualityScoreCard({ units }: { units: BayEquipmentUnit[] }) {
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {units.map((unit, idx) => (
-            <div key={`${unit.role}-${idx}`} className="rounded-lg border bg-muted/30 p-3">
+            <div key={`${unit.role}-${idx}`} className="rounded-lg border bg-muted p-3">
               <p className="truncate text-xs font-semibold text-muted-foreground" title={unit.role}>
                 {unit.role}
               </p>

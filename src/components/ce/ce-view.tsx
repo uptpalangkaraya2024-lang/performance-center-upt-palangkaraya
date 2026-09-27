@@ -169,7 +169,7 @@ function BreakdownGrid({ title, entries }: { title: string; entries: { label: st
       <p className="text-sm font-bold tracking-wide text-foreground uppercase">{title}</p>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {entries.map((entry) => (
-          <div key={entry.label} className="flex flex-col gap-1 rounded-lg border bg-muted/30 p-3">
+          <div key={entry.label} className="flex flex-col gap-1 rounded-lg border bg-secondary p-3">
             <span className="text-sm font-bold text-foreground">{entry.label}</span>
             <p className="text-sm text-muted-foreground">
               Close:{entry.close} / Open:{entry.open} · Total:{entry.total}
@@ -345,7 +345,7 @@ function RecentActivityCard({ activity }: { activity: ReturnType<typeof buildCeR
       <CardContent>
         <ul className="max-h-72 space-y-2 overflow-y-auto">
           {activity.map(({ item, tanggalRealisasi }) => (
-            <li key={item.id} className="flex items-start gap-2 rounded-lg border bg-muted/20 p-2.5 text-sm">
+            <li key={item.id} className="flex items-start gap-2 rounded-lg border bg-secondary p-2.5 text-sm">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
               <div className="flex flex-col">
                 <span className="font-semibold text-foreground">{item.namaProgram || item.gardu}</span>
@@ -497,7 +497,7 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="overflow-hidden rounded-lg border bg-muted/40">
+        <div className="overflow-hidden rounded-lg border bg-muted">
           <div className="h-1.5 w-full bg-primary" />
           <div className="p-3">
             <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{summary.total}</div>
@@ -518,7 +518,7 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
             <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Open</div>
           </div>
         </div>
-        <div className="overflow-hidden rounded-lg border bg-muted/40">
+        <div className="overflow-hidden rounded-lg border bg-muted">
           <div className="h-1.5 w-full bg-info" />
           <div className="p-3">
             <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{formatPercent(summary.percentAchieve)}</div>

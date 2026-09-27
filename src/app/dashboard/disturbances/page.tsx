@@ -59,7 +59,7 @@ function StatTile({
   barClassName?: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-muted/40">
+    <div className="overflow-hidden rounded-lg border bg-muted">
       <div className={`h-1.5 w-full ${barClassName}`} />
       <div className="p-3">
         <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
@@ -125,7 +125,7 @@ function CategoryResumeCard({
   return (
     <a
       href={`#${anchorId}`}
-      className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 transition-colors hover:bg-muted/30"
+      className="flex flex-col gap-3 rounded-lg border bg-secondary p-4 transition-colors hover:brightness-110"
       style={{ borderLeft: `4px solid ${accent}` }}
     >
       <div className="flex items-center gap-2">
@@ -134,7 +134,7 @@ function CategoryResumeCard({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-md border bg-card p-2">
+        <div className="rounded-md border bg-muted p-2">
           <div className="text-xl font-extrabold tabular-nums text-critical">
             {data.summary.trip.toLocaleString("id-ID")}
             {!isTrafo ? (
@@ -143,7 +143,7 @@ function CategoryResumeCard({
           </div>
           <div className="text-xs font-medium text-muted-foreground">{isTrafo ? "Trip" : "Trip / AR Sukses"}</div>
         </div>
-        <div className="rounded-md border bg-card p-2">
+        <div className="rounded-md border bg-muted p-2">
           <div className="text-xl font-extrabold tabular-nums text-critical">
             {data.followUp.open.toLocaleString("id-ID")}
           </div>
@@ -234,7 +234,7 @@ function CategorySection({
             <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Masih Open</div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5 rounded-lg border bg-muted/30 p-3">
+        <div className="flex items-center gap-2.5 rounded-lg border bg-muted p-3">
           <CircleDashed className="size-5 shrink-0 text-muted-foreground" />
           <div>
             <div className="text-xl font-extrabold tabular-nums text-foreground">{data.followUp.unknown}</div>
@@ -243,7 +243,7 @@ function CategorySection({
         </div>
       </div>
 
-      <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="rounded-lg border bg-secondary p-3">
         <p className="mb-2 text-xs font-bold tracking-wide text-foreground uppercase">Penyebab Gangguan Keseluruhan</p>
         <div className="flex flex-wrap gap-2">
           {data.causePareto.map((c) => (
@@ -366,7 +366,7 @@ function CategorySection({
             </p>
           ) : (
             <>
-              <div className="rounded-lg border bg-muted/40 p-3">
+              <div className="rounded-lg border bg-muted p-3">
                 <div className="text-2xl font-extrabold tabular-nums text-foreground">
                   {formatDurationMinutes(data.avgDurationMinutes)}
                 </div>

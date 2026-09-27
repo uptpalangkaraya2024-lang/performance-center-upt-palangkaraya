@@ -100,7 +100,7 @@ function useLandscapePrint() {
 
 function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
   return (
-    <div className="flex flex-col justify-center rounded-lg border bg-muted/30 p-5 text-center">
+    <div className="flex flex-col justify-center rounded-lg border bg-muted p-5 text-center">
       <div className={cn("text-3xl font-extrabold tabular-nums", className ?? "text-foreground")}>{value}</div>
       <div className="text-sm font-medium text-muted-foreground">{label}</div>
     </div>
@@ -112,7 +112,7 @@ function StatTile({ value, label, className }: { value: string; label: string; c
  *  awkward wrapping for something like "ULTG PALANGKARAYA". */
 function InfoTile({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div className="flex flex-col justify-center rounded-lg border bg-muted/30 p-5">
+    <div className="flex flex-col justify-center rounded-lg border bg-muted p-5">
       <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       <div className={cn("mt-1 text-xl font-extrabold text-foreground", className)}>{value}</div>
     </div>
@@ -424,7 +424,7 @@ export function DisturbancePresentationView({
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:col-span-3 sm:grid-cols-3">
                   {totalByCategory.map((c) => (
-                    <div key={c.label} className="rounded-lg border bg-muted/30 p-4" style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR[c.label] }}>
+                    <div key={c.label} className="rounded-lg border bg-muted p-4" style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR[c.label] }}>
                       <div className="text-2xl font-extrabold tabular-nums text-foreground">{c.total}</div>
                       <div className="text-sm text-muted-foreground">{c.label}</div>
                       <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">

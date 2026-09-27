@@ -160,31 +160,31 @@ function StatGrid({
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="rounded-lg border bg-muted p-3">
         <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.master}</div>
         <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target UPT</div>
       </div>
-      <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="rounded-lg border bg-muted p-3">
         <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.targetRencana}</div>
         <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target Rencana</div>
       </div>
-      <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="rounded-lg border bg-muted p-3">
         <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.targetToDate}</div>
         <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target s.d. Periode</div>
       </div>
-      <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="rounded-lg border bg-muted p-3">
         <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.realisasiToDate}</div>
         <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Realisasi s.d. Periode</div>
       </div>
-      <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="rounded-lg border bg-muted p-3">
         <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{formatPercent(stats.percentTarget)}</div>
         <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">% Target (s.d. Periode/Total)</div>
       </div>
-      <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="rounded-lg border bg-muted p-3">
         <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{formatPercent(stats.percentRealisasi)}</div>
         <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">% Realisasi (thd Total)</div>
       </div>
-      <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="rounded-lg border bg-muted p-3">
         <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{stats.gap}</div>
         <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">GAP</div>
       </div>
@@ -198,7 +198,7 @@ function UltgBreakdown({ ultgBreakdown }: { ultgBreakdown: AboUltgComputed[] }) 
       <p className="text-sm font-bold tracking-wide text-foreground uppercase">Breakdown per ULTG</p>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {ultgBreakdown.map((u) => (
-          <div key={u.ultg} className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-3">
+          <div key={u.ultg} className="flex flex-col gap-1.5 rounded-lg border bg-secondary p-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-bold text-foreground">{u.ultg}</span>
               <StatusPill status={u.status} />
@@ -246,14 +246,14 @@ function RuasChecklist({
         </span>
       </p>
       {grouped.map(([ultg, items]) => (
-        <div key={ultg} className="flex flex-col gap-1.5 rounded-lg border bg-muted/20 p-2.5">
+        <div key={ultg} className="flex flex-col gap-1.5 rounded-lg border bg-secondary p-2.5">
           <p className="text-xs font-bold text-muted-foreground uppercase">{ultg}</p>
           <ul className="flex flex-col gap-1.5">
             {items.map((item, i) => {
               const overdue = !item.done && item.targetWeekLabel !== selectedWeekLabel;
               const notOk = item.kondisi.trim().toUpperCase() === "NOT OK";
               return (
-                <li key={`${item.asset}-${i}`} className="flex flex-col gap-1 rounded-md border bg-card px-3 py-2 text-sm">
+                <li key={`${item.asset}-${i}`} className="flex flex-col gap-1 rounded-md border bg-muted px-3 py-2 text-sm">
                   <div className="flex items-center gap-2">
                     {item.done ? (
                       <CheckCircle2 className="size-4 shrink-0 text-success" />

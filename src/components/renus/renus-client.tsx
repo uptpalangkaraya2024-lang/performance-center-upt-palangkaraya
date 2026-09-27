@@ -98,7 +98,7 @@ function StatTile({
   barClassName?: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-muted/40">
+    <div className="overflow-hidden rounded-lg border bg-muted">
       <div className={`h-1.5 w-full ${barClassName}`} />
       <div className="p-3">
         <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
@@ -311,7 +311,7 @@ export function RenusClient({ data }: { data: RenusData }) {
                 <span className="flex items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 p-2 font-semibold text-success">
                   <CheckCircle2 className="size-4 shrink-0" /> {closedThisWeek} Selesai
                 </span>
-                <span className="flex items-center gap-1.5 rounded-lg border bg-muted/30 p-2 font-semibold text-muted-foreground">
+                <span className="flex items-center gap-1.5 rounded-lg border bg-muted p-2 font-semibold text-muted-foreground">
                   <CircleDashed className="size-4 shrink-0" /> {weekRows.length} Total
                 </span>
               </div>
@@ -344,7 +344,7 @@ export function RenusClient({ data }: { data: RenusData }) {
                 <span className="flex items-center gap-1.5 rounded-lg border border-warning/50 bg-warning/10 p-2 font-semibold text-warning-foreground">
                   <AlertTriangle className="size-4 shrink-0" /> {data.nextWeekRows.filter((r) => isRenusHighRisk(r)).length} High Risk
                 </span>
-                <span className="flex items-center gap-1.5 rounded-lg border bg-muted/30 p-2 font-semibold text-muted-foreground">
+                <span className="flex items-center gap-1.5 rounded-lg border bg-muted p-2 font-semibold text-muted-foreground">
                   <CircleDashed className="size-4 shrink-0" /> {data.nextWeekRows.length} Total
                 </span>
               </div>

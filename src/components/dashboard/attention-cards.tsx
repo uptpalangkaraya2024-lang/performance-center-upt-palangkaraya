@@ -50,7 +50,7 @@ const TONE_META: Record<
     icon: Info,
     className: "text-muted-foreground",
     dotClassName: "bg-muted-foreground",
-    cardClassName: "border-border bg-muted/40",
+    cardClassName: "border-border bg-muted",
     badgeClassName: "border border-border bg-muted text-muted-foreground",
   },
 };

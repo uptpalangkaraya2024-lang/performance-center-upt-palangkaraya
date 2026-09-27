@@ -66,7 +66,7 @@ export function UptKpiCard({ kpi, highlighted = false }: { kpi: UptKpi; highligh
           {formatKpiValue(kpi.actualValue, kpi.actualLabel, kpi.unit)}
         </div>
 
-        <div className="mt-3 flex flex-col gap-1.5 rounded-lg border bg-muted/25 p-2.5 text-sm">
+        <div className="mt-3 flex flex-col gap-1.5 rounded-lg border bg-secondary p-2.5 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Target</span>
             <span className="font-bold tabular-nums text-foreground">
@@ -88,7 +88,7 @@ export function UptKpiCard({ kpi, highlighted = false }: { kpi: UptKpi; highligh
         <Progress value={progressPct} className="mt-3" />
 
         {kpi.weightInfo ? (
-          <div className="mt-2.5 flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-[11px]">
+          <div className="mt-2.5 flex items-center justify-between rounded-md bg-secondary px-2 py-1.5 text-[11px]">
             <span className="text-muted-foreground">
               Bobot {kpi.weightInfo.sharedWith ? "grup" : ""}: <b className="text-foreground">{kpi.weightInfo.weight}</b>
             </span>

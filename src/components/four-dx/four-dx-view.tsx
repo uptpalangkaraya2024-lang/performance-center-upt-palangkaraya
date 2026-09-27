@@ -180,19 +180,19 @@ function LmCard({ lm }: { lm: FourDxLm }) {
             </span>
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border bg-muted/40 p-3">
+            <div className="rounded-lg border bg-muted p-3">
               <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{lm.targetBulanan}</div>
               <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target Bulanan</div>
             </div>
-            <div className="rounded-lg border bg-muted/40 p-3">
+            <div className="rounded-lg border bg-muted p-3">
               <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{lm.targetMingguan}</div>
               <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Target Mingguan</div>
             </div>
-            <div className="rounded-lg border bg-muted/40 p-3">
+            <div className="rounded-lg border bg-muted p-3">
               <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">{lm.realisasiMingguan}</div>
               <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Realisasi Mingguan</div>
             </div>
-            <div className="rounded-lg border bg-muted/40 p-3">
+            <div className="rounded-lg border bg-muted p-3">
               <div className="text-xl font-bold tabular-nums text-foreground sm:text-2xl">
                 {formatPercent(lm.percentRealisasiMingguan)}
               </div>
@@ -204,11 +204,11 @@ function LmCard({ lm }: { lm: FourDxLm }) {
         {lm.assets.length === 0 ? (
           <p className="text-sm text-muted-foreground">Tidak ada aset yang dijadwalkan pada periode ini.</p>
         ) : (
-          <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/20 p-2.5">
+          <div className="flex flex-col gap-1.5 rounded-lg border bg-secondary p-2.5">
             <p className="text-xs font-bold text-muted-foreground uppercase">Breakdown per ULTG / Ruas</p>
             <ul className="flex flex-col gap-1.5">
               {lm.assets.map((asset) => (
-                <li key={asset.asset} className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm">
+                <li key={asset.asset} className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm">
                   {asset.done ? (
                     <CheckCircle2 className="size-4 shrink-0 text-success" />
                   ) : (
@@ -401,7 +401,7 @@ function OutcomeCorrelationBanner({
             const unit = s.wigNumber === 3 ? "Jam" : "kali";
             const chart = (charts[s.wigNumber] ?? []).slice(fromMonth, toMonth + 1);
             return (
-              <div key={s.wigNumber} className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3" style={{ borderLeft: `4px solid ${accent}` }}>
+              <div key={s.wigNumber} className="flex flex-col gap-2 rounded-lg border bg-muted p-3" style={{ borderLeft: `4px solid ${accent}` }}>
                 <button
                   type="button"
                   onClick={() => jumpTo(wigAnchorId(s.wigNumber))}
@@ -460,7 +460,7 @@ function AchievementSummaryCards({
           const evaluable = wig.lms.filter((lm) => lm.targetMingguan > 0);
           const tercapai = evaluable.filter((lm) => lm.status === "tercapai").length;
           return (
-            <div key={wig.number} className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-3">
+            <div key={wig.number} className="flex flex-col gap-1.5 rounded-lg border bg-secondary p-3">
               <span className="text-sm font-bold tracking-tight text-foreground">WIG {wig.number} — {wigLabels[wig.number]}</span>
               <span className="text-sm text-muted-foreground">
                 Periode dipilih: <span className="font-bold text-foreground">{evaluable.length > 0 ? `${tercapai}/${evaluable.length}` : "—"}</span> LM tercapai
@@ -526,7 +526,7 @@ function WaRecapSheet({ text }: { text: string }) {
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             {copied ? "Tersalin" : "Copy"}
           </Button>
-          <pre className="flex-1 overflow-auto rounded-lg border bg-muted/20 p-3 text-xs whitespace-pre-wrap text-foreground">
+          <pre className="flex-1 overflow-auto rounded-lg border bg-secondary p-3 text-xs whitespace-pre-wrap text-foreground">
             {text}
           </pre>
         </div>
