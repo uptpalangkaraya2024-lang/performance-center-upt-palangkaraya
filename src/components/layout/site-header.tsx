@@ -38,7 +38,7 @@ export function SiteHeader() {
       <button
         type="button"
         onClick={() => setSearchOpen(true)}
-        className="relative hidden max-w-sm flex-1 items-center rounded-md border bg-background px-2.5 h-9 text-left text-sm text-muted-foreground hover:bg-muted sm:flex"
+        className="relative hidden max-w-sm flex-1 items-center rounded-md border bg-card px-2.5 h-9 text-left text-sm text-muted-foreground hover:bg-muted sm:flex"
       >
         <Search className="mr-2 size-4 shrink-0" />
         <span className="flex-1">Cari GI, Trafo, Gangguan, Case...</span>

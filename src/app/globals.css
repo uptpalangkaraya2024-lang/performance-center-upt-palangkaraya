@@ -26,6 +26,7 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -86,6 +87,10 @@
   --accent-foreground: #c2410c;
   --destructive: #ef4444;
   --border: #cbd5e1;
+  /* A slightly stronger variant of --border, used only where a clearer
+     separator is warranted (the shared Card component's own outline) — see
+     the matching --border-strong in .dark for why this pair exists. */
+  --border-strong: #b8c4d3;
   --input: #cbd5e1;
   --ring: #183b8f;
   --success: #15803d;
@@ -106,105 +111,128 @@
   --radius: 0.75rem;
 
   /* Sidebar is always deep navy — a fixed structural element, not part of
-   * the light/dark toggle (same values repeated in .dark below). */
-  --sidebar: #111a5e;
-  --sidebar-foreground: #dce3f7;
-  --sidebar-primary: #f97316;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ffffff14;
-  --sidebar-accent-foreground: #fdba12;
-  --sidebar-border: #ffffff1a;
-  --sidebar-ring: #f97316;
+   * the light/dark toggle (same values repeated in .dark below). Updated to
+   * the exact enterprise color-system spec the user provided (screenshot +
+   * hex list): navy sidebar, blue active-item fill, orange only as a small
+   * accent (left indicator bar) — never a solid orange sidebar. */
+  --sidebar: #111c4a;
+  --sidebar-foreground: #a9b8ca;
+  --sidebar-primary: #ff8a00;
+  --sidebar-primary-foreground: #111c4a;
+  --sidebar-accent: #253b87;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: rgba(130, 160, 190, 0.15);
+  --sidebar-ring: #ff8a00;
 
   /* Controlled gradients — used only on the hero header, sidebar backdrop,
    * and a couple of highlighted accents, never on every card. */
-  --gradient-primary: linear-gradient(135deg, #111a5e 0%, #183b8f 100%);
-  --gradient-accent: linear-gradient(135deg, #f97316 0%, #f59e0b 55%, #fdba12 100%);
+  --gradient-primary: linear-gradient(135deg, #111c4a 0%, #2d63b8 100%);
+  --gradient-accent: linear-gradient(135deg, #ff8a00 0%, #ffb000 55%, #ffd166 100%);
   --gradient-hero: linear-gradient(
     120deg,
-    rgba(17, 26, 94, 0.08) 0%,
-    rgba(36, 87, 166, 0.05) 30%,
-    rgba(249, 115, 22, 0.06) 65%,
-    rgba(253, 186, 18, 0.12) 100%
+    rgba(17, 28, 74, 0.08) 0%,
+    rgba(45, 99, 184, 0.05) 30%,
+    rgba(255, 138, 0, 0.06) 65%,
+    rgba(255, 176, 0, 0.12) 100%
   );
 }
 
+/*
+ * Dark theme — "enterprise performance monitoring" color system, per the
+ * user's own detailed spec (exact hex values, given after auditing several
+ * earlier brightness/hue iterations that still didn't land). This replaces
+ * the previous OKLCH-based dark tokens wholesale rather than nudging them
+ * again, since the spec is precise enough to apply directly. Visual-only —
+ * no logic, data, or component structure changed alongside this.
+ *
+ * Hierarchy (each level a visible step lighter than the last, so cards
+ * separate from the page and from each other without needing heavy shadows):
+ *   Level 1  Page background     #0B1220
+ *   Level 2  Main card           #172A42
+ *   Level 3  Inner KPI / stat box #243D5B
+ *   Level 4  Small info box      #203650  (a distinct mid-tone, not "more
+ *                                          nested" than level 3 — used for
+ *                                          secondary/metadata chips)
+ *   Level 5  Border              rgba(130, 160, 190, .25)
+ * Status colors (success/warning/critical) are used as ACCENTS — badge
+ * fill, icon, border, top-of-card stripe — never as a card's entire
+ * background, matching the spec's explicit "not a fully green/red card"
+ * instruction and this app's own established badge convention.
+ */
 .dark {
-  /* Page background reverted to the original pre-redesign value per user
-     feedback — the "Deep Ocean Blue" hue/chroma bump was liked for cards
-     and stat boxes (kept below) but tinting the PAGE background the same
-     rich blue made the whole scene read as one uniform wash instead of
-     letting cards visibly float above a plain, receding backdrop. Cards
-     now carry all of the color; the page canvas stays neutral and dark. */
-  --background: oklch(0.19 0.02 260);
-  --foreground: oklch(0.97 0.008 255);
-  /* "Deep Ocean Blue" card tone the user picked from the 4 mocked-up
-     options — richer/more saturated (255°, chroma ~0.06) than the app's
-     original near-neutral card. Against the now-darker --background above,
-     this creates a wide, clearly visible lift (cards read as distinctly
-     colored and raised, not just "a bit lighter than the page"). */
-  --card: oklch(0.35 0.06 255);
-  --card-foreground: oklch(0.97 0.008 255);
-  --popover: oklch(0.35 0.06 255);
-  --popover-foreground: oklch(0.97 0.008 255);
-  --primary: oklch(0.74 0.12 258);
-  --primary-foreground: oklch(0.18 0.03 258);
-  --secondary: oklch(0.38 0.055 255);
-  --secondary-foreground: oklch(0.92 0.02 255);
-  /* Bumped alongside --card so the bg-muted/NN "inset stat tile" pattern
-     used throughout the app still reads as visibly lighter than the card
-     it sits on, not swallowed by the lighter card background above. */
-  --muted: oklch(0.41 0.055 255);
-  --muted-foreground: oklch(0.8 0.03 255);
-  --accent: oklch(0.38 0.065 230);
-  --accent-foreground: oklch(0.92 0.02 255);
-  --destructive: oklch(0.7 0.19 25);
-  /* Bumped from 10% -> 18% -> 20% per user feedback: the original value was
-     nearly invisible against the dark card background, making every
-     bordered section (stat tiles, breakdown cards, table rows) look
-     flat/undivided. This single token drives border-border and the Card
-     ring below across the whole app, so raising it here fixes contrast
-     everywhere at once instead of patching each component individually. */
-  --border: oklch(1 0 0 / 20%);
-  --input: oklch(1 0 0 / 20%);
-  --ring: oklch(0.66 0.12 255);
-  --success: oklch(0.68 0.14 150);
-  --success-foreground: oklch(0.16 0.03 150);
-  --warning: oklch(0.78 0.15 80);
-  /* Every badge/pill in the app pairs this with a translucent bg-warning/NN
-   * fill over a dark card (never a solid --warning fill with text on top —
-   * confirmed no such usage exists), matching how --critical/--success are
-   * used directly as bright text elsewhere. The previous dark value
-   * (oklch(0.22 0.06 80), meant for dark text on a solid amber fill) was
-   * nearly invisible against that dark translucent combination. */
-  --warning-foreground: oklch(0.78 0.15 80);
-  --critical: oklch(0.7 0.19 25);
-  --critical-foreground: oklch(0.16 0.03 25);
-  --info: oklch(0.68 0.15 250);
-  --info-foreground: oklch(0.16 0.03 250);
-  --chart-1: oklch(0.72 0.12 258);
-  --chart-2: oklch(0.68 0.11 220);
-  --chart-3: oklch(0.68 0.14 150);
-  --chart-4: oklch(0.78 0.15 80);
-  --chart-5: oklch(0.7 0.19 25);
-  --brand: oklch(0.7 0.19 42);
-  --brand-foreground: oklch(0.18 0.04 42);
-  --sidebar: #111a5e;
-  --sidebar-foreground: #dce3f7;
-  --sidebar-primary: #f97316;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ffffff14;
-  --sidebar-accent-foreground: #fdba12;
-  --sidebar-border: #ffffff1a;
-  --sidebar-ring: #f97316;
-  --gradient-primary: linear-gradient(135deg, #111a5e 0%, #183b8f 100%);
-  --gradient-accent: linear-gradient(135deg, #f97316 0%, #f59e0b 55%, #fdba12 100%);
+  --background: #0b1220;
+  --foreground: #f1f5f9;
+  --card: #172a42;
+  --card-foreground: #f1f5f9;
+  --popover: #172a42;
+  --popover-foreground: #f1f5f9;
+  /* Primary interactive blue — buttons, links, progress fill, chart lines,
+     focus rings. Never used as a card's full background (see the top-level
+     comment above and section 6 of the spec). */
+  --primary: #2d63b8;
+  --primary-foreground: #f1f5f9;
+  /* "Small info box" tone — secondary/metadata chips, and reused as the
+     generic hover-surface color so the app doesn't accumulate more distinct
+     dark hues than the spec calls for. */
+  --secondary: #203650;
+  --secondary-foreground: #a9b8ca;
+  /* "Inner KPI / stat box" tone — Target/Realisasi/Achievement/Gap tiles,
+     the bg-muted/NN "inset" pattern used throughout the app. One step
+     lighter than --card so nested stat boxes read as clearly separate from
+     the card they sit in. */
+  --muted: #243d5b;
+  --muted-foreground: #a9b8ca;
+  --accent: #203650;
+  --accent-foreground: #a9b8ca;
+  --destructive: #f05a5a;
+  /* Subtle blue-gray border per spec — never bright white. This single
+     token drives border-border and (via the Card component) every card's
+     own outline across the whole app. */
+  --border: rgba(130, 160, 190, 0.25);
+  /* Per spec: "for a card that needs clearer separation, may use
+     rgba(130,160,190,.35)" — used only by the Card component's own outline,
+     not the base divider/table-row border above. */
+  --border-strong: rgba(130, 160, 190, 0.35);
+  --input: rgba(130, 160, 190, 0.25);
+  --ring: #2d63b8;
+  --success: #35c47a;
+  --success-foreground: #06301c;
+  --warning: #f5b83d;
+  /* Kept equal to --warning itself, per this app's own documented gotcha:
+   * every warning badge pairs a translucent bg-warning/NN fill with
+   * warning-foreground TEXT (never a solid --warning fill), and a separate
+   * dark value here previously rendered as invisible warning-on-warning. */
+  --warning-foreground: #f5b83d;
+  --critical: #f05a5a;
+  --critical-foreground: #3a0f0f;
+  --info: #2d63b8;
+  --info-foreground: #f1f5f9;
+  --chart-1: #2d63b8;
+  --chart-2: #4f8fe0;
+  --chart-3: #35c47a;
+  --chart-4: #f5b83d;
+  --chart-5: #f05a5a;
+  /* Orange brand accent — logo identity. Used sparingly (active-nav
+   * indicator, small section accents, badges) per the spec's explicit
+   * "accent only, never a card/page background" rule. */
+  --brand: #ff8a00;
+  --brand-foreground: #3d2400;
+  --sidebar: #111c4a;
+  --sidebar-foreground: #a9b8ca;
+  --sidebar-primary: #ff8a00;
+  --sidebar-primary-foreground: #111c4a;
+  --sidebar-accent: #253b87;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: rgba(130, 160, 190, 0.15);
+  --sidebar-ring: #ff8a00;
+  --gradient-primary: linear-gradient(135deg, #111c4a 0%, #2d63b8 100%);
+  --gradient-accent: linear-gradient(135deg, #ff8a00 0%, #ffb000 55%, #ffd166 100%);
   --gradient-hero: linear-gradient(
     120deg,
-    rgba(17, 26, 94, 0.5) 0%,
-    rgba(36, 87, 166, 0.32) 30%,
-    rgba(249, 115, 22, 0.18) 65%,
-    rgba(253, 186, 18, 0.14) 100%
+    rgba(17, 28, 74, 0.5) 0%,
+    rgba(45, 99, 184, 0.32) 30%,
+    rgba(255, 138, 0, 0.18) 65%,
+    rgba(255, 176, 0, 0.14) 100%
   );
 }
 
