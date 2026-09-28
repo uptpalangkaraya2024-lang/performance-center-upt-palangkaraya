@@ -409,13 +409,28 @@ export function formatFourDxWaRecap(period: FourDxPeriodRange, year: number, wig
       lines.push(`Total UPT: R:${lm.realisasiMingguan}/T:${lm.targetMingguan} ${lmMark}`);
       if (lm.assets.length === 0) {
         lines.push("- Tidak ada aset dijadwalkan pada periode ini");
-      }
-      for (const asset of lm.assets) {
-        const mark = asset.done ? "✅" : "⏳";
-        if (isUltgLevelAsset(asset.asset)) {
-          lines.push(`- ${asset.asset} (R:${asset.realizedCount}/T:${asset.targetThisWeek}) ${mark}`);
+      } else if (wig.number === 4) {
+        // WIG 4's per-ULTG target is confirmed arbitrary (see buildFourDxLm)
+        // — the UPT-level target/realisasi line above is the real
+        // pass/fail gate, so per the user's explicit request this breakdown
+        // is just a marker of which ULTG already contributed this week and
+        // how many, not a second target/realisasi checklist.
+        const contributed = lm.assets.filter((asset) => asset.realizedCount > 0);
+        if (contributed.length === 0) {
+          lines.push("- Belum ada ULTG yang terealisasi pada periode ini");
         } else {
-          lines.push(`- ${asset.asset} ${mark}`);
+          for (const asset of contributed) {
+            lines.push(`- ${asset.asset} (${asset.realizedCount})`);
+          }
+        }
+      } else {
+        for (const asset of lm.assets) {
+          const mark = asset.done ? "✅" : "⏳";
+          if (isUltgLevelAsset(asset.asset)) {
+            lines.push(`- ${asset.asset} (R:${asset.realizedCount}/T:${asset.targetThisWeek}) ${mark}`);
+          } else {
+            lines.push(`- ${asset.asset} ${mark}`);
+          }
         }
       }
     }
