@@ -108,11 +108,26 @@ function useLandscapePrint() {
   }, []);
 }
 
-function StatTile({ value, label, className }: { value: string; label: string; className?: string }) {
+// `compact` trims padding/font-size for a dense row (e.g. 6 tiles across) —
+// added per explicit user feedback that Slide 2 grew too tall to fit one
+// screen in presentation mode once it gained 2 more tiles.
+function StatTile({
+  value,
+  label,
+  className,
+  compact = false,
+}: {
+  value: string;
+  label: string;
+  className?: string;
+  compact?: boolean;
+}) {
   return (
-    <div className="flex flex-col justify-center rounded-lg border bg-muted p-5 text-center">
-      <div className={cn("text-3xl font-extrabold tabular-nums", className ?? "text-foreground")}>{value}</div>
-      <div className="text-sm font-medium text-muted-foreground">{label}</div>
+    <div className={cn("flex flex-col justify-center rounded-lg border bg-muted text-center", compact ? "p-2.5" : "p-5")}>
+      <div className={cn("font-extrabold tabular-nums", compact ? "text-xl" : "text-3xl", className ?? "text-foreground")}>
+        {value}
+      </div>
+      <div className={cn("font-medium text-muted-foreground", compact ? "text-[11px] leading-tight" : "text-sm")}>{label}</div>
     </div>
   );
 }
@@ -167,14 +182,23 @@ function CauseYearChart({ cause, data, years }: { cause: string; data: Cumulativ
       <p className="truncate text-sm font-semibold text-foreground" title={cause}>
         {cause}
       </p>
-      <ResponsiveContainer width="100%" height={170}>
-        <LineChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height={160}>
+        <LineChart data={data} margin={{ top: 14, right: 8, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} stroke="var(--muted-foreground)" />
-          <YAxis tickLine={false} axisLine={false} fontSize={10} stroke="var(--muted-foreground)" allowDecimals={false} width={24} />
+          <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={9} stroke="var(--muted-foreground)" />
+          <YAxis tickLine={false} axisLine={false} fontSize={9} stroke="var(--muted-foreground)" allowDecimals={false} width={20} />
           <ChartTooltip contentStyle={{ fontSize: 11 }} />
           {years.map((y, i) => (
-            <Line key={y} type="monotone" dataKey={y} name={y} stroke={YEAR_COLORS[i % YEAR_COLORS.length]} strokeWidth={2} dot={{ r: 2 }} />
+            <Line
+              key={y}
+              type="monotone"
+              dataKey={y}
+              name={y}
+              stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
+              strokeWidth={2}
+              dot={{ r: 2 }}
+              label={{ position: "top", fontSize: 8, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
+            />
           ))}
         </LineChart>
       </ResponsiveContainer>
@@ -203,10 +227,10 @@ function CombinedCalendarGrid({ days, monthIndex0, year }: { days: CombinedCalen
   const leadingBlanks = (firstWeekday + 6) % 7; // shift to Monday-first
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-7 gap-2 text-center">
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-7 gap-1.5 text-center">
         {DAY_LABELS.map((d) => (
-          <div key={d} className="pb-1 text-sm font-semibold text-muted-foreground">
+          <div key={d} className="pb-0.5 text-xs font-semibold text-muted-foreground sm:text-sm">
             {d}
           </div>
         ))}
@@ -217,11 +241,15 @@ function CombinedCalendarGrid({ days, monthIndex0, year }: { days: CombinedCalen
           <div
             key={d.date}
             className={cn(
-              "flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border p-1.5",
+              // Fixed height instead of aspect-square — on a wide
+              // presentation-mode viewport, a square cell (width-driven)
+              // makes a 5-6 row month grow tall enough to force scrolling.
+              // Per explicit user feedback: no slide should need to scroll.
+              "flex h-14 flex-col items-center justify-center gap-0.5 rounded-lg border p-1 sm:h-[72px]",
               d.total > 0 ? "border-critical/50 bg-critical/10" : "border-success/30 bg-success/5",
             )}
           >
-            <span className={cn("text-lg font-bold tabular-nums", d.total > 0 ? "text-critical" : "text-foreground")}>
+            <span className={cn("text-sm font-bold tabular-nums sm:text-base", d.total > 0 ? "text-critical" : "text-foreground")}>
               {d.day}
             </span>
             {d.byCategory.flatMap((c) =>
@@ -601,23 +629,25 @@ export function DisturbancePresentationView({
         title: "Kalender Gangguan (Gabungan)",
         subtitle: `${formatPercent(combinedCalendarSummary.percentWithDisturbance)} hari dengan gangguan · ${formatPercent(combinedCalendarSummary.percentWithoutDisturbance)} hari tanpa gangguan (${combinedCalendarSummary.daysWithoutDisturbance} dari ${combinedCalendarSummary.daysInMonth} hari)`,
         render: () => (
-          <div className="flex flex-col gap-5">
+          <div className="flex h-full flex-col gap-4">
             <CombinedCalendarGrid days={combinedCalendarDays} monthIndex0={monthIndex0} year={Number(year)} />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
               <StatTile
+                compact
                 value={formatPercent(combinedCalendarSummary.percentWithoutDisturbance)}
-                label="Hari Tanpa Gangguan Bulan Ini"
+                label="Hari Tanpa Gangguan"
                 className="text-success"
               />
               <StatTile
+                compact
                 value={formatPercent(combinedCalendarSummary.percentWithDisturbance)}
-                label="Hari Dengan Gangguan Bulan Ini"
+                label="Hari Dengan Gangguan"
                 className="text-critical"
               />
-              <StatTile value={String(kindCountFor("Transmisi", "Trip"))} label="Transmisi · Trip" className="text-critical" />
-              <StatTile value={String(kindCountFor("Transmisi", "AR Sukses"))} label="Transmisi · Reclose" className="text-success" />
-              <StatTile value={String(totalByCategory.find((c) => c.label === "Trafo HV")?.total ?? 0)} label="Trafo HV · Gangguan" />
-              <StatTile value={String(totalByCategory.find((c) => c.label === "Trafo LV")?.total ?? 0)} label="Trafo LV · Gangguan" />
+              <StatTile compact value={String(kindCountFor("Transmisi", "Trip"))} label="Transmisi · Trip" className="text-critical" />
+              <StatTile compact value={String(kindCountFor("Transmisi", "AR Sukses"))} label="Transmisi · Reclose" className="text-success" />
+              <StatTile compact value={String(totalByCategory.find((c) => c.label === "Trafo HV")?.total ?? 0)} label="Trafo HV" />
+              <StatTile compact value={String(totalByCategory.find((c) => c.label === "Trafo LV")?.total ?? 0)} label="Trafo LV" />
             </div>
           </div>
         ),
@@ -670,90 +700,127 @@ export function DisturbancePresentationView({
         title: "Kumulatif Transmisi & Trafo",
         subtitle: `Tren kumulatif tahun ${year} · perbandingan tahun ${compareYears.join("/")}`,
         render: () => (
-          <div className="flex h-full flex-col gap-6 overflow-y-auto">
-            <div className="flex min-h-0 flex-1 flex-col gap-2">
-              <p className="text-base font-semibold text-foreground">Transmisi — AR / Trip ({year})</p>
-              <div className="min-h-0 flex-1">
-                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
-                  <LineChart data={cumulativeTransmisi} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" />
-                    <YAxis tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
-                    <ChartTooltip />
-                    <Legend wrapperStyle={{ fontSize: 13 }} />
-                    {Object.keys(KIND_COLOR)
-                      .filter((kind) => cumulativeTransmisi.some((p) => Number(p[kind] ?? 0) > 0))
-                      .map((kind) => (
-                        <Line key={kind} type="monotone" dataKey={kind} name={kind} stroke={KIND_COLOR[kind]} strokeWidth={3} dot={{ r: 4 }} />
-                      ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-2">
-              <p className="text-base font-semibold text-foreground">Trafo HV vs LV — Trip ({year})</p>
-              <div className="min-h-0 flex-1">
-                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
-                  <LineChart data={cumulativeTrafo} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" />
-                    <YAxis tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
-                    <ChartTooltip />
-                    <Legend wrapperStyle={{ fontSize: 13 }} />
-                    <Line type="monotone" dataKey="Trafo HV" stroke={CATEGORY_COLOR["Trafo HV"]} strokeWidth={3} dot={{ r: 4 }} />
-                    <Line type="monotone" dataKey="Trafo LV" stroke={CATEGORY_COLOR["Trafo LV"]} strokeWidth={3} dot={{ r: 4 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Year-over-year comparison — added alongside the kind/side
-                breakdown above rather than replacing it, per the user's
-                explicit "ditambahkan juga" (also add) request. */}
-            <div className="flex flex-col gap-1.5 border-t pt-4">
-              <p className="text-sm font-semibold text-foreground">Perbandingan Tahun ({compareYears.join(", ")})</p>
-            </div>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="flex min-h-0 flex-col gap-2">
-                <p className="text-base font-semibold text-foreground">Transmisi — Total Kumulatif</p>
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={cumulativeTransmisiByYear} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" />
-                    <YAxis tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
-                    <ChartTooltip />
-                    <Legend wrapperStyle={{ fontSize: 13 }} />
-                    {compareYears.map((y, i) => (
-                      <Line key={y} type="monotone" dataKey={y} name={y} stroke={YEAR_COLORS[i % YEAR_COLORS.length]} strokeWidth={3} dot={{ r: 4 }} />
+          // 2x2 grid instead of a vertical stack — per explicit user
+          // feedback that stacking all 4 charts made this slide require
+          // scrolling in presentation mode. Fixed chart heights (not
+          // flex-1-fills-remaining-space) so the whole grid has a
+          // predictable total height that fits one screen.
+          <div className="grid h-full grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-semibold text-foreground">Transmisi — AR / Trip ({year})</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={cumulativeTransmisi} margin={{ top: 16, right: 16, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  {Object.keys(KIND_COLOR)
+                    .filter((kind) => cumulativeTransmisi.some((p) => Number(p[kind] ?? 0) > 0))
+                    .map((kind) => (
+                      <Line
+                        key={kind}
+                        type="monotone"
+                        dataKey={kind}
+                        name={kind}
+                        stroke={KIND_COLOR[kind]}
+                        strokeWidth={3}
+                        dot={{ r: 3 }}
+                        label={{ position: "top", fontSize: 10, fill: KIND_COLOR[kind] }}
+                      />
                     ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex min-h-0 flex-col gap-2">
-                <p className="text-base font-semibold text-foreground">Trafo (HV + LV) — Total Kumulatif</p>
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={cumulativeTrafoByYear} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" />
-                    <YAxis tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
-                    <ChartTooltip />
-                    <Legend wrapperStyle={{ fontSize: 13 }} />
-                    {compareYears.map((y, i) => (
-                      <Line key={y} type="monotone" dataKey={y} name={y} stroke={YEAR_COLORS[i % YEAR_COLORS.length]} strokeWidth={3} dot={{ r: 4 }} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-semibold text-foreground">Trafo HV vs LV — Trip ({year})</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={cumulativeTrafo} margin={{ top: 16, right: 16, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="Trafo HV"
+                    stroke={CATEGORY_COLOR["Trafo HV"]}
+                    strokeWidth={3}
+                    dot={{ r: 3 }}
+                    label={{ position: "top", fontSize: 10, fill: CATEGORY_COLOR["Trafo HV"] }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Trafo LV"
+                    stroke={CATEGORY_COLOR["Trafo LV"]}
+                    strokeWidth={3}
+                    dot={{ r: 3 }}
+                    label={{ position: "bottom", fontSize: 10, fill: CATEGORY_COLOR["Trafo LV"] }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-semibold text-foreground">Transmisi — Total Kumulatif (Perbandingan Tahun)</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={cumulativeTransmisiByYear} margin={{ top: 16, right: 16, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  {compareYears.map((y, i) => (
+                    <Line
+                      key={y}
+                      type="monotone"
+                      dataKey={y}
+                      name={y}
+                      stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
+                      strokeWidth={3}
+                      dot={{ r: 3 }}
+                      label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-semibold text-foreground">Trafo (HV + LV) — Total Kumulatif (Perbandingan Tahun)</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={cumulativeTrafoByYear} margin={{ top: 16, right: 16, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                  <ChartTooltip />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  {compareYears.map((y, i) => (
+                    <Line
+                      key={y}
+                      type="monotone"
+                      dataKey={y}
+                      name={y}
+                      stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
+                      strokeWidth={3}
+                      dot={{ r: 3 }}
+                      label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </div>
         ),
       },
       {
-        id: "kumulatif-penyebab",
-        title: "Kumulatif Penyebab Gangguan",
-        subtitle: `Top 5 penyebab per kategori — satu grafik per penyebab, perbandingan tahun ${compareYears.join("/")}`,
+        // Split from a single "kumulatif-penyebab" slide into two — per
+        // explicit user feedback: Transmisi's causes on their own slide,
+        // Trafo HV/LV's causes on the next one, since fitting 10 mini-charts
+        // (5 Transmisi + 5 Trafo) on one screen forced scrolling.
+        id: "kumulatif-penyebab-transmisi",
+        title: "Kumulatif Penyebab Gangguan — Transmisi",
+        subtitle: `Top 5 penyebab — satu grafik per penyebab, perbandingan tahun ${compareYears.join("/")}`,
         render: () => (
-          <div className="flex h-full flex-col gap-5 overflow-y-auto">
+          <div className="flex h-full flex-col gap-3">
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">Tahun:</span>
               {compareYears.map((y, i) => (
@@ -763,30 +830,42 @@ export function DisturbancePresentationView({
                 </span>
               ))}
             </div>
-            <div>
-              <p className="mb-2 text-base font-semibold text-foreground">Penyebab Transmisi</p>
-              {transmisiCauseYearCharts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada penyebab tercatat.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {transmisiCauseYearCharts.map((c) => (
-                    <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
-                  ))}
-                </div>
-              )}
+            {transmisiCauseYearCharts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Belum ada penyebab tercatat.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {transmisiCauseYearCharts.map((c) => (
+                  <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
+                ))}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: "kumulatif-penyebab-trafo",
+        title: "Kumulatif Penyebab Gangguan — Trafo HV/LV",
+        subtitle: `Top 5 penyebab (HV + LV digabung) — satu grafik per penyebab, perbandingan tahun ${compareYears.join("/")}`,
+        render: () => (
+          <div className="flex h-full flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Tahun:</span>
+              {compareYears.map((y, i) => (
+                <span key={y} className="inline-flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: YEAR_COLORS[i % YEAR_COLORS.length] }} />
+                  {y}
+                </span>
+              ))}
             </div>
-            <div>
-              <p className="mb-2 text-base font-semibold text-foreground">Penyebab Trafo (HV + LV)</p>
-              {trafoCauseYearCharts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada penyebab tercatat.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {trafoCauseYearCharts.map((c) => (
-                    <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
-                  ))}
-                </div>
-              )}
-            </div>
+            {trafoCauseYearCharts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Belum ada penyebab tercatat.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {trafoCauseYearCharts.map((c) => (
+                  <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
+                ))}
+              </div>
+            )}
           </div>
         ),
       },
