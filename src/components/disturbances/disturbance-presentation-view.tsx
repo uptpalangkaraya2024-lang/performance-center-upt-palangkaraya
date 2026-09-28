@@ -623,24 +623,40 @@ export function DisturbancePresentationView({
   // asked this total to represent). Trafo's Trip is HV+LV combined into ONE
   // chart (also per the user's explicit request), since the two sides were
   // already being compared together before.
+  // Truncates the SELECTED (year, month) — never the other compared years —
+  // so a still-in-progress year's line visibly stops at the selected month
+  // instead of drawing a flat continuation through months that haven't
+  // happened yet. Per the user's explicit request.
+  const truncateAtSelectedMonth = useMemo(() => ({ year, monthIndex0 }), [year, monthIndex0]);
+
   const cumulativeTransmisiTotalByYear = useMemo(() => {
     const trip = transmisi.monthlyByYearByKind.find((k) => k.kind === "Trip")?.data ?? [];
     const ar = transmisi.monthlyByYearByKind.find((k) => k.kind === "AR Sukses")?.data ?? [];
-    return buildCumulativeByYear(sumMonthlyByYear(trip, ar), compareYears);
-  }, [transmisi.monthlyByYearByKind, compareYears]);
+    return buildCumulativeByYear(sumMonthlyByYear(trip, ar), compareYears, truncateAtSelectedMonth);
+  }, [transmisi.monthlyByYearByKind, compareYears, truncateAtSelectedMonth]);
   const cumulativeTransmisiTripByYear = useMemo(
-    () => buildCumulativeByYear(transmisi.monthlyByYearByKind.find((k) => k.kind === "Trip")?.data ?? [], compareYears),
-    [transmisi.monthlyByYearByKind, compareYears],
+    () =>
+      buildCumulativeByYear(
+        transmisi.monthlyByYearByKind.find((k) => k.kind === "Trip")?.data ?? [],
+        compareYears,
+        truncateAtSelectedMonth,
+      ),
+    [transmisi.monthlyByYearByKind, compareYears, truncateAtSelectedMonth],
   );
   const cumulativeTransmisiArByYear = useMemo(
-    () => buildCumulativeByYear(transmisi.monthlyByYearByKind.find((k) => k.kind === "AR Sukses")?.data ?? [], compareYears),
-    [transmisi.monthlyByYearByKind, compareYears],
+    () =>
+      buildCumulativeByYear(
+        transmisi.monthlyByYearByKind.find((k) => k.kind === "AR Sukses")?.data ?? [],
+        compareYears,
+        truncateAtSelectedMonth,
+      ),
+    [transmisi.monthlyByYearByKind, compareYears, truncateAtSelectedMonth],
   );
   const cumulativeTrafoTripByYear = useMemo(() => {
     const hvTrip = trafoHv.monthlyByYearByKind.find((k) => k.kind === "Trip")?.data ?? [];
     const lvTrip = trafoLv.monthlyByYearByKind.find((k) => k.kind === "Trip")?.data ?? [];
-    return buildCumulativeByYear(sumMonthlyByYear(hvTrip, lvTrip), compareYears);
-  }, [trafoHv.monthlyByYearByKind, trafoLv.monthlyByYearByKind, compareYears]);
+    return buildCumulativeByYear(sumMonthlyByYear(hvTrip, lvTrip), compareYears, truncateAtSelectedMonth);
+  }, [trafoHv.monthlyByYearByKind, trafoLv.monthlyByYearByKind, compareYears, truncateAtSelectedMonth]);
 
   // Transmisi, Trafo HV, and Trafo LV causes are kept as three SEPARATE
   // paretos/trends rather than one combined-across-everything chart — a
@@ -666,25 +682,37 @@ export function DisturbancePresentationView({
     () =>
       transmisiTopCauses.map((cause) => ({
         cause,
-        data: buildCumulativeByYear(transmisi.monthlyByYearByCause.find((c) => c.cause === cause)?.data ?? [], compareYears),
+        data: buildCumulativeByYear(
+          transmisi.monthlyByYearByCause.find((c) => c.cause === cause)?.data ?? [],
+          compareYears,
+          truncateAtSelectedMonth,
+        ),
       })),
-    [transmisiTopCauses, transmisi.monthlyByYearByCause, compareYears],
+    [transmisiTopCauses, transmisi.monthlyByYearByCause, compareYears, truncateAtSelectedMonth],
   );
   const trafoHvCauseYearCharts = useMemo(
     () =>
       trafoHvTopCauses.map((cause) => ({
         cause,
-        data: buildCumulativeByYear(trafoHv.monthlyByYearByCause.find((c) => c.cause === cause)?.data ?? [], compareYears),
+        data: buildCumulativeByYear(
+          trafoHv.monthlyByYearByCause.find((c) => c.cause === cause)?.data ?? [],
+          compareYears,
+          truncateAtSelectedMonth,
+        ),
       })),
-    [trafoHvTopCauses, trafoHv.monthlyByYearByCause, compareYears],
+    [trafoHvTopCauses, trafoHv.monthlyByYearByCause, compareYears, truncateAtSelectedMonth],
   );
   const trafoLvCauseYearCharts = useMemo(
     () =>
       trafoLvTopCauses.map((cause) => ({
         cause,
-        data: buildCumulativeByYear(trafoLv.monthlyByYearByCause.find((c) => c.cause === cause)?.data ?? [], compareYears),
+        data: buildCumulativeByYear(
+          trafoLv.monthlyByYearByCause.find((c) => c.cause === cause)?.data ?? [],
+          compareYears,
+          truncateAtSelectedMonth,
+        ),
       })),
-    [trafoLvTopCauses, trafoLv.monthlyByYearByCause, compareYears],
+    [trafoLvTopCauses, trafoLv.monthlyByYearByCause, compareYears, truncateAtSelectedMonth],
   );
 
   // Per-year pie data ("grafik pie persentase jumlah gangguan terbanyak

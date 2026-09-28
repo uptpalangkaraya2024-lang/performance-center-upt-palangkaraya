@@ -57,7 +57,10 @@ export function buildMonthlyBreakdown<T extends { data: DisturbanceMonthlyYearPo
 
 export interface CumulativePoint {
   month: string;
-  [series: string]: string | number;
+  /** null past the truncation point for a year still in progress — a gap
+   *  the chart should stop drawing at, never a fabricated flat 0-growth
+   *  continuation through months that haven't happened yet in the data. */
+  [series: string]: string | number | null;
 }
 
 /** Running-total version of one or more month x year matrices, all for the
@@ -90,12 +93,27 @@ export function buildCumulativeForYear(
  *  actually present in the category's own `years` list — a year with no key
  *  on any point is indistinguishable from "confirmed zero" here, so drawing
  *  a line for a year that was never tracked would misrepresent "no data" as
- *  "zero disturbances". */
-export function buildCumulativeByYear(data: DisturbanceMonthlyYearPoint[], years: string[]): CumulativePoint[] {
+ *  "zero disturbances".
+ *
+ *  `truncate`, when given, stops ONE year's own line right after the
+ *  selected month instead of continuing (flat, since there's nothing left
+ *  to add) all the way to December — per the user's explicit request: only
+ *  the currently-selected (year, month) pair is "still in progress" and
+ *  should read that way on the chart, while every other compared year is
+ *  shown in full since it's already a complete year in the source data. */
+export function buildCumulativeByYear(
+  data: DisturbanceMonthlyYearPoint[],
+  years: string[],
+  truncate?: { year: string; monthIndex0: number },
+): CumulativePoint[] {
   const running: Record<string, number> = Object.fromEntries(years.map((y) => [y, 0]));
-  return MONTH_ID.map((month) => {
+  return MONTH_ID.map((month, monthIndex0) => {
     const point: CumulativePoint = { month: month.slice(0, 3) };
     for (const y of years) {
+      if (truncate && y === truncate.year && monthIndex0 > truncate.monthIndex0) {
+        point[y] = null;
+        continue;
+      }
       running[y] += monthValue(data, month, y);
       point[y] = running[y];
     }
