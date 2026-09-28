@@ -6,7 +6,7 @@
 // sheet parse and hands over a DisturbanceCategoryResult per category;
 // everything here just re-slices that already-computed data by a chosen
 // (year, month) — no new raw-row access needed.
-import type { DisturbanceMonthlyYearPoint } from "@/types";
+import type { DisturbanceBayEventRecord, DisturbanceMonthlyYearPoint } from "@/types";
 
 // Same 12-month Indonesian label order src/services/disturbances.ts's own
 // buildMonthlyByYear() produces each point's `.month` in — duplicated here
@@ -80,6 +80,37 @@ export function buildCumulativeForYear(
     }
     return point;
   });
+}
+
+/** Running-total version of ONE series, split into one column per YEAR
+ *  instead of one column per named series — the year-over-year comparison
+ *  counterpart to buildCumulativeForYear above (which compares several
+ *  named series within a single year). Same running-sum idea as
+ *  disturbance-yoy-monthly-chart.tsx's own toCumulative(). Only pass years
+ *  actually present in the category's own `years` list — a year with no key
+ *  on any point is indistinguishable from "confirmed zero" here, so drawing
+ *  a line for a year that was never tracked would misrepresent "no data" as
+ *  "zero disturbances". */
+export function buildCumulativeByYear(data: DisturbanceMonthlyYearPoint[], years: string[]): CumulativePoint[] {
+  const running: Record<string, number> = Object.fromEntries(years.map((y) => [y, 0]));
+  return MONTH_ID.map((month) => {
+    const point: CumulativePoint = { month: month.slice(0, 3) };
+    for (const y of years) {
+      running[y] += monthValue(data, month, y);
+      point[y] = running[y];
+    }
+    return point;
+  });
+}
+
+/** The selected year plus up to 2 preceding years, filtered to only those
+ *  actually present in `availableYears` — e.g. selecting 2026 with
+ *  2024-2026 all available yields ["2024","2025","2026"], oldest first so
+ *  the legend/lines read left-to-right chronologically. */
+export function comparisonYears(selectedYear: string, availableYears: string[]): string[] {
+  const selected = Number(selectedYear);
+  const candidates = [selected - 2, selected - 1, selected].map(String);
+  return candidates.filter((y) => availableYears.includes(y));
 }
 
 // --- Cross-category ("gabungan") helpers ------------------------------
@@ -184,6 +215,32 @@ export interface CombinedBayEntry {
   category: string;
   ultg: string;
   count: number;
+  /** The actual date(s) this bay was hit in the selected month, formatted
+   *  "DD Mon" — empty when no per-event record matched (shouldn't happen
+   *  for a bay with count > 0, but never assumed). */
+  dates: string[];
+}
+
+/** One (bay, year, month) -> date-list lookup, filtered from a category's
+ *  full bayEvents list down to just the selected period — built once per
+ *  category rather than re-filtering on every bay lookup. */
+export function buildBayEventDatesForMonth(
+  events: DisturbanceBayEventRecord[],
+  monthLabel: string,
+  year: string,
+): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const e of events) {
+    if (e.month !== monthLabel || e.year !== year) continue;
+    // Drop the trailing " YYYY" — every date shown here is already scoped to
+    // one selected year via the month/year filter above, so repeating it per
+    // date would be redundant.
+    const shortDate = e.date.replace(new RegExp(`\\s+${year}$`), "");
+    const list = map.get(e.bay) ?? [];
+    list.push(shortDate);
+    map.set(e.bay, list);
+  }
+  return map;
 }
 
 /** One row per (bay, category) pair that had at least one event this
@@ -192,9 +249,16 @@ export interface CombinedBayEntry {
  *  tagged with its category for the "kontribusi ruas" slide's own badge.
  *  `ultgOf` looks up which ULTG a given bay belongs to (from that
  *  category's own bayBreakdown, which already carries `ultg` per bay) so
- *  the merged ULTG+ruas slide can show both in one table. */
+ *  the merged ULTG+ruas slide can show both in one table. `datesOf` looks
+ *  up that same bay's actual disturbance date(s) this month (see
+ *  buildBayEventDatesForMonth) for the same table's date column. */
 export function buildCombinedBayBreakdown(
-  categories: { label: string; series: { bay: string; data: DisturbanceMonthlyYearPoint[] }[]; ultgOf: (bay: string) => string }[],
+  categories: {
+    label: string;
+    series: { bay: string; data: DisturbanceMonthlyYearPoint[] }[];
+    ultgOf: (bay: string) => string;
+    datesOf: (bay: string) => string[];
+  }[],
   monthLabel: string,
   year: string,
 ): CombinedBayEntry[] {
@@ -202,10 +266,33 @@ export function buildCombinedBayBreakdown(
   for (const cat of categories) {
     for (const s of cat.series) {
       const count = monthValue(s.data, monthLabel, year);
-      if (count > 0) rows.push({ bay: s.bay, category: cat.label, ultg: cat.ultgOf(s.bay), count });
+      if (count > 0) {
+        rows.push({ bay: s.bay, category: cat.label, ultg: cat.ultgOf(s.bay), count, dates: cat.datesOf(s.bay) });
+      }
     }
   }
   return rows.sort((a, b) => b.count - a.count);
+}
+
+/** Point-wise sum of two categories' own "all-causes" month x year matrices
+ *  (same shape as mergeCauseSeries below, just for the single un-keyed
+ *  `monthlyByYear` series rather than a per-cause list) — used to build a
+ *  combined Trafo HV+LV total for the year-over-year comparison chart. */
+export function sumMonthlyByYear(
+  a: DisturbanceMonthlyYearPoint[],
+  b: DisturbanceMonthlyYearPoint[],
+): DisturbanceMonthlyYearPoint[] {
+  return MONTH_ID.map((month) => {
+    const pointA = a.find((p) => p.month === month);
+    const pointB = b.find((p) => p.month === month);
+    const point: DisturbanceMonthlyYearPoint = { month };
+    const years = new Set([...Object.keys(pointA ?? {}), ...Object.keys(pointB ?? {})]);
+    years.delete("month");
+    for (const year of years) {
+      point[year] = Number(pointA?.[year] ?? 0) + Number(pointB?.[year] ?? 0);
+    }
+    return point;
+  });
 }
 
 /** Merges several categories' own per-cause month x year matrices into one

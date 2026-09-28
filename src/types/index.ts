@@ -109,6 +109,23 @@ export interface DisturbanceBayMonthlyYear {
   data: DisturbanceMonthlyYearPoint[];
 }
 
+/** One raw disturbance event's bay + when it happened — added for the
+ *  presentation view's "Kontribusi Ruas" slide, which needs the actual
+ *  date(s) a bay was hit in the selected month, not just a count (see
+ *  `monthlyByYearByBay` above, which only ever gives a number). Every row
+ *  becomes one record (not capped, unlike `longestDisturbances`), since a
+ *  bay can legitimately have more than 10 events across a year and this is
+ *  filtered down to one month before display anyway. */
+export interface DisturbanceBayEventRecord {
+  bay: string;
+  year: string;
+  /** Normalized Indonesian month label — same value/order as
+   *  DisturbanceMonthlyYearPoint's own `.month` keys. */
+  month: string;
+  /** Formatted "DD Mon YYYY". */
+  date: string;
+}
+
 /** Everything needed to render one category's (Transmisi or Trafo) section
  *  of the Gangguan page — see src/services/disturbances.ts. */
 export interface DisturbanceCategoryResult {
@@ -158,6 +175,10 @@ export interface DisturbanceCategoryResult {
   ultgBreakdown: DisturbanceUltgSummary[];
   /** Sorted by total desc — every bay in this category, not just `topBay`'s 8. */
   bayBreakdown: DisturbanceBaySummary[];
+  /** Every row as one (bay, year, month, date) record — feeds the
+   *  presentation view's "Kontribusi Ruas" slide so each ruas can show which
+   *  actual date(s) it was hit in the selected month, not just a count. */
+  bayEvents: DisturbanceBayEventRecord[];
 }
 
 export interface AiInsight {

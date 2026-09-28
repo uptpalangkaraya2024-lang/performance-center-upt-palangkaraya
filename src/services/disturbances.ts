@@ -5,6 +5,7 @@ import { readConfiguredSource } from "@/lib/data-connector";
 import { parseDurationMinutes, requireText } from "@/lib/parse";
 import type {
   DisturbanceBayCount,
+  DisturbanceBayEventRecord,
   DisturbanceBayMonthlyYear,
   DisturbanceBaySummary,
   DisturbanceCategoryResult,
@@ -165,6 +166,7 @@ function emptyCategory(): DisturbanceCategoryResult {
     longestDisturbances: [],
     ultgBreakdown: [],
     bayBreakdown: [],
+    bayEvents: [],
   };
 }
 
@@ -342,6 +344,16 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     data: buildMonthlyByYear(rows.filter((r) => r.namaBay === bay), sortedYears),
   }));
 
+  // One record per row — feeds the presentation view's "Kontribusi Ruas"
+  // slide, which needs the actual date(s) a bay was hit in the selected
+  // month, not just monthlyByYearByBay's bare count.
+  const bayEvents: DisturbanceBayEventRecord[] = rows.map((r) => ({
+    bay: r.namaBay,
+    year: r.year,
+    month: r.month.replace(/^\d+\.\s*/, ""),
+    date: formatDateLabel(r.tgl) ?? r.tgl,
+  }));
+
   // One count per calendar day this category had at least one row — a day
   // with zero rows simply has no key here (see DisturbanceCategoryResult's
   // own doc comment). Straight from TGL's date part (yyyy-MM-dd), so this
@@ -428,6 +440,7 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     longestDisturbances,
     ultgBreakdown: buildUltgBreakdown(rows),
     bayBreakdown: buildBayBreakdown(rows),
+    bayEvents,
   };
 }
 
