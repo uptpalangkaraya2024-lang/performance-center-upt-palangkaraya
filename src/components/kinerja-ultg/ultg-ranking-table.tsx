@@ -1,4 +1,4 @@
-import { Trophy } from "lucide-react";
+import { Medal, Trophy } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -36,21 +36,38 @@ const RANK_BADGE_TONE = [
   "bg-critical/20 text-critical border border-critical/40",
 ];
 
-/** A numbered rank badge (1st/2nd/3rd) — same green/amber/red convention as
- *  RANK_ACCENT above, reused both in this table's own rows and in the
- *  homepage's stacked per-ULTG banners so the two ranking surfaces read
- *  consistently. Falls back to a plain neutral tone past 3rd place (kept
- *  general even though there are only 3 ULTGs today). */
+/** A trophy/medal rank badge (1st/2nd/3rd) — same green/amber/red
+ *  convention as RANK_ACCENT above, reused both in this table's own rows
+ *  and in the homepage's stacked per-ULTG banners so the two ranking
+ *  surfaces read consistently. 1st place gets a trophy, 2nd/3rd get a
+ *  medal — plus the actual rank number as a small corner badge, per the
+ *  user's explicit "make it look like there's a trophy" request (a plain
+ *  numbered circle read as "polosan" / too plain). Falls back to a plain
+ *  numbered circle past 3rd place (kept general even though there are
+ *  only 3 ULTGs today). */
 export function RankBadge({ rank, size = "sm" }: { rank: number; size?: "sm" | "lg" }) {
+  const isLarge = size === "lg";
+  const Icon = rank === 1 ? Trophy : rank <= 3 ? Medal : null;
+
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-full font-extrabold text-foreground",
-        size === "lg" ? "size-10 text-lg" : "size-7 text-sm",
+        "relative inline-flex shrink-0 items-center justify-center rounded-full font-extrabold text-foreground",
+        isLarge ? "size-11" : "size-8",
         RANK_BADGE_TONE[rank - 1] ?? "bg-secondary",
       )}
     >
-      {rank}
+      {Icon ? <Icon className={isLarge ? "size-5" : "size-3.5"} /> : rank}
+      {Icon ? (
+        <span
+          className={cn(
+            "absolute -right-1 -bottom-1 flex items-center justify-center rounded-full bg-card font-extrabold text-foreground ring-2 ring-background",
+            isLarge ? "size-5 text-[11px]" : "size-4 text-[9px]",
+          )}
+        >
+          {rank}
+        </span>
+      ) : null}
     </span>
   );
 }
