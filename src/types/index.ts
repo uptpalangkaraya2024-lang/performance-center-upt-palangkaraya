@@ -118,12 +118,20 @@ export interface DisturbanceBayMonthlyYear {
  *  filtered down to one month before display anyway. */
 export interface DisturbanceBayEventRecord {
   bay: string;
+  /** UPT Palangkaraya's own sub-unit — "-" if the raw row had none. Added
+   *  alongside cause/kind for the presentation view's per-ULTG cause and
+   *  kind breakdown charts, which need this per EVENT, not just per bay. */
+  ultg: string;
   year: string;
   /** Normalized Indonesian month label — same value/order as
    *  DisturbanceMonthlyYearPoint's own `.month` keys. */
   month: string;
   /** Formatted "DD Mon YYYY". */
   date: string;
+  /** Mapped label (e.g. "Petir"), same mapping as causePareto. */
+  cause: string;
+  /** Mapped label (e.g. "Trip", "AR Sukses", "Tidak Trip"), same mapping as kindBreakdown. */
+  kind: string;
 }
 
 /** Everything needed to render one category's (Transmisi or Trafo) section

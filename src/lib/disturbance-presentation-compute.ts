@@ -252,34 +252,42 @@ export function buildCombinedUltgBreakdown(
     .sort((a, b) => b.total - a.total);
 }
 
+export interface BayEventDetail {
+  /** "DD Mon" — the trailing year is dropped since every detail here is
+   *  already scoped to one selected year via the month/year filter. */
+  date: string;
+  cause: string;
+  kind: string;
+}
+
 export interface CombinedBayEntry {
   bay: string;
   category: string;
   ultg: string;
   count: number;
-  /** The actual date(s) this bay was hit in the selected month, formatted
-   *  "DD Mon" — empty when no per-event record matched (shouldn't happen
-   *  for a bay with count > 0, but never assumed). */
-  dates: string[];
+  /** One entry per real event this bay had in the selected month — powers
+   *  the "kontribusi ruas" table's Tanggal/Penyebab/Keterangan columns,
+   *  each read off the SAME event so they stay correctly paired (not 3
+   *  separately-sorted parallel arrays that could drift out of order).
+   *  Empty when no per-event record matched (shouldn't happen for a bay
+   *  with count > 0, but never assumed). */
+  events: BayEventDetail[];
 }
 
-/** One (bay, year, month) -> date-list lookup, filtered from a category's
- *  full bayEvents list down to just the selected period — built once per
- *  category rather than re-filtering on every bay lookup. */
-export function buildBayEventDatesForMonth(
+/** One (bay, year, month) -> event-detail-list lookup, filtered from a
+ *  category's full bayEvents list down to just the selected period — built
+ *  once per category rather than re-filtering on every bay lookup. */
+export function buildBayEventDetailsForMonth(
   events: DisturbanceBayEventRecord[],
   monthLabel: string,
   year: string,
-): Map<string, string[]> {
-  const map = new Map<string, string[]>();
+): Map<string, BayEventDetail[]> {
+  const map = new Map<string, BayEventDetail[]>();
   for (const e of events) {
     if (e.month !== monthLabel || e.year !== year) continue;
-    // Drop the trailing " YYYY" — every date shown here is already scoped to
-    // one selected year via the month/year filter above, so repeating it per
-    // date would be redundant.
     const shortDate = e.date.replace(new RegExp(`\\s+${year}$`), "");
     const list = map.get(e.bay) ?? [];
-    list.push(shortDate);
+    list.push({ date: shortDate, cause: e.cause, kind: e.kind });
     map.set(e.bay, list);
   }
   return map;
@@ -291,15 +299,15 @@ export function buildBayEventDatesForMonth(
  *  tagged with its category for the "kontribusi ruas" slide's own badge.
  *  `ultgOf` looks up which ULTG a given bay belongs to (from that
  *  category's own bayBreakdown, which already carries `ultg` per bay) so
- *  the merged ULTG+ruas slide can show both in one table. `datesOf` looks
- *  up that same bay's actual disturbance date(s) this month (see
- *  buildBayEventDatesForMonth) for the same table's date column. */
+ *  the merged ULTG+ruas slide can show both in one table. `eventsOf` looks
+ *  up that same bay's actual event details this month (see
+ *  buildBayEventDetailsForMonth) for the same table's date/cause/kind columns. */
 export function buildCombinedBayBreakdown(
   categories: {
     label: string;
     series: { bay: string; data: DisturbanceMonthlyYearPoint[] }[];
     ultgOf: (bay: string) => string;
-    datesOf: (bay: string) => string[];
+    eventsOf: (bay: string) => BayEventDetail[];
   }[],
   monthLabel: string,
   year: string,
@@ -309,11 +317,70 @@ export function buildCombinedBayBreakdown(
     for (const s of cat.series) {
       const count = monthValue(s.data, monthLabel, year);
       if (count > 0) {
-        rows.push({ bay: s.bay, category: cat.label, ultg: cat.ultgOf(s.bay), count, dates: cat.datesOf(s.bay) });
+        rows.push({ bay: s.bay, category: cat.label, ultg: cat.ultgOf(s.bay), count, events: cat.eventsOf(s.bay) });
       }
     }
   }
   return rows.sort((a, b) => b.count - a.count);
+}
+
+/** Per-ULTG breakdown by CAUSE for one selected month, combined across
+ *  every category's own bayEvents — built directly from real per-event
+ *  records (not a monthly-by-year matrix) since this is only ever needed
+ *  for the currently selected period. Causes outside `topCauses` are
+ *  folded into "Lainnya" so the chart stays readable with a fixed column
+ *  set instead of one column per distinct cause code. */
+export function buildCombinedUltgByCause(
+  categoryEvents: DisturbanceBayEventRecord[][],
+  monthLabel: string,
+  year: string,
+  topCauses: string[],
+): CombinedUltgEntry[] {
+  const rows = new Map<string, CombinedUltgEntry>();
+  for (const events of categoryEvents) {
+    for (const e of events) {
+      if (e.month !== monthLabel || e.year !== year || !e.ultg || e.ultg === "-") continue;
+      const column = topCauses.includes(e.cause) ? e.cause : "Lainnya";
+      const row = rows.get(e.ultg) ?? { ultg: e.ultg, total: 0 };
+      row[column] = Number(row[column] ?? 0) + 1;
+      row.total += 1;
+      rows.set(e.ultg, row);
+    }
+  }
+  return [...rows.values()].filter((r) => r.total > 0).sort((a, b) => b.total - a.total);
+}
+
+/** Per-ULTG breakdown by JENIS GANGGUAN for one selected month — Transmisi
+ *  splits into its own Trip/Reclose columns (the auto-reclose distinction
+ *  is the whole point there), while Trafo HV+LV combine into a single
+ *  "Trafo Trip" column (no reclose scheme exists for Trafo, and HV/LV were
+ *  already being combined for the same reason on the Kumulatif slide) —
+ *  per the user's explicit request. "Tidak Trip" is deliberately excluded
+ *  here (not asked for), unlike the calendar slide's own kind split. */
+export function buildCombinedUltgByKind(
+  transmisiEvents: DisturbanceBayEventRecord[],
+  trafoHvEvents: DisturbanceBayEventRecord[],
+  trafoLvEvents: DisturbanceBayEventRecord[],
+  monthLabel: string,
+  year: string,
+): CombinedUltgEntry[] {
+  const rows = new Map<string, CombinedUltgEntry>();
+  function bump(ultg: string, column: string) {
+    const row = rows.get(ultg) ?? { ultg, total: 0 };
+    row[column] = Number(row[column] ?? 0) + 1;
+    row.total += 1;
+    rows.set(ultg, row);
+  }
+  for (const e of transmisiEvents) {
+    if (e.month !== monthLabel || e.year !== year || !e.ultg || e.ultg === "-") continue;
+    if (e.kind === "Trip") bump(e.ultg, "Transmisi Trip");
+    else if (e.kind === "AR Sukses") bump(e.ultg, "Transmisi Reclose");
+  }
+  for (const e of [...trafoHvEvents, ...trafoLvEvents]) {
+    if (e.month !== monthLabel || e.year !== year || !e.ultg || e.ultg === "-") continue;
+    if (e.kind === "Trip") bump(e.ultg, "Trafo Trip");
+  }
+  return [...rows.values()].filter((r) => r.total > 0).sort((a, b) => b.total - a.total);
 }
 
 /** Point-wise sum of two categories' own "all-causes" month x year matrices

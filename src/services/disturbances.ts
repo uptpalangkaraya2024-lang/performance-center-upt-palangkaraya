@@ -345,13 +345,19 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
   }));
 
   // One record per row — feeds the presentation view's "Kontribusi Ruas"
-  // slide, which needs the actual date(s) a bay was hit in the selected
-  // month, not just monthlyByYearByBay's bare count.
+  // slide, which needs the actual date/cause/kind of every event a bay had
+  // in the selected month (not just monthlyByYearByBay's bare count), plus
+  // its own per-ULTG cause/kind breakdown charts. Same label mappings as
+  // causePareto/kindBreakdown above, so a "Petir"/"Trip" here means the same
+  // thing it does everywhere else in this category's own aggregates.
   const bayEvents: DisturbanceBayEventRecord[] = rows.map((r) => ({
     bay: r.namaBay,
+    ultg: r.ultg ?? "-",
     year: r.year,
     month: r.month.replace(/^\d+\.\s*/, ""),
     date: formatDateLabel(r.tgl) ?? r.tgl,
+    cause: CAUSE_LABELS[r.cause] ?? titleCase(r.cause),
+    kind: KIND_LABELS[r.kind] ?? titleCase(r.kind),
   }));
 
   // One count per calendar day this category had at least one row — a day

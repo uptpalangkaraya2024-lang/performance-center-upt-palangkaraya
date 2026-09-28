@@ -31,11 +31,13 @@ import {
 import { cn } from "@/lib/utils";
 import {
   MONTH_ID,
-  buildBayEventDatesForMonth,
+  buildBayEventDetailsForMonth,
   buildCauseShareByYear,
   buildCombinedBayBreakdown,
   buildCombinedCalendarDays,
   buildCombinedUltgBreakdown,
+  buildCombinedUltgByCause,
+  buildCombinedUltgByKind,
   buildCumulativeByYear,
   buildMonthlyBreakdown,
   comparisonYears,
@@ -427,6 +429,8 @@ function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?
               <th className="px-4 py-2.5 font-bold">ULTG</th>
               <th className="px-4 py-2.5 font-bold">Kategori</th>
               <th className="px-4 py-2.5 font-bold">Tanggal Gangguan</th>
+              <th className="px-4 py-2.5 font-bold">Penyebab</th>
+              <th className="px-4 py-2.5 font-bold">Keterangan</th>
               <th className="px-4 py-2.5 font-bold text-right">Jumlah</th>
             </tr>
           </thead>
@@ -438,7 +442,20 @@ function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?
                 <td className="px-4 py-2.5">
                   <CategoryBadge label={e.category} />
                 </td>
-                <td className="px-4 py-2.5 text-muted-foreground">{e.dates.length > 0 ? e.dates.join(", ") : "—"}</td>
+                {/* Tanggal/Penyebab/Keterangan each read off the SAME
+                    events array in the same order, so a bay with more than
+                    one event this month keeps its date, cause, and kind
+                    correctly paired per event instead of 3 independently
+                    joined lists that could drift out of alignment. */}
+                <td className="px-4 py-2.5 text-muted-foreground">
+                  {e.events.length > 0 ? e.events.map((ev) => ev.date).join(", ") : "—"}
+                </td>
+                <td className="px-4 py-2.5 text-muted-foreground">
+                  {e.events.length > 0 ? e.events.map((ev) => ev.cause).join(", ") : "—"}
+                </td>
+                <td className="px-4 py-2.5 text-muted-foreground">
+                  {e.events.length > 0 ? e.events.map((ev) => ev.kind).join(", ") : "—"}
+                </td>
                 <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-foreground">{e.count}</td>
               </tr>
             ))}
@@ -552,18 +569,40 @@ export function DisturbancePresentationView({
       buildCombinedBayBreakdown(
         categories.map((c) => {
           const ultgByBay = new Map(c.data.bayBreakdown.map((b) => [b.bay, b.ultg]));
-          const datesByBay = buildBayEventDatesForMonth(c.data.bayEvents, monthLabel, year);
+          const eventsByBay = buildBayEventDetailsForMonth(c.data.bayEvents, monthLabel, year);
           return {
             label: c.label,
             series: c.data.monthlyByYearByBay,
             ultgOf: (bay: string) => ultgByBay.get(bay) ?? "—",
-            datesOf: (bay: string) => datesByBay.get(bay) ?? [],
+            eventsOf: (bay: string) => eventsByBay.get(bay) ?? [],
           };
         }),
         monthLabel,
         year,
       ),
     [categories, monthLabel, year],
+  );
+
+  // Combined (all 3 categories) top-5 causes for the SELECTED MONTH — feeds
+  // the new per-ULTG cause breakdown chart's fixed column set (anything
+  // outside the top 5 folds into "Lainnya"), same pattern as the pie
+  // charts' own topCauses usage.
+  const topCausesThisMonth = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of causeByCategory) for (const cause of c.causes) counts.set(cause.label, (counts.get(cause.label) ?? 0) + cause.count);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cause]) => cause);
+  }, [causeByCategory]);
+
+  // Slide 3: per-ULTG breakdown by CAUSE and by JENIS GANGGUAN (Trip/Reclose
+  // for Transmisi, Trip for Trafo HV+LV combined) — sits alongside the
+  // existing per-ULTG-by-category chart, per the user's explicit request.
+  const combinedUltgByCause = useMemo(
+    () => buildCombinedUltgByCause([transmisi.bayEvents, trafoHv.bayEvents, trafoLv.bayEvents], monthLabel, year, topCausesThisMonth),
+    [transmisi.bayEvents, trafoHv.bayEvents, trafoLv.bayEvents, monthLabel, year, topCausesThisMonth],
+  );
+  const combinedUltgByKind = useMemo(
+    () => buildCombinedUltgByKind(transmisi.bayEvents, trafoHv.bayEvents, trafoLv.bayEvents, monthLabel, year),
+    [transmisi.bayEvents, trafoHv.bayEvents, trafoLv.bayEvents, monthLabel, year],
   );
 
   // The selected year plus up to 2 preceding years actually present in the
@@ -859,26 +898,111 @@ export function DisturbancePresentationView({
             {combinedUltg.length === 0 ? (
               <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>
             ) : (
-              <div className="min-h-0 flex-1">
-                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
-                  <BarChart data={combinedUltg} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                    <XAxis type="number" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
-                    <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" width={160} />
-                    <ChartTooltip />
-                    <Legend wrapperStyle={{ fontSize: 13 }} />
-                    <Bar dataKey="Transmisi" stackId="a" fill={CATEGORY_COLOR.Transmisi}>
-                      <LabelList dataKey="Transmisi" position="inside" fontSize={12} fill="var(--card)" formatter={formatBarLabel} />
-                    </Bar>
-                    <Bar dataKey="Trafo HV" stackId="a" fill={CATEGORY_COLOR["Trafo HV"]}>
-                      <LabelList dataKey="Trafo HV" position="inside" fontSize={12} fill="var(--card)" formatter={formatBarLabel} />
-                    </Bar>
-                    <Bar dataKey="Trafo LV" stackId="a" fill={CATEGORY_COLOR["Trafo LV"]} radius={[0, 4, 4, 0]}>
-                      <LabelList dataKey="Trafo LV" position="inside" fontSize={12} fill="var(--card)" formatter={formatBarLabel} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              (() => {
+                const causeKeys = [...topCausesThisMonth, "Lainnya"].filter((k) =>
+                  combinedUltgByCause.some((r) => r[k] !== undefined),
+                );
+                const kindKeys = ["Transmisi Trip", "Transmisi Reclose", "Trafo Trip"].filter((k) =>
+                  combinedUltgByKind.some((r) => r[k] !== undefined),
+                );
+                const KIND_SERIES_COLOR: Record<string, string> = {
+                  "Transmisi Trip": KIND_COLOR.Trip,
+                  "Transmisi Reclose": KIND_COLOR["AR Sukses"],
+                  "Trafo Trip": CATEGORY_COLOR["Trafo HV"],
+                };
+                return (
+                  <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-3">
+                    <div className="flex min-h-0 flex-col gap-1.5">
+                      <p className="shrink-0 text-sm font-semibold text-foreground">Per Kategori</p>
+                      <div className="min-h-0 flex-1">
+                        <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                          <BarChart data={combinedUltg} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                            <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                            <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" width={140} />
+                            <ChartTooltip />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="Transmisi" stackId="a" fill={CATEGORY_COLOR.Transmisi}>
+                              <LabelList dataKey="Transmisi" position="inside" fontSize={11} fill="var(--card)" formatter={formatBarLabel} />
+                            </Bar>
+                            <Bar dataKey="Trafo HV" stackId="a" fill={CATEGORY_COLOR["Trafo HV"]}>
+                              <LabelList dataKey="Trafo HV" position="inside" fontSize={11} fill="var(--card)" formatter={formatBarLabel} />
+                            </Bar>
+                            <Bar dataKey="Trafo LV" stackId="a" fill={CATEGORY_COLOR["Trafo LV"]} radius={[0, 4, 4, 0]}>
+                              <LabelList dataKey="Trafo LV" position="inside" fontSize={11} fill="var(--card)" formatter={formatBarLabel} />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* New: per-ULTG breakdown by CAUSE, sitting alongside
+                        the category chart, per the user's explicit request. */}
+                    <div className="flex min-h-0 flex-col gap-1.5">
+                      <p className="shrink-0 text-sm font-semibold text-foreground">Per Penyebab</p>
+                      <div className="min-h-0 flex-1">
+                        {combinedUltgByCause.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Tidak ada data.</p>
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                            <BarChart data={combinedUltgByCause} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                              <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                              <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" width={140} />
+                              <ChartTooltip />
+                              <Legend wrapperStyle={{ fontSize: 11 }} />
+                              {causeKeys.map((key, i) => (
+                                <Bar
+                                  key={key}
+                                  dataKey={key}
+                                  stackId="a"
+                                  fill={causeColorOf(topCausesThisMonth, key)}
+                                  radius={i === causeKeys.length - 1 ? [0, 4, 4, 0] : undefined}
+                                >
+                                  <LabelList dataKey={key} position="inside" fontSize={11} fill="var(--card)" formatter={formatBarLabel} />
+                                </Bar>
+                              ))}
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* New: per-ULTG breakdown by JENIS GANGGUAN — Transmisi
+                        Trip/Reclose split, Trafo HV+LV combined into one
+                        Trip column, per the user's explicit request. */}
+                    <div className="flex min-h-0 flex-col gap-1.5">
+                      <p className="shrink-0 text-sm font-semibold text-foreground">Per Jenis Gangguan</p>
+                      <div className="min-h-0 flex-1">
+                        {combinedUltgByKind.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Tidak ada data.</p>
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                            <BarChart data={combinedUltgByKind} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                              <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                              <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" width={140} />
+                              <ChartTooltip />
+                              <Legend wrapperStyle={{ fontSize: 11 }} />
+                              {kindKeys.map((key, i) => (
+                                <Bar
+                                  key={key}
+                                  dataKey={key}
+                                  stackId="a"
+                                  fill={KIND_SERIES_COLOR[key] ?? "var(--muted-foreground)"}
+                                  radius={i === kindKeys.length - 1 ? [0, 4, 4, 0] : undefined}
+                                >
+                                  <LabelList dataKey={key} position="inside" fontSize={11} fill="var(--card)" formatter={formatBarLabel} />
+                                </Bar>
+                              ))}
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
             )}
             <div className="shrink-0">
               <p className="mb-2 text-base font-semibold text-foreground">Kontribusi Ruas</p>
@@ -1153,6 +1277,9 @@ export function DisturbancePresentationView({
       combinedCalendarDays,
       combinedUltg,
       combinedBay,
+      combinedUltgByCause,
+      combinedUltgByKind,
+      topCausesThisMonth,
       compareYears,
       cumulativeTransmisiTotalByYear,
       cumulativeTransmisiTripByYear,
