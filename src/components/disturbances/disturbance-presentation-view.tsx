@@ -83,6 +83,17 @@ function formatPercent(v: number | null): string {
   return `${Math.round(v * 100)}%`;
 }
 
+// A "terbanyak" (most-affected) tile picking just entry [0] after a
+// count-desc sort silently hides real ties (e.g. 2 ULTGs both at the same
+// top count) behind whichever one happened to sort first — confirmed
+// confusing from a live screenshot ("kenapa ... padahal ada ruas lain yang
+// juga sama jumlahnya"). This lists every tied entry instead, capped so a
+// long tie (common for a low count like 1) doesn't overflow the tile.
+function formatTiedNames(names: string[], max = 4): string {
+  if (names.length <= max) return names.join(", ");
+  return `${names.slice(0, max).join(", ")}, +${names.length - max} lainnya`;
+}
+
 // LabelList's own formatter type accepts any renderable value (not just
 // number), so a stacked segment's own 0-value cells (rendered but with
 // nothing to show) get coerced safely instead of printing "0" inside a
@@ -253,23 +264,31 @@ function CauseShareYearPie({ share, topCauses }: { share: CauseShareYear; topCau
   }
 
   return (
-    <div className="flex h-full flex-col gap-1 rounded-lg border bg-muted p-2.5">
+    <div className="flex h-full flex-col gap-1.5 rounded-lg border bg-muted p-2.5">
       <p className="shrink-0 text-center text-sm font-semibold text-foreground">
         {share.year} <span className="font-normal text-muted-foreground">({share.total} gangguan)</span>
       </p>
+      {/* A generous PieChart margin (not just container padding) plus a
+          smaller outerRadius give the percent labels real clearance from
+          the pie's own edge — without this, a label near the very top or
+          bottom of the pie sits flush against the title/legend rows right
+          outside the chart, reading as cut off or overlapping (confirmed
+          from a live screenshot: the largest slice's own label was
+          invisible behind the title, and a 50/50 two-slice pie's two
+          labels overlapped the legend below). Per explicit user feedback. */}
       <div className="min-h-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%" minHeight={130}>
-          <PieChart>
+        <ResponsiveContainer width="100%" height="100%" minHeight={180}>
+          <PieChart margin={{ top: 22, right: 8, bottom: 22, left: 8 }}>
             <Pie
               data={share.slices}
               dataKey="count"
               nameKey="cause"
-              innerRadius="38%"
-              outerRadius="82%"
+              innerRadius="34%"
+              outerRadius="62%"
               paddingAngle={2}
               label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
               labelLine={false}
-              fontSize={10}
+              fontSize={11}
             >
               {share.slices.map((s) => (
                 <Cell key={s.cause} fill={causeColorOf(topCauses, s.cause)} />
@@ -707,26 +726,49 @@ export function DisturbancePresentationView({
                   <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
                     {causeByCategory.map((c) => {
                       const total = totalByCategory.find((t) => t.label === c.label)?.total ?? 0;
+                      const maxCount = c.causes[0]?.count ?? 0;
                       return (
                         <div
                           key={c.label}
-                          className="flex flex-col gap-2 rounded-lg border bg-muted p-3.5"
+                          className="flex h-full flex-col gap-2 rounded-lg border bg-muted p-4"
                           style={{ borderLeftWidth: 4, borderLeftColor: CATEGORY_COLOR[c.label] }}
                         >
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="text-sm font-bold text-foreground">{c.label}</span>
-                            <span className="text-xs whitespace-nowrap text-muted-foreground">{total} gangguan</span>
+                          <div className="flex shrink-0 items-baseline justify-between gap-2">
+                            <span className="text-base font-bold text-foreground">{c.label}</span>
+                            <span className="text-sm whitespace-nowrap text-muted-foreground">{total} gangguan</span>
                           </div>
+                          {/* Vertically centered in the remaining space
+                              instead of pinned to the top — a category with
+                              only 1 cause used to leave a large empty gap
+                              below a short list while sitting in the same
+                              stretched-height grid cell as a 3-cause
+                              category, per explicit user feedback ("tampak
+                              memanjang"). Mini bars make the relative size
+                              of each cause visible at a glance, not just its
+                              number. */}
                           {c.causes.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Tidak ada gangguan bulan ini.</p>
+                            <div className="flex flex-1 items-center justify-center">
+                              <p className="text-sm text-muted-foreground">Tidak ada gangguan bulan ini.</p>
+                            </div>
                           ) : (
-                            <ul className="flex flex-col gap-1">
+                            <ul className="flex flex-1 flex-col justify-center gap-2.5">
                               {c.causes.map((cause) => (
-                                <li key={cause.label} className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="truncate text-muted-foreground" title={cause.label}>
-                                    {cause.label}
-                                  </span>
-                                  <span className="shrink-0 font-semibold tabular-nums text-foreground">{cause.count}</span>
+                                <li key={cause.label} className="flex flex-col gap-1">
+                                  <div className="flex items-center justify-between gap-2 text-sm">
+                                    <span className="truncate text-foreground" title={cause.label}>
+                                      {cause.label}
+                                    </span>
+                                    <span className="shrink-0 font-semibold tabular-nums text-foreground">{cause.count}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                                    <div
+                                      className="h-full rounded-full"
+                                      style={{
+                                        width: `${maxCount > 0 ? Math.round((cause.count / maxCount) * 100) : 0}%`,
+                                        backgroundColor: CATEGORY_COLOR[c.label],
+                                      }}
+                                    />
+                                  </div>
                                 </li>
                               ))}
                             </ul>
@@ -756,12 +798,12 @@ export function DisturbancePresentationView({
             <div className="grid shrink-0 grid-cols-3 gap-2 sm:grid-cols-6">
               <StatTile
                 value={formatPercent(combinedCalendarSummary.percentWithoutDisturbance)}
-                label="Hari Tanpa Gangguan"
+                label={`Hari Tanpa Gangguan (${combinedCalendarSummary.daysWithoutDisturbance} hari)`}
                 className="text-success"
               />
               <StatTile
                 value={formatPercent(combinedCalendarSummary.percentWithDisturbance)}
-                label="Hari Dengan Gangguan"
+                label={`Hari Dengan Gangguan (${combinedCalendarSummary.daysWithDisturbance} hari)`}
                 className="text-critical"
               />
               <StatTile value={String(kindCountFor("Transmisi", "Trip"))} label="Transmisi · Trip" className="text-critical" />
@@ -777,18 +819,32 @@ export function DisturbancePresentationView({
         title: "Kontribusi ULTG & Ruas",
         subtitle: `Transmisi + Trafo HV + Trafo LV — ${monthLabel} ${year}`,
         render: () => {
-          const topUltg = combinedUltg[0];
-          const topBay = combinedBay[0];
+          const topUltgCount = combinedUltg[0]?.total ?? 0;
+          const topUltgTied = topUltgCount > 0 ? combinedUltg.filter((u) => u.total === topUltgCount) : [];
+          const topBayCount = combinedBay[0]?.count ?? 0;
+          const topBayTied = topBayCount > 0 ? combinedBay.filter((b) => b.count === topBayCount) : [];
           return (
           <div className="flex h-full flex-col gap-4">
             <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <InfoTile
-                label={topUltg ? `ULTG Terdampak Terbanyak (${topUltg.total} kejadian)` : "ULTG Terdampak Terbanyak"}
-                value={topUltg ? topUltg.ultg : "—"}
+                label={
+                  topUltgTied.length === 0
+                    ? "ULTG Terdampak Terbanyak"
+                    : topUltgTied.length === 1
+                      ? `ULTG Terdampak Terbanyak (${topUltgCount} kejadian)`
+                      : `ULTG Terdampak Terbanyak — ${topUltgTied.length} ULTG seri (${topUltgCount} kejadian masing-masing)`
+                }
+                value={topUltgTied.length === 0 ? "—" : formatTiedNames(topUltgTied.map((u) => u.ultg))}
               />
               <InfoTile
-                label={topBay ? `Ruas Terdampak Terbanyak (${topBay.count} kejadian)` : "Ruas Terdampak Terbanyak"}
-                value={topBay ? topBay.bay : "—"}
+                label={
+                  topBayTied.length === 0
+                    ? "Ruas Terdampak Terbanyak"
+                    : topBayTied.length === 1
+                      ? `Ruas Terdampak Terbanyak (${topBayCount} kejadian)`
+                      : `Ruas Terdampak Terbanyak — ${topBayTied.length} ruas seri (${topBayCount} kejadian masing-masing)`
+                }
+                value={topBayTied.length === 0 ? "—" : formatTiedNames(topBayTied.map((b) => b.bay))}
               />
             </div>
             {combinedUltg.length === 0 ? (
@@ -953,7 +1009,7 @@ export function DisturbancePresentationView({
                     <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
                   ))}
                 </div>
-                <div className="flex min-h-0 flex-[2] flex-col gap-1.5">
+                <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
                   <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
                   <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
                     {transmisiCauseShareByYear.map((share) => (
@@ -993,7 +1049,7 @@ export function DisturbancePresentationView({
                     <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
                   ))}
                 </div>
-                <div className="flex min-h-0 flex-[2] flex-col gap-1.5">
+                <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
                   <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
                   <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
                     {trafoHvCauseShareByYear.map((share) => (
@@ -1033,7 +1089,7 @@ export function DisturbancePresentationView({
                     <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
                   ))}
                 </div>
-                <div className="flex min-h-0 flex-[2] flex-col gap-1.5">
+                <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
                   <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
                   <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
                     {trafoLvCauseShareByYear.map((share) => (
