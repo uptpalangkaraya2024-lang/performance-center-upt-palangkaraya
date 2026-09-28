@@ -113,6 +113,48 @@ export function comparisonYears(selectedYear: string, availableYears: string[]):
   return candidates.filter((y) => availableYears.includes(y));
 }
 
+export interface CauseShareSlice {
+  cause: string;
+  count: number;
+}
+
+export interface CauseShareYear {
+  year: string;
+  total: number;
+  slices: CauseShareSlice[];
+}
+
+/** One pie chart's worth of data per year — each YEAR's own full-year cause
+ *  totals (summed across all 12 months, not a running cumulative — a pie
+ *  represents a share of a whole, so it uses the year's real total rather
+ *  than a mid-year running count). Only `topCauses` get their own slice;
+ *  everything else is folded into "Lainnya" so the slices still sum to the
+ *  year's true total instead of silently underrepresenting it. A year with
+ *  zero events yields an empty slice list (rendered as "no data" by the
+ *  caller), never a fabricated 100%-Lainnya slice. */
+export function buildCauseShareByYear(
+  causeSeries: { cause: string; data: DisturbanceMonthlyYearPoint[] }[],
+  topCauses: string[],
+  years: string[],
+): CauseShareYear[] {
+  return years.map((year) => {
+    let otherTotal = 0;
+    const slices: CauseShareSlice[] = [];
+    for (const { cause, data } of causeSeries) {
+      const total = data.reduce((sum, p) => sum + Number(p[year] ?? 0), 0);
+      if (total <= 0) continue;
+      if (topCauses.includes(cause)) {
+        slices.push({ cause, count: total });
+      } else {
+        otherTotal += total;
+      }
+    }
+    if (otherTotal > 0) slices.push({ cause: "Lainnya", count: otherTotal });
+    slices.sort((a, b) => b.count - a.count);
+    return { year, total: slices.reduce((sum, s) => sum + s.count, 0), slices };
+  });
+}
+
 // --- Cross-category ("gabungan") helpers ------------------------------
 //
 // Every function above works on ONE category's own data. The overview,

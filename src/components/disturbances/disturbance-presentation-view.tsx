@@ -8,6 +8,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -31,15 +32,16 @@ import { cn } from "@/lib/utils";
 import {
   MONTH_ID,
   buildBayEventDatesForMonth,
+  buildCauseShareByYear,
   buildCombinedBayBreakdown,
   buildCombinedCalendarDays,
   buildCombinedUltgBreakdown,
   buildCumulativeByYear,
   buildMonthlyBreakdown,
   comparisonYears,
-  mergeCauseSeries,
   summarizeCombinedCalendar,
   sumMonthlyByYear,
+  type CauseShareYear,
   type CombinedBayEntry,
   type CombinedCalendarDay,
   type CumulativePoint,
@@ -79,6 +81,15 @@ function todayInJakarta(): { year: number; monthIndex0: number } {
 function formatPercent(v: number | null): string {
   if (v === null) return "—";
   return `${Math.round(v * 100)}%`;
+}
+
+// LabelList's own formatter type accepts any renderable value (not just
+// number), so a stacked segment's own 0-value cells (rendered but with
+// nothing to show) get coerced safely instead of printing "0" inside a
+// sliver too thin to hold text.
+function formatBarLabel(value: unknown): string {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? String(n) : "";
 }
 
 /** Sums each category's own all-time causePareto by matching cause label —
@@ -207,6 +218,74 @@ function CauseYearChart({ cause, data, years }: { cause: string; data: Cumulativ
             ))}
           </LineChart>
         </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// Cause colors are assigned by POSITION in the shared top-5 list (not the
+// year-comparison YEAR_COLORS palette, which means something different
+// here) — every year's pie for the same category uses the same color for
+// the same cause, so "Petir" reads as the same slice color across 2024,
+// 2025 and 2026 at a glance. "Lainnya" (everything outside the top 5)
+// always gets a neutral tone rather than competing for a chart color.
+const CAUSE_PIE_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
+const OTHER_CAUSE_COLOR = "var(--muted-foreground)";
+
+function causeColorOf(topCauses: string[], cause: string): string {
+  if (cause === "Lainnya") return OTHER_CAUSE_COLOR;
+  const idx = topCauses.indexOf(cause);
+  return idx >= 0 ? CAUSE_PIE_COLORS[idx % CAUSE_PIE_COLORS.length] : OTHER_CAUSE_COLOR;
+}
+
+/** One year's pie — "grafik pie persentase jumlah gangguan terbanyak tiap
+ *  tahun" per the user's explicit request: which cause made up the biggest
+ *  share of that year's disturbances, at a glance, alongside the line
+ *  charts' own year-over-year trend view. */
+function CauseShareYearPie({ share, topCauses }: { share: CauseShareYear; topCauses: string[] }) {
+  if (share.total === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-1 rounded-lg border bg-muted p-3 text-center">
+        <p className="text-sm font-semibold text-foreground">{share.year}</p>
+        <p className="text-xs text-muted-foreground">Belum ada gangguan.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-1 rounded-lg border bg-muted p-2.5">
+      <p className="shrink-0 text-center text-sm font-semibold text-foreground">
+        {share.year} <span className="font-normal text-muted-foreground">({share.total} gangguan)</span>
+      </p>
+      <div className="min-h-0 flex-1">
+        <ResponsiveContainer width="100%" height="100%" minHeight={130}>
+          <PieChart>
+            <Pie
+              data={share.slices}
+              dataKey="count"
+              nameKey="cause"
+              innerRadius="38%"
+              outerRadius="82%"
+              paddingAngle={2}
+              label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
+              labelLine={false}
+              fontSize={10}
+            >
+              {share.slices.map((s) => (
+                <Cell key={s.cause} fill={causeColorOf(topCauses, s.cause)} />
+              ))}
+            </Pie>
+            <ChartTooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex shrink-0 flex-wrap justify-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+        {share.slices.map((s) => (
+          <span key={s.cause} className="inline-flex items-center gap-1">
+            <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: causeColorOf(topCauses, s.cause) }} />
+            {s.cause}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -496,23 +575,24 @@ export function DisturbancePresentationView({
     return buildCumulativeByYear(sumMonthlyByYear(hvTrip, lvTrip), compareYears);
   }, [trafoHv.monthlyByYearByKind, trafoLv.monthlyByYearByKind, compareYears]);
 
-  // Transmisi and Trafo (HV+LV merged) causes are kept in two SEPARATE
+  // Transmisi, Trafo HV, and Trafo LV causes are kept as three SEPARATE
   // paretos/trends rather than one combined-across-everything chart — a
   // single top-5 across all 3 categories tends to conflate causes that are
   // only meaningful for one asset type (e.g. a lightning-strike cause
   // dominating Transmisi's own trend gets buried by a totally unrelated
-  // Trafo cause, and vice versa), per explicit user feedback.
+  // Trafo cause, and vice versa), per explicit user feedback. Trafo HV and
+  // LV used to be merged into one "Trafo" pareto/trend — now split apart
+  // too, also per explicit user feedback ("pisahkan antara trafo hv dan lv").
   const transmisiCausePareto = useMemo(() => paretoFor([transmisi]), [transmisi]);
   const transmisiTopCauses = useMemo(() => transmisiCausePareto.slice(0, 5).map((c) => c.cause), [transmisiCausePareto]);
 
-  const trafoCausePareto = useMemo(() => paretoFor([trafoHv, trafoLv]), [trafoHv, trafoLv]);
-  const trafoTopCauses = useMemo(() => trafoCausePareto.slice(0, 5).map((c) => c.cause), [trafoCausePareto]);
-  const trafoMergedCauseSeries = useMemo(
-    () => mergeCauseSeries([trafoHv.monthlyByYearByCause, trafoLv.monthlyByYearByCause]),
-    [trafoHv.monthlyByYearByCause, trafoLv.monthlyByYearByCause],
-  );
+  const trafoHvCausePareto = useMemo(() => paretoFor([trafoHv]), [trafoHv]);
+  const trafoHvTopCauses = useMemo(() => trafoHvCausePareto.slice(0, 5).map((c) => c.cause), [trafoHvCausePareto]);
 
-  // Slide 5: one small chart PER cause (not one chart with every cause
+  const trafoLvCausePareto = useMemo(() => paretoFor([trafoLv]), [trafoLv]);
+  const trafoLvTopCauses = useMemo(() => trafoLvCausePareto.slice(0, 5).map((c) => c.cause), [trafoLvCausePareto]);
+
+  // Slide 5/6/7: one small chart PER cause (not one chart with every cause
   // overlaid) — each showing that single cause's own cumulative trend
   // compared across compareYears, per the user's explicit request.
   const transmisiCauseYearCharts = useMemo(
@@ -523,13 +603,37 @@ export function DisturbancePresentationView({
       })),
     [transmisiTopCauses, transmisi.monthlyByYearByCause, compareYears],
   );
-  const trafoCauseYearCharts = useMemo(
+  const trafoHvCauseYearCharts = useMemo(
     () =>
-      trafoTopCauses.map((cause) => ({
+      trafoHvTopCauses.map((cause) => ({
         cause,
-        data: buildCumulativeByYear(trafoMergedCauseSeries.find((c) => c.cause === cause)?.data ?? [], compareYears),
+        data: buildCumulativeByYear(trafoHv.monthlyByYearByCause.find((c) => c.cause === cause)?.data ?? [], compareYears),
       })),
-    [trafoTopCauses, trafoMergedCauseSeries, compareYears],
+    [trafoHvTopCauses, trafoHv.monthlyByYearByCause, compareYears],
+  );
+  const trafoLvCauseYearCharts = useMemo(
+    () =>
+      trafoLvTopCauses.map((cause) => ({
+        cause,
+        data: buildCumulativeByYear(trafoLv.monthlyByYearByCause.find((c) => c.cause === cause)?.data ?? [], compareYears),
+      })),
+    [trafoLvTopCauses, trafoLv.monthlyByYearByCause, compareYears],
+  );
+
+  // Per-year pie data ("grafik pie persentase jumlah gangguan terbanyak
+  // tiap tahun") — one pie per compared year, sharing the same top-5 cause
+  // set as that category's own line charts above.
+  const transmisiCauseShareByYear = useMemo(
+    () => buildCauseShareByYear(transmisi.monthlyByYearByCause, transmisiTopCauses, compareYears),
+    [transmisi.monthlyByYearByCause, transmisiTopCauses, compareYears],
+  );
+  const trafoHvCauseShareByYear = useMemo(
+    () => buildCauseShareByYear(trafoHv.monthlyByYearByCause, trafoHvTopCauses, compareYears),
+    [trafoHv.monthlyByYearByCause, trafoHvTopCauses, compareYears],
+  );
+  const trafoLvCauseShareByYear = useMemo(
+    () => buildCauseShareByYear(trafoLv.monthlyByYearByCause, trafoLvTopCauses, compareYears),
+    [trafoLv.monthlyByYearByCause, trafoLvTopCauses, compareYears],
   );
 
   const donutData = totalByCategory.filter((c) => c.total > 0).map((c) => ({ name: c.label, value: c.total }));
@@ -676,8 +780,8 @@ export function DisturbancePresentationView({
           const topUltg = combinedUltg[0];
           const topBay = combinedBay[0];
           return (
-          <div className="flex flex-col gap-6">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex h-full flex-col gap-4">
+            <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <InfoTile
                 label={topUltg ? `ULTG Terdampak Terbanyak (${topUltg.total} kejadian)` : "ULTG Terdampak Terbanyak"}
                 value={topUltg ? topUltg.ultg : "—"}
@@ -690,20 +794,28 @@ export function DisturbancePresentationView({
             {combinedUltg.length === 0 ? (
               <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={combinedUltg} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" width={160} />
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 13 }} />
-                  <Bar dataKey="Transmisi" stackId="a" fill={CATEGORY_COLOR.Transmisi} />
-                  <Bar dataKey="Trafo HV" stackId="a" fill={CATEGORY_COLOR["Trafo HV"]} />
-                  <Bar dataKey="Trafo LV" stackId="a" fill={CATEGORY_COLOR["Trafo LV"]} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                  <BarChart data={combinedUltg} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                    <XAxis type="number" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <YAxis type="category" dataKey="ultg" tickLine={false} axisLine={false} fontSize={13} stroke="var(--muted-foreground)" width={160} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    <Bar dataKey="Transmisi" stackId="a" fill={CATEGORY_COLOR.Transmisi}>
+                      <LabelList dataKey="Transmisi" position="inside" fontSize={12} fill="var(--card)" formatter={formatBarLabel} />
+                    </Bar>
+                    <Bar dataKey="Trafo HV" stackId="a" fill={CATEGORY_COLOR["Trafo HV"]}>
+                      <LabelList dataKey="Trafo HV" position="inside" fontSize={12} fill="var(--card)" formatter={formatBarLabel} />
+                    </Bar>
+                    <Bar dataKey="Trafo LV" stackId="a" fill={CATEGORY_COLOR["Trafo LV"]} radius={[0, 4, 4, 0]}>
+                      <LabelList dataKey="Trafo LV" position="inside" fontSize={12} fill="var(--card)" formatter={formatBarLabel} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             )}
-            <div>
+            <div className="shrink-0">
               <p className="mb-2 text-base font-semibold text-foreground">Kontribusi Ruas</p>
               <BayTable entries={combinedBay} />
             </div>
@@ -716,93 +828,100 @@ export function DisturbancePresentationView({
         title: "Kumulatif Transmisi & Trafo",
         subtitle: `Perbandingan tahun ${compareYears.join("/")} — Transmisi Trip & AR dipisah, Trafo Trip HV+LV digabung`,
         render: () => (
-          // 3 charts in one row on wide screens — per explicit user request:
-          // Transmisi's Trip and AR Sukses as two SEPARATE year-comparison
-          // charts (not mixed in one), Trafo's Trip as ONE HV+LV-combined
-          // year-comparison chart. One row keeps the slide from either
-          // scrolling (too many rows) or leaving empty space below (too few,
-          // too-short charts) — both explicit feedback from prior rounds.
+          // 3 charts in one row, each stretching to fill the FULL slide
+          // height (ResponsiveContainer height="100%" inside a min-h-0
+          // flex-1 wrapper) instead of a small fixed pixel height — per
+          // explicit user feedback that fixed-height charts left a large
+          // empty area below them on a real presentation display.
           <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold text-foreground">Transmisi — Trip (Perbandingan Tahun)</p>
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={cumulativeTransmisiTripByYear} margin={{ top: 16, right: 12, left: -8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  {compareYears.map((y, i) => (
-                    <Line
-                      key={y}
-                      type="monotone"
-                      dataKey={y}
-                      name={y}
-                      stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
-                      strokeWidth={3}
-                      dot={{ r: 3 }}
-                      label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="flex min-h-0 flex-col gap-2">
+              <p className="shrink-0 text-sm font-semibold text-foreground">Transmisi — Trip (Perbandingan Tahun)</p>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={260}>
+                  <LineChart data={cumulativeTransmisiTripByYear} margin={{ top: 16, right: 12, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                    <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {compareYears.map((y, i) => (
+                      <Line
+                        key={y}
+                        type="monotone"
+                        dataKey={y}
+                        name={y}
+                        stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
+                        strokeWidth={3}
+                        dot={{ r: 3 }}
+                        label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold text-foreground">Transmisi — AR Sukses (Perbandingan Tahun)</p>
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={cumulativeTransmisiArByYear} margin={{ top: 16, right: 12, left: -8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  {compareYears.map((y, i) => (
-                    <Line
-                      key={y}
-                      type="monotone"
-                      dataKey={y}
-                      name={y}
-                      stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
-                      strokeWidth={3}
-                      dot={{ r: 3 }}
-                      label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="flex min-h-0 flex-col gap-2">
+              <p className="shrink-0 text-sm font-semibold text-foreground">Transmisi — AR Sukses (Perbandingan Tahun)</p>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={260}>
+                  <LineChart data={cumulativeTransmisiArByYear} margin={{ top: 16, right: 12, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                    <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {compareYears.map((y, i) => (
+                      <Line
+                        key={y}
+                        type="monotone"
+                        dataKey={y}
+                        name={y}
+                        stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
+                        strokeWidth={3}
+                        dot={{ r: 3 }}
+                        label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold text-foreground">Trafo (HV + LV) — Trip (Perbandingan Tahun)</p>
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={cumulativeTrafoTripByYear} margin={{ top: 16, right: 12, left: -8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
-                  <ChartTooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  {compareYears.map((y, i) => (
-                    <Line
-                      key={y}
-                      type="monotone"
-                      dataKey={y}
-                      name={y}
-                      stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
-                      strokeWidth={3}
-                      dot={{ r: 3 }}
-                      label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="flex min-h-0 flex-col gap-2">
+              <p className="shrink-0 text-sm font-semibold text-foreground">Trafo (HV + LV) — Trip (Perbandingan Tahun)</p>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={260}>
+                  <LineChart data={cumulativeTrafoTripByYear} margin={{ top: 16, right: 12, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                    <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {compareYears.map((y, i) => (
+                      <Line
+                        key={y}
+                        type="monotone"
+                        dataKey={y}
+                        name={y}
+                        stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
+                        strokeWidth={3}
+                        dot={{ r: 3 }}
+                        label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         ),
       },
       {
-        // Split from a single "kumulatif-penyebab" slide into two — per
+        // Split from a single "kumulatif-penyebab" slide into three — per
         // explicit user feedback: Transmisi's causes on their own slide,
-        // Trafo HV/LV's causes on the next one, since fitting 10 mini-charts
-        // (5 Transmisi + 5 Trafo) on one screen forced scrolling.
+        // Trafo HV and Trafo LV each on their own slide too (previously
+        // merged into one "Trafo" set), since fitting everything on one or
+        // two screens forced scrolling. Each slide also gets a per-year pie
+        // ("grafik pie persentase jumlah gangguan terbanyak tiap tahun").
         id: "kumulatif-penyebab-transmisi",
         title: "Kumulatif Penyebab Gangguan — Transmisi",
         subtitle: `Top 5 penyebab — satu grafik per penyebab, perbandingan tahun ${compareYears.join("/")}`,
@@ -820,27 +939,37 @@ export function DisturbancePresentationView({
             {transmisiCauseYearCharts.length === 0 ? (
               <p className="text-sm text-muted-foreground">Belum ada penyebab tercatat.</p>
             ) : (
-              // Row heights stretch evenly (minmax(0,1fr)) to fill the
-              // slide instead of a fixed small chart height leaving empty
-              // space below — same fix as Slide 2's calendar. Assumes the
-              // lg:grid-cols-3 breakpoint (presentation mode is effectively
-              // always a wide fullscreen viewport).
-              <div
-                className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                style={{ gridTemplateRows: `repeat(${Math.ceil(transmisiCauseYearCharts.length / 3)}, minmax(0, 1fr))` }}
-              >
-                {transmisiCauseYearCharts.map((c) => (
-                  <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
-                ))}
-              </div>
+              <>
+                {/* Row heights stretch evenly (minmax(0,1fr)) to fill the
+                    slide instead of a fixed small chart height leaving empty
+                    space below — same fix as Slide 2's calendar. Assumes the
+                    lg:grid-cols-3 breakpoint (presentation mode is
+                    effectively always a wide fullscreen viewport). */}
+                <div
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                  style={{ gridTemplateRows: `repeat(${Math.ceil(transmisiCauseYearCharts.length / 3)}, minmax(0, 1fr))` }}
+                >
+                  {transmisiCauseYearCharts.map((c) => (
+                    <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
+                  ))}
+                </div>
+                <div className="flex min-h-0 flex-[2] flex-col gap-1.5">
+                  <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
+                  <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+                    {transmisiCauseShareByYear.map((share) => (
+                      <CauseShareYearPie key={share.year} share={share} topCauses={transmisiTopCauses} />
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         ),
       },
       {
-        id: "kumulatif-penyebab-trafo",
-        title: "Kumulatif Penyebab Gangguan — Trafo HV/LV",
-        subtitle: `Top 5 penyebab (HV + LV digabung) — satu grafik per penyebab, perbandingan tahun ${compareYears.join("/")}`,
+        id: "kumulatif-penyebab-trafo-hv",
+        title: "Kumulatif Penyebab Gangguan — Trafo HV",
+        subtitle: `Top 5 penyebab — satu grafik per penyebab, perbandingan tahun ${compareYears.join("/")}`,
         render: () => (
           <div className="flex h-full flex-col gap-3">
             <div className="flex shrink-0 flex-wrap items-center gap-4 text-xs text-muted-foreground">
@@ -852,17 +981,67 @@ export function DisturbancePresentationView({
                 </span>
               ))}
             </div>
-            {trafoCauseYearCharts.length === 0 ? (
+            {trafoHvCauseYearCharts.length === 0 ? (
               <p className="text-sm text-muted-foreground">Belum ada penyebab tercatat.</p>
             ) : (
-              <div
-                className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                style={{ gridTemplateRows: `repeat(${Math.ceil(trafoCauseYearCharts.length / 3)}, minmax(0, 1fr))` }}
-              >
-                {trafoCauseYearCharts.map((c) => (
-                  <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
-                ))}
-              </div>
+              <>
+                <div
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                  style={{ gridTemplateRows: `repeat(${Math.ceil(trafoHvCauseYearCharts.length / 3)}, minmax(0, 1fr))` }}
+                >
+                  {trafoHvCauseYearCharts.map((c) => (
+                    <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
+                  ))}
+                </div>
+                <div className="flex min-h-0 flex-[2] flex-col gap-1.5">
+                  <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
+                  <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+                    {trafoHvCauseShareByYear.map((share) => (
+                      <CauseShareYearPie key={share.year} share={share} topCauses={trafoHvTopCauses} />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: "kumulatif-penyebab-trafo-lv",
+        title: "Kumulatif Penyebab Gangguan — Trafo LV",
+        subtitle: `Top 5 penyebab — satu grafik per penyebab, perbandingan tahun ${compareYears.join("/")}`,
+        render: () => (
+          <div className="flex h-full flex-col gap-3">
+            <div className="flex shrink-0 flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Tahun:</span>
+              {compareYears.map((y, i) => (
+                <span key={y} className="inline-flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: YEAR_COLORS[i % YEAR_COLORS.length] }} />
+                  {y}
+                </span>
+              ))}
+            </div>
+            {trafoLvCauseYearCharts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Belum ada penyebab tercatat.</p>
+            ) : (
+              <>
+                <div
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                  style={{ gridTemplateRows: `repeat(${Math.ceil(trafoLvCauseYearCharts.length / 3)}, minmax(0, 1fr))` }}
+                >
+                  {trafoLvCauseYearCharts.map((c) => (
+                    <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
+                  ))}
+                </div>
+                <div className="flex min-h-0 flex-[2] flex-col gap-1.5">
+                  <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
+                  <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+                    {trafoLvCauseShareByYear.map((share) => (
+                      <CauseShareYearPie key={share.year} share={share} topCauses={trafoLvTopCauses} />
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         ),
@@ -886,7 +1065,14 @@ export function DisturbancePresentationView({
       cumulativeTransmisiArByYear,
       cumulativeTrafoTripByYear,
       transmisiCauseYearCharts,
-      trafoCauseYearCharts,
+      trafoHvCauseYearCharts,
+      trafoLvCauseYearCharts,
+      transmisiCauseShareByYear,
+      trafoHvCauseShareByYear,
+      trafoLvCauseShareByYear,
+      transmisiTopCauses,
+      trafoHvTopCauses,
+      trafoLvTopCauses,
     ],
   );
 
