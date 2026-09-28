@@ -577,9 +577,18 @@ export function DisturbancePresentationView({
   // Slide 4: Transmisi's Trip and AR Sukses kept as two SEPARATE
   // year-comparison charts (not one chart mixing both kinds together) per
   // the user's explicit request — each kind's own trend is clearer on its
-  // own than sharing an axis with the other. Trafo's Trip is HV+LV combined
-  // into ONE chart (also per the user's explicit request), since the two
-  // sides were already being compared together before.
+  // own than sharing an axis with the other. A combined Trip+AR total chart
+  // sits before both, per the user's explicit request ("tambahkan jumlah
+  // total gangguan dulu trip dan ar") — deliberately Trip+AR only, not
+  // every kind (excludes "Tidak Trip", which isn't part of what the user
+  // asked this total to represent). Trafo's Trip is HV+LV combined into ONE
+  // chart (also per the user's explicit request), since the two sides were
+  // already being compared together before.
+  const cumulativeTransmisiTotalByYear = useMemo(() => {
+    const trip = transmisi.monthlyByYearByKind.find((k) => k.kind === "Trip")?.data ?? [];
+    const ar = transmisi.monthlyByYearByKind.find((k) => k.kind === "AR Sukses")?.data ?? [];
+    return buildCumulativeByYear(sumMonthlyByYear(trip, ar), compareYears);
+  }, [transmisi.monthlyByYearByKind, compareYears]);
   const cumulativeTransmisiTripByYear = useMemo(
     () => buildCumulativeByYear(transmisi.monthlyByYearByKind.find((k) => k.kind === "Trip")?.data ?? [], compareYears),
     [transmisi.monthlyByYearByKind, compareYears],
@@ -884,12 +893,40 @@ export function DisturbancePresentationView({
         title: "Kumulatif Transmisi & Trafo",
         subtitle: `Perbandingan tahun ${compareYears.join("/")} — Transmisi Trip & AR dipisah, Trafo Trip HV+LV digabung`,
         render: () => (
-          // 3 charts in one row, each stretching to fill the FULL slide
+          // 4 charts in one row, each stretching to fill the FULL slide
           // height (ResponsiveContainer height="100%" inside a min-h-0
           // flex-1 wrapper) instead of a small fixed pixel height — per
           // explicit user feedback that fixed-height charts left a large
-          // empty area below them on a real presentation display.
-          <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-3">
+          // empty area below them on a real presentation display. The
+          // combined Trip+AR total sits first, per the user's explicit
+          // ordering request.
+          <div className="grid h-full grid-cols-1 gap-5 lg:grid-cols-4">
+            <div className="flex min-h-0 flex-col gap-2">
+              <p className="shrink-0 text-sm font-semibold text-foreground">Transmisi — Total Trip + AR (Perbandingan Tahun)</p>
+              <div className="min-h-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minHeight={260}>
+                  <LineChart data={cumulativeTransmisiTotalByYear} margin={{ top: 16, right: 12, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
+                    <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={false} />
+                    <ChartTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {compareYears.map((y, i) => (
+                      <Line
+                        key={y}
+                        type="monotone"
+                        dataKey={y}
+                        name={y}
+                        stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
+                        strokeWidth={3}
+                        dot={{ r: 3 }}
+                        label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
             <div className="flex min-h-0 flex-col gap-2">
               <p className="shrink-0 text-sm font-semibold text-foreground">Transmisi — Trip (Perbandingan Tahun)</p>
               <div className="min-h-0 flex-1">
@@ -1117,6 +1154,7 @@ export function DisturbancePresentationView({
       combinedUltg,
       combinedBay,
       compareYears,
+      cumulativeTransmisiTotalByYear,
       cumulativeTransmisiTripByYear,
       cumulativeTransmisiArByYear,
       cumulativeTrafoTripByYear,
