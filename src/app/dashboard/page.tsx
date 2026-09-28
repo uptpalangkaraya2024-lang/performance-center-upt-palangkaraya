@@ -8,8 +8,10 @@ import { GiCorrelationTable } from "@/components/dashboard/gi-correlation-table"
 import { PageHero } from "@/components/dashboard/page-hero";
 import { UptPerformanceStatus } from "@/components/dashboard/upt-performance-status";
 import { UptGapToTarget } from "@/components/dashboard/upt-gap-to-target";
+import { UltgGapToTarget } from "@/components/kinerja-ultg/ultg-gap-to-target";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { getUptPerformance } from "@/services/upt-performance";
+import { getUltgPerformance } from "@/services/ultg-performance";
 import { getDisturbances, type DisturbancesResult } from "@/services/disturbances";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
@@ -17,7 +19,14 @@ import { getRenusData } from "@/services/renus";
 import { buildManagementAttention } from "@/lib/executive-insights";
 import { buildGiCorrelation } from "@/lib/asset-correlation";
 import { listSyncStatus } from "@/lib/sync-status";
-import type { AhiResult, BayLineReport, RenusData, StatusLevel, UptPerformanceResult } from "@/types";
+import type {
+  AhiResult,
+  BayLineReport,
+  RenusData,
+  StatusLevel,
+  UltgPerformanceResult,
+  UptPerformanceResult,
+} from "@/types";
 
 export const dynamic = "force-dynamic";
 // Safety margin against Apps Script's own observed latency variance
@@ -51,6 +60,7 @@ function formatTime(date: Date | null): string | null {
 // a promise only ever resolves once no matter how many places await it.
 export default function OverviewPage() {
   const uptPromise = getUptPerformance();
+  const ultgPromise = getUltgPerformance();
   const disturbancesPromise = getDisturbances();
   const ahiPromise = getAhiPerformance();
   const renusPromise = getRenusData();
@@ -65,6 +75,7 @@ export default function OverviewPage() {
           <Suspense fallback={<span>Memuat status sinkronisasi...</span>}>
             <SyncStatus
               uptPromise={uptPromise}
+              ultgPromise={ultgPromise}
               disturbancesPromise={disturbancesPromise}
               ahiPromise={ahiPromise}
               renusPromise={renusPromise}
@@ -82,6 +93,13 @@ export default function OverviewPage() {
       <Suspense fallback={<UptStatusFallback />}>
         <UptStatusSection uptPromise={uptPromise} />
       </Suspense>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-lg font-extrabold tracking-tight text-foreground">Kinerja ULTG</h3>
+        <Suspense fallback={<UptStatusFallback />}>
+          <UltgStatusSection ultgPromise={ultgPromise} />
+        </Suspense>
+      </div>
 
       <div className="flex flex-col gap-2">
         <h3 className="text-lg font-extrabold tracking-tight text-foreground">Management Attention</h3>
@@ -103,6 +121,17 @@ export default function OverviewPage() {
         <CardContent>
           <Suspense fallback={<Skeleton className="h-48 w-full" />}>
             <GapToTargetSection uptPromise={uptPromise} />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-extrabold">Gap to Target — Kinerja ULTG</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+            <UltgGapToTargetSection ultgPromise={ultgPromise} />
           </Suspense>
         </CardContent>
       </Card>
@@ -168,12 +197,14 @@ function ManagementAttentionFallback() {
 
 async function SyncStatus({
   uptPromise,
+  ultgPromise,
   disturbancesPromise,
   ahiPromise,
   renusPromise,
   bayLineReportsPromise,
 }: {
   uptPromise: Promise<unknown>;
+  ultgPromise: Promise<unknown>;
   disturbancesPromise: Promise<unknown>;
   ahiPromise: Promise<unknown>;
   renusPromise: Promise<unknown>;
@@ -184,7 +215,7 @@ async function SyncStatus({
   // promise here (even though their VALUES aren't used) ensures the
   // registry actually reflects this request's own sync attempts before
   // this reads it, not whatever an earlier request left behind.
-  await Promise.all([uptPromise, disturbancesPromise, ahiPromise, renusPromise, bayLineReportsPromise]);
+  await Promise.all([uptPromise, ultgPromise, disturbancesPromise, ahiPromise, renusPromise, bayLineReportsPromise]);
   const lastSyncOverall = listSyncStatus().reduce<Date | null>(
     (latest, entry) => (entry.lastSync && (!latest || entry.lastSync > latest) ? entry.lastSync : latest),
     null,
@@ -221,6 +252,52 @@ async function UptStatusSection({ uptPromise }: { uptPromise: Promise<UptPerform
         <DataUnavailable message="Kinerja UPT belum tersedia. Lihat halaman Data & Sync." />
       </CardContent>
     </Card>
+  );
+}
+
+// One full-width UptPerformanceStatus banner per ULTG, stacked — same
+// widget as UPT's own, reused as-is (see its `title` prop) rather than a
+// separate component, since the shape (overall counts + weighted score +
+// status) is identical, just computed per ULTG instead of once for the UPT.
+async function UltgStatusSection({ ultgPromise }: { ultgPromise: Promise<UltgPerformanceResult> }) {
+  const ultg = await ultgPromise;
+
+  if (!ultg.data) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <DataUnavailable message="Kinerja ULTG belum tersedia. Lihat halaman Data & Sync." />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {ultg.data.map((snapshot) => {
+        const status: StatusLevel =
+          snapshot.overall.critical > 0 ? "critical" : snapshot.overall.warning > 0 ? "warning" : "good";
+        return (
+          <UptPerformanceStatus
+            key={snapshot.ultgSlug}
+            title={`${snapshot.ultg} Performance Status`}
+            overall={snapshot.overall}
+            periodLabel={snapshot.periodLabel}
+            status={status}
+            overallWeightedScore={snapshot.overallWeightedScore}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+async function UltgGapToTargetSection({ ultgPromise }: { ultgPromise: Promise<UltgPerformanceResult> }) {
+  const ultg = await ultgPromise;
+  return ultg.data ? (
+    <UltgGapToTarget snapshots={ultg.data} />
+  ) : (
+    <DataUnavailable message="Kinerja ULTG belum tersedia." />
   );
 }
 

@@ -55,11 +55,15 @@ const STATUS_META: Record<
 // matter how the heights were reconciled; stacking them instead sidesteps
 // the problem entirely.
 export function UptPerformanceStatus({
+  title = "UPT Performance Status",
   overall,
   periodLabel,
   status,
   overallWeightedScore,
 }: {
+  /** Defaults to "UPT Performance Status" — overridden by Kinerja ULTG's
+   *  homepage banners (one per ULTG) so each says whose numbers these are. */
+  title?: string;
   overall: UptOverallPerformance;
   periodLabel: string;
   status: StatusLevel;
@@ -79,7 +83,7 @@ export function UptPerformanceStatus({
       <div className={cn("h-1.5 w-full", meta.bar)} />
       <CardContent className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:gap-8">
         <div className="flex shrink-0 flex-col gap-1.5 lg:w-56">
-          <p className="text-sm font-bold tracking-wide text-muted-foreground uppercase">UPT Performance Status</p>
+          <p className="text-sm font-bold tracking-wide text-muted-foreground uppercase">{title}</p>
           <p className="text-xs text-muted-foreground">Kinerja s.d. {periodLabel}</p>
           <span className={cn("mt-1 inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold", meta.tint)}>
             <Icon className="size-4" />
