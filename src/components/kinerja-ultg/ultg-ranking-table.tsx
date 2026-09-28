@@ -30,6 +30,30 @@ export function buildUltgRanking(snapshots: UltgPerformanceSnapshot[]): UltgRank
 }
 
 const RANK_ACCENT = ["border-l-success", "border-l-warning", "border-l-critical"];
+const RANK_BADGE_TONE = [
+  "bg-success/20 text-success border border-success/40",
+  "bg-warning/20 text-warning-foreground border border-warning/50",
+  "bg-critical/20 text-critical border border-critical/40",
+];
+
+/** A numbered rank badge (1st/2nd/3rd) — same green/amber/red convention as
+ *  RANK_ACCENT above, reused both in this table's own rows and in the
+ *  homepage's stacked per-ULTG banners so the two ranking surfaces read
+ *  consistently. Falls back to a plain neutral tone past 3rd place (kept
+ *  general even though there are only 3 ULTGs today). */
+export function RankBadge({ rank, size = "sm" }: { rank: number; size?: "sm" | "lg" }) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full font-extrabold text-foreground",
+        size === "lg" ? "size-10 text-lg" : "size-7 text-sm",
+        RANK_BADGE_TONE[rank - 1] ?? "bg-secondary",
+      )}
+    >
+      {rank}
+    </span>
+  );
+}
 
 export function UltgRankingTable({
   ranking,
@@ -62,9 +86,7 @@ export function UltgRankingTable({
                 isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
               )}
             >
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-extrabold text-foreground">
-                {row.rank}
-              </span>
+              <RankBadge rank={row.rank} />
               <span className="flex-1">
                 <span className="block text-sm font-bold text-foreground">{row.snapshot.ultg}</span>
                 <span className="block text-xs text-muted-foreground">

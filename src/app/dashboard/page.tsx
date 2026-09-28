@@ -9,6 +9,7 @@ import { PageHero } from "@/components/dashboard/page-hero";
 import { UptPerformanceStatus } from "@/components/dashboard/upt-performance-status";
 import { UptGapToTarget } from "@/components/dashboard/upt-gap-to-target";
 import { UltgGapToTarget } from "@/components/kinerja-ultg/ultg-gap-to-target";
+import { buildUltgRanking, RankBadge } from "@/components/kinerja-ultg/ultg-ranking-table";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { getUptPerformance } from "@/services/upt-performance";
 import { getUltgPerformance } from "@/services/ultg-performance";
@@ -255,10 +256,15 @@ async function UptStatusSection({ uptPromise }: { uptPromise: Promise<UptPerform
   );
 }
 
-// One full-width UptPerformanceStatus banner per ULTG, stacked — same
-// widget as UPT's own, reused as-is (see its `title` prop) rather than a
-// separate component, since the shape (overall counts + weighted score +
-// status) is identical, just computed per ULTG instead of once for the UPT.
+// One full-width UptPerformanceStatus banner per ULTG, stacked in RANKED
+// order (best weighted contract score first — same ranking buildUltgRanking
+// already computes for the Kinerja ULTG page's own ranking table) with a
+// matching numbered RankBadge, per the user's explicit request: the banners
+// used to render in a fixed PALANGKARAYA/PANGKALAN BUN/MUARA TEWEH order
+// regardless of who actually performed best, which read as arbitrary rather
+// than a ranking. Same widget as UPT's own (see its `title` prop) rather
+// than a separate component, since the shape is identical, just computed
+// per ULTG instead of once for the UPT.
 async function UltgStatusSection({ ultgPromise }: { ultgPromise: Promise<UltgPerformanceResult> }) {
   const ultg = await ultgPromise;
 
@@ -272,20 +278,26 @@ async function UltgStatusSection({ ultgPromise }: { ultgPromise: Promise<UltgPer
     );
   }
 
+  const ranking = buildUltgRanking(ultg.data);
+
   return (
     <div className="flex flex-col gap-3">
-      {ultg.data.map((snapshot) => {
+      {ranking.map(({ rank, snapshot }) => {
         const status: StatusLevel =
           snapshot.overall.critical > 0 ? "critical" : snapshot.overall.warning > 0 ? "warning" : "good";
         return (
-          <UptPerformanceStatus
-            key={snapshot.ultgSlug}
-            title={`${snapshot.ultg} Performance Status`}
-            overall={snapshot.overall}
-            periodLabel={snapshot.periodLabel}
-            status={status}
-            overallWeightedScore={snapshot.overallWeightedScore}
-          />
+          <div key={snapshot.ultgSlug} className="flex items-center gap-3">
+            <RankBadge rank={rank} size="lg" />
+            <div className="min-w-0 flex-1">
+              <UptPerformanceStatus
+                title={`#${rank} · ${snapshot.ultg} Performance Status`}
+                overall={snapshot.overall}
+                periodLabel={snapshot.periodLabel}
+                status={status}
+                overallWeightedScore={snapshot.overallWeightedScore}
+              />
+            </div>
+          </div>
         );
       })}
     </div>
