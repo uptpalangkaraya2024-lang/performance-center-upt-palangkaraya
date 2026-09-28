@@ -1,0 +1,124 @@
+import { ArrowDown, ArrowUp } from "lucide-react";
+
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import type { UltgKpi } from "@/types";
+import { formatAchievement, formatKpiValue } from "@/components/kinerja-upt/format";
+import { UptStatusBadge } from "@/components/kinerja-upt/upt-status-badge";
+
+// Same card as Kinerja UPT's UptKpiCard (see that file), minus the
+// directionConflict warning — there is no external "documented expected
+// direction" brief for ULTG KPIs to check the sheet's own POLARITAS
+// against (see src/config/ultg-kpi.ts), so no conflict concept applies here.
+const ACCENT_BY_STATUS: Record<UltgKpi["status"], string> = {
+  good: "bg-success",
+  warning: "bg-warning",
+  critical: "bg-critical",
+  none: "bg-border",
+};
+
+export function UltgKpiCard({ kpi, highlighted = false }: { kpi: UltgKpi; highlighted?: boolean }) {
+  if (kpi.status === "none") {
+    return (
+      <Card id={`kpi-${kpi.key}`} className="gap-3 overflow-hidden py-0">
+        <div className="h-1.5 w-full bg-border" />
+        <CardHeader className="px-4 pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-base font-extrabold text-muted-foreground">
+              {kpi.abbreviation ?? kpi.displayName}
+            </span>
+            <UptStatusBadge status="none" />
+          </div>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <p className="text-sm font-semibold text-foreground">{kpi.displayName}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Tidak tersedia untuk periode ini.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const progressPct = kpi.achievement !== null ? Math.min(100, Math.max(0, Math.round(kpi.achievement))) : 0;
+  const DirectionIcon = kpi.direction === "LOWER_IS_BETTER" ? ArrowDown : ArrowUp;
+
+  return (
+    <Card
+      id={`kpi-${kpi.key}`}
+      className={cn(
+        "gap-3 overflow-hidden py-0 scroll-mt-20 transition-shadow hover:shadow-md",
+        highlighted && "ring-2 ring-brand ring-offset-2 ring-offset-background",
+      )}
+    >
+      <div className={cn("h-1.5 w-full", ACCENT_BY_STATUS[kpi.status])} />
+      <CardHeader className="px-4 pt-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-extrabold text-foreground">{kpi.abbreviation ?? kpi.displayName}</span>
+            {kpi.direction ? (
+              <span title={kpi.direction === "LOWER_IS_BETTER" ? "Lower is better" : "Higher is better"}>
+                <DirectionIcon className="size-3.5 text-muted-foreground" />
+              </span>
+            ) : null}
+          </div>
+          <UptStatusBadge status={kpi.status} />
+        </div>
+        <p className="text-xs text-muted-foreground">{kpi.displayName}</p>
+      </CardHeader>
+      <CardContent className="px-4 pb-4">
+        <div className="text-3xl font-extrabold tracking-tight text-foreground tabular-nums">
+          {formatKpiValue(kpi.actualValue, kpi.actualLabel, kpi.unit)}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-1.5 rounded-lg border bg-secondary p-2.5 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Target</span>
+            <span className="font-bold tabular-nums text-foreground">
+              {formatKpiValue(kpi.targetValue, kpi.targetLabel, kpi.unit)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Realisasi</span>
+            <span className="font-bold tabular-nums text-foreground">
+              {formatKpiValue(kpi.actualValue, kpi.actualLabel, kpi.unit)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Achievement</span>
+            <span className="font-bold tabular-nums text-foreground">{formatAchievement(kpi.achievement)}</span>
+          </div>
+        </div>
+
+        <Progress value={progressPct} className="mt-3" />
+
+        {kpi.weightInfo ? (
+          <div className="mt-2.5 flex items-center justify-between rounded-md bg-secondary px-2 py-1.5 text-[11px]">
+            <span className="text-muted-foreground">
+              Bobot {kpi.weightInfo.sharedWith ? "grup" : ""}: <b className="text-foreground">{kpi.weightInfo.weight}</b>
+            </span>
+            <span className="text-muted-foreground">
+              Kontribusi:{" "}
+              <b className="text-foreground tabular-nums">
+                {kpi.weightInfo.weightedScore !== null
+                  ? kpi.weightInfo.weightedScore.toLocaleString("id-ID", { maximumFractionDigits: 2 })
+                  : "-"}
+              </b>
+            </span>
+          </div>
+        ) : null}
+        {kpi.weightInfo?.sharedWith ? (
+          <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
+            Bobot digabung dengan sub-indikator lain di &quot;{kpi.weightInfo.sharedWith}&quot; — tidak ada rincian
+            per-indikator pada sumber data.
+          </p>
+        ) : null}
+
+        {kpi.direction === null ? (
+          <p className="mt-2 text-[10px] leading-tight text-warning-foreground">
+            ⚠ Arah target (higher/lower is better) tidak dapat dipastikan dari sumber data.
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}

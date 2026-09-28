@@ -61,7 +61,8 @@ export const AI_ASSISTANT_TOOLS = [
   },
   {
     name: "kinerja_ultg",
-    description: "Kinerja per ULTG (unit layanan transmisi gardu) — target/realisasi/pencapaian per ULTG.",
+    description:
+      "Kinerja 33 KPI kontrak tiap ULTG (Palangkaraya, Pangkalan Bun, Muara Teweh) untuk periode berjalan: target, realisasi, pencapaian, status, dan skor bobot keseluruhan per ULTG.",
     parameters: { type: "object" as const, properties: {} },
   },
   {
@@ -181,16 +182,22 @@ export async function runAiTool(name: AiToolName, input: Record<string, unknown>
     }
     case "kinerja_ultg": {
       const result = await getUltgPerformance();
-      if (result.error) return { error: result.error };
+      if (!result.data) return { error: result.error ?? "Data Kinerja ULTG tidak tersedia." };
       return {
-        data: result.data.map((u) => ({
-          ultg: u.name,
-          kpi: u.kpi,
-          target: u.target,
-          realisasi: u.actual,
-          pencapaian: u.achievement,
-          status: u.status,
-          tren: u.trend,
+        data: result.data.map((snapshot) => ({
+          ultg: snapshot.ultg,
+          periode: snapshot.periodLabel,
+          skorBobotKeseluruhan: snapshot.overallWeightedScore,
+          ringkasan: snapshot.overall,
+          kpis: snapshot.kpis.map((k) => ({
+            nama: k.displayName,
+            singkatan: k.abbreviation,
+            kategori: k.category,
+            target: k.targetLabel,
+            realisasi: k.actualLabel,
+            pencapaian: k.achievement,
+            status: k.status,
+          })),
         })),
       };
     }

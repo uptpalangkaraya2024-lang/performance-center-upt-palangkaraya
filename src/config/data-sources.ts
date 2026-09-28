@@ -62,13 +62,24 @@ export const dataSources = {
       },
     ],
   },
+  // Same KPI-contract template as uptPerformance's "DRAFT BARU" (confirmed
+  // live), one sheet per ULTG instead of one UPT-wide sheet — 33 indicators
+  // per ULTG vs UPT's 19. Real column header sits at row 8 here (not row 14
+  // like the UPT file — a different cover-page length, confirmed live, not
+  // assumed identical between the two files). required: false on each sheet:
+  // one ULTG's sheet failing must not take down the other two — see
+  // src/services/ultg-performance.ts.
   ultgPerformance: {
     id: "ultg-performance",
     label: "Kinerja ULTG",
     sources: [
       {
-        file: "Kinerja ULTG",
-        sheets: [{ name: "Kinerja ULTG", purpose: "ULTG performance data" }],
+        file: "LPTK ULTG 2026",
+        sheets: [
+          { name: "ULTG PALANGKARAYA", required: false, headerRow: 8, purpose: "ULTG Palangkaraya KPI contract — 33 indicators, target/realisasi s.d. current period" },
+          { name: "ULTG PANGKALAN BUN", required: false, headerRow: 8, purpose: "ULTG Pangkalan Bun KPI contract — same 33-indicator template." },
+          { name: "ULTG MUARA TEWEH", required: false, headerRow: 8, purpose: "ULTG Muara Teweh KPI contract — same 33-indicator template." },
+        ],
       },
     ],
   },

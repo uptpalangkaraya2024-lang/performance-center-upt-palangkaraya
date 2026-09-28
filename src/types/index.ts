@@ -1,17 +1,5 @@
 export type StatusLevel = "good" | "warning" | "critical" | "none";
 
-export interface UltgPerformance {
-  id: string;
-  name: string;
-  kpi: string;
-  target: number;
-  actual: number;
-  achievement: number;
-  status: StatusLevel;
-  trend: "up" | "down" | "flat";
-  rank: number;
-}
-
 export interface DisturbanceCause {
   cause: string;
   count: number;
@@ -292,6 +280,78 @@ export interface UptPerformanceSnapshot {
 
 export interface UptPerformanceResult {
   data: UptPerformanceSnapshot | null;
+  error: string | null;
+}
+
+// "LPTK ULTG 2026" (src/config/data-sources.ts's ultgPerformance) is the SAME
+// KPI-contract template as "LPTK UPT PALANGKARAYA & ULTG 2026"'s DRAFT BARU
+// sheet (confirmed live) — one sheet per ULTG (ULTG PALANGKARAYA/PANGKALAN
+// BUN/MUARA TEWEH), each with its own 33-indicator contract instead of UPT's
+// 19. UptKpiDirection / UptWeightInfo / UptKpiMonthlyPoint / UptOverallPerformance
+// / UptPeriodOption are reused as-is below — their field names were never
+// UPT-specific, just first introduced there — only the category enum and KPI
+// shape differ (no directionConflict here: unlike UPT's Phase 3A brief, there
+// is no external "documented expected direction" for ULTG KPIs to check the
+// sheet's own POLARITAS against, so direction is simply read and trusted).
+export type UltgKpiCategory =
+  | "availability"
+  | "disturbance"
+  | "protection"
+  | "maintenance-support"
+  | "abo-proteksi"
+  | "abo-jaringan"
+  | "abo-gardu-induk"
+  | "reporting"
+  | "konten";
+
+/** One of the 33 configured KPIs for one ULTG, resolved against its matched
+ *  row (if any) in that ULTG's own sheet — see src/services/ultg-performance.ts. */
+export interface UltgKpi {
+  key: string;
+  displayName: string;
+  abbreviation?: string;
+  category: UltgKpiCategory;
+  /** From the sheet's own POLARITAS column (Positif/Negatif) for the matched
+   *  row — null when the row is missing or its polarity is neither (e.g. the
+   *  "Konten" KPI, whose POLARITAS cell is blank in the source). */
+  direction: UptKpiDirection | null;
+  unit: string | null;
+  /** Raw text as it appears in the sheet — always shown even when unparseable. */
+  targetLabel: string | null;
+  targetValue: number | null;
+  actualLabel: string | null;
+  actualValue: number | null;
+  /** The sheet's own "Pencapaian" column — not recomputed locally. */
+  achievement: number | null;
+  status: StatusLevel;
+  monthlyTrend: UptKpiMonthlyPoint[] | null;
+  weightInfo: UptWeightInfo | null;
+}
+
+/** One ULTG's full KPI-contract snapshot — the page renders one of these per
+ *  ULTG (selector) plus a cross-ULTG ranking built from all of them together. */
+export interface UltgPerformanceSnapshot {
+  ultg: string;
+  ultgSlug: string;
+  /** The one period the sheet's "Target s/d" / "Realisasi s/d" columns actually reflect, e.g. "2026-08". */
+  period: string;
+  periodLabel: string;
+  kpis: UltgKpi[];
+  overall: UptOverallPerformance;
+  periodOptions: UptPeriodOption[];
+  lastUpdate: string | null;
+  /** The sheet's own "TOTAL BOBOT PROPORSIONAL" row (Capping 110% column) —
+   *  the official weighted contract score across all 33 KPIs for this ULTG. */
+  overallWeightedScore: number | null;
+  warnings: string[];
+}
+
+export interface UltgPerformanceResult {
+  /** One entry per ULTG sheet that was readable — a single ULTG's sheet
+   *  failing (see `required: false` in data-sources.ts) excludes just that
+   *  ULTG rather than failing the whole page, same principle as every other
+   *  per-source try/catch in this app. Null only when NONE could be read. */
+  data: UltgPerformanceSnapshot[] | null;
   error: string | null;
 }
 
