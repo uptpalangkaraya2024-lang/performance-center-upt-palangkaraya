@@ -152,7 +152,16 @@ function WigBanner({ wig }: { wig: FourDxWig }) {
   );
 }
 
-function LmCard({ lm }: { lm: FourDxLm }) {
+function LmCard({ lm, wigNumber }: { lm: FourDxLm; wigNumber: number }) {
+  // WIG 4's per-ULTG target is confirmed arbitrary (see buildFourDxLm in
+  // four-dx-compute.ts) — the UPT-level target/realisasi block above is the
+  // real pass/fail gate, so per the user's explicit request this breakdown
+  // only lists ULTGs that actually contributed this week, showing just
+  // their realisasi count with no target/checklist semantics — mirroring
+  // the WA recap's own formatFourDxWaRecap treatment for WIG 4.
+  const isWig4 = wigNumber === 4;
+  const breakdownAssets = isWig4 ? lm.assets.filter((asset) => asset.realizedCount > 0) : lm.assets;
+
   // Colored LEFT-edge accent, not a full-width top stripe — see the
   // matching comment on ABO's ProgramCard for why (a solid bar across every
   // Tercapai card in a list read as "the whole card is green").
@@ -203,21 +212,25 @@ function LmCard({ lm }: { lm: FourDxLm }) {
 
         {lm.assets.length === 0 ? (
           <p className="text-sm text-muted-foreground">Tidak ada aset yang dijadwalkan pada periode ini.</p>
+        ) : isWig4 && breakdownAssets.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Belum ada ULTG yang terealisasi pada periode ini.</p>
         ) : (
           <div className="flex flex-col gap-1.5 rounded-lg border bg-secondary p-2.5">
             <p className="text-xs font-bold text-muted-foreground uppercase">Breakdown per ULTG / Ruas</p>
             <ul className="flex flex-col gap-1.5">
-              {lm.assets.map((asset) => (
+              {breakdownAssets.map((asset) => (
                 <li key={asset.asset} className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm">
-                  {asset.done ? (
+                  {isWig4 || asset.done ? (
                     <CheckCircle2 className="size-4 shrink-0 text-success" />
                   ) : (
                     <Circle className="size-4 shrink-0 text-muted-foreground" />
                   )}
-                  <span className={cn("flex-1 font-medium", asset.done ? "text-foreground" : "text-muted-foreground")}>
+                  <span className={cn("flex-1 font-medium", isWig4 || asset.done ? "text-foreground" : "text-muted-foreground")}>
                     {asset.asset}
                   </span>
-                  {asset.targetThisWeek > 1 ? (
+                  {isWig4 ? (
+                    <span className="text-xs text-muted-foreground">({asset.realizedCount})</span>
+                  ) : asset.targetThisWeek > 1 ? (
                     <span className="text-xs text-muted-foreground">
                       R:{asset.realizedCount}/T:{asset.targetThisWeek}
                     </span>
@@ -724,7 +737,7 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
           <WigBanner wig={wig} />
           <div className="flex flex-col gap-5">
             {wig.lms.map((lm) => (
-              <LmCard key={lm.code} lm={lm} />
+              <LmCard key={lm.code} lm={lm} wigNumber={wig.number} />
             ))}
           </div>
         </div>
