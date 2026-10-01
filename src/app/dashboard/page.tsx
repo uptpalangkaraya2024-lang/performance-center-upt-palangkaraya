@@ -8,6 +8,8 @@ import { GiCorrelationTable } from "@/components/dashboard/gi-correlation-table"
 import { PageHero } from "@/components/dashboard/page-hero";
 import { UptPerformanceStatus } from "@/components/dashboard/upt-performance-status";
 import { UptGapToTarget } from "@/components/dashboard/upt-gap-to-target";
+import { OverviewExportToolbar } from "@/components/dashboard/overview-export-toolbar";
+import type { ExcelSheetSpec } from "@/components/dashboard/export-excel-button";
 import { UltgGapToTarget } from "@/components/kinerja-ultg/ultg-gap-to-target";
 import { buildUltgRanking, RankBadge } from "@/components/kinerja-ultg/ultg-ranking-table";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
@@ -82,6 +84,11 @@ export default function OverviewPage() {
               renusPromise={renusPromise}
               bayLineReportsPromise={bayLineReportsPromise}
             />
+          </Suspense>
+        }
+        actions={
+          <Suspense fallback={null}>
+            <ExportToolbarSection uptPromise={uptPromise} ultgPromise={ultgPromise} />
           </Suspense>
         }
       />
@@ -228,6 +235,65 @@ async function SyncStatus({
       {lastSyncOverall ? ` · Last update: ${formatTime(lastSyncOverall)}` : null}
     </>
   );
+}
+
+// Builds the Excel workbook's sheets from the SAME data the rest of this
+// page already fetched (uptPromise/ultgPromise are awaited again here, but
+// a promise only ever resolves once no matter how many places await it —
+// no extra Apps Script round trip). Row shape matches the Kinerja UPT and
+// Kinerja ULTG pages' own export buttons exactly, so a number in this
+// workbook always means the same thing it does on those pages. Falls back
+// to an empty sheet list (not an error) when a source has no data yet —
+// the PDF export (plain window.print()) still works regardless.
+async function ExportToolbarSection({
+  uptPromise,
+  ultgPromise,
+}: {
+  uptPromise: Promise<UptPerformanceResult>;
+  ultgPromise: Promise<UltgPerformanceResult>;
+}) {
+  const [upt, ultg] = await Promise.all([uptPromise, ultgPromise]);
+  const sheets: ExcelSheetSpec[] = [];
+
+  if (upt.data) {
+    sheets.push({
+      name: "Kinerja UPT",
+      rows: upt.data.kpis.map((kpi) => ({
+        KPI: kpi.displayName,
+        Kategori: kpi.category,
+        Target: kpi.targetLabel ?? "",
+        Realisasi: kpi.actualLabel ?? "",
+        "Achievement (%)": kpi.achievement ?? "",
+        Status: kpi.status,
+        Arah: kpi.direction ?? "",
+        Bobot: kpi.weightInfo?.weight ?? "",
+        "Kontribusi Bobot": kpi.weightInfo?.weightedScore ?? "",
+        "Bobot Digabung Dengan": kpi.weightInfo?.sharedWith ?? "",
+      })),
+    });
+  }
+
+  if (ultg.data) {
+    for (const snapshot of ultg.data) {
+      sheets.push({
+        name: snapshot.ultg,
+        rows: snapshot.kpis.map((kpi) => ({
+          KPI: kpi.displayName,
+          Kategori: kpi.category,
+          Target: kpi.targetLabel ?? "",
+          Realisasi: kpi.actualLabel ?? "",
+          "Achievement (%)": kpi.achievement ?? "",
+          Status: kpi.status,
+          Arah: kpi.direction ?? "",
+          Bobot: kpi.weightInfo?.weight ?? "",
+          "Kontribusi Bobot": kpi.weightInfo?.weightedScore ?? "",
+          "Bobot Digabung Dengan": kpi.weightInfo?.sharedWith ?? "",
+        })),
+      });
+    }
+  }
+
+  return <OverviewExportToolbar sheets={sheets} />;
 }
 
 async function UptStatusSection({ uptPromise }: { uptPromise: Promise<UptPerformanceResult> }) {
