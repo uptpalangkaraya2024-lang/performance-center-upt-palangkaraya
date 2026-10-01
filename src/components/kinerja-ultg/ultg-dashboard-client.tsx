@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { UptOverallPerformanceSummary } from "@/components/kinerja-upt/upt-overall-performance";
 import type { UltgPerformanceSnapshot } from "@/types";
@@ -106,6 +107,7 @@ export function UltgDashboardClient({ snapshots }: { snapshots: UltgPerformanceS
                 ))}
               </SelectContent>
             </Select>
+            <ExportPdfButton />
             <ExportExcelButton
               filename={`Kinerja-${selected.ultg.replace(/\s+/g, "-")}-${selected.period}.xlsx`}
               sheets={[

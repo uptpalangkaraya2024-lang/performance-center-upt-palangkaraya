@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import type { UptKpiCategory, UptPerformanceSnapshot } from "@/types";
 import { UptCategorySection } from "./upt-category-section";
@@ -91,6 +92,7 @@ export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnaps
                 ))}
               </SelectContent>
             </Select>
+            <ExportPdfButton />
             <ExportExcelButton
               filename={`Kinerja-UPT-${snapshot.period}.xlsx`}
               sheets={[

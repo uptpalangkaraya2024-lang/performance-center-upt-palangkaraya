@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
 import { RenusWorkTable } from "./renus-work-table";
 import type { RenusData, RenusRow, RenusWeekPeriod } from "@/types";
@@ -387,25 +388,28 @@ export function RenusClient({ data }: { data: RenusData }) {
             <CardTitle className="text-lg font-extrabold">Daftar Pekerjaan</CardTitle>
             <p className="text-xs text-muted-foreground">{filtered.length} dari {data.rows.length} pekerjaan ditampilkan.</p>
           </div>
-          <ExportExcelButton
-            filename="RENUS-UPT-Palangkaraya.xlsx"
-            sheets={[
-              {
-                name: "RENUS",
-                rows: filtered.map((r) => ({
-                  Tanggal: r.rencanaDate,
-                  ULTG: r.ultg,
-                  GI: r.gi,
-                  Bay: r.bay,
-                  "Detail Pekerjaan": r.workDetail,
-                  Status: r.status || "Belum Diisi",
-                  Risiko: r.risk || "Belum Diisi",
-                  PIC: r.pic ?? "",
-                  Realisasi: r.realisasiDate ?? "",
-                })),
-              },
-            ]}
-          />
+          <div className="flex items-center gap-2">
+            <ExportPdfButton />
+            <ExportExcelButton
+              filename="RENUS-UPT-Palangkaraya.xlsx"
+              sheets={[
+                {
+                  name: "RENUS",
+                  rows: filtered.map((r) => ({
+                    Tanggal: r.rencanaDate,
+                    ULTG: r.ultg,
+                    GI: r.gi,
+                    Bay: r.bay,
+                    "Detail Pekerjaan": r.workDetail,
+                    Status: r.status || "Belum Diisi",
+                    Risiko: r.risk || "Belum Diisi",
+                    PIC: r.pic ?? "",
+                    Realisasi: r.realisasiDate ?? "",
+                  })),
+                },
+              ]}
+            />
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-2">

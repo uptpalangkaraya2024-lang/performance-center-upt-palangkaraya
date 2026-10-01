@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { AhiExecutiveSummary } from "@/components/ahi/ahi-executive-summary";
 import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
@@ -53,6 +54,8 @@ export default async function AhiPage() {
           </>
         }
         actions={
+          <>
+          <ExportPdfButton />
           <ExportExcelButton
             filename="AHI-UPT-Palangkaraya.xlsx"
             sheets={[
@@ -93,6 +96,7 @@ export default async function AhiPage() {
               },
             ]}
           />
+          </>
         }
       />
       </div>

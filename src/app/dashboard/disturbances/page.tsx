@@ -14,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
@@ -438,6 +439,7 @@ export default async function DisturbancesPage() {
               <MonitorPlay className="size-3.5" />
               Mode Presentasi
             </Link>
+            <ExportPdfButton />
             <ExportExcelButton
               filename="Gangguan-UPT-Palangkaraya.xlsx"
               sheets={[
