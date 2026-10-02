@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import {
   Sheet,
   SheetContent,
@@ -713,6 +714,25 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
             <Printer className="size-3.5" />
             Cetak / Simpan PDF
           </Button>
+          <ExportExcelButton
+            filename={`4DX-Transmisi-${monthAbbr}-M${weekOfMonth}.xlsx`}
+            sheets={[
+              {
+                name: "Resume LM",
+                rows: wigs.flatMap((wig) =>
+                  wig.lms.map((lm) => ({
+                    WIG: wig.number,
+                    "Kode LM": lm.code,
+                    "Lead Measure": lm.description,
+                    "Target Mingguan": lm.targetMingguan,
+                    "Realisasi Mingguan": lm.realisasiMingguan,
+                    "% Realisasi": lm.percentRealisasiMingguan !== null ? Math.round(lm.percentRealisasiMingguan * 100) : "",
+                    Status: lm.status === "tercapai" ? "Tercapai" : "Belum",
+                  })),
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
 

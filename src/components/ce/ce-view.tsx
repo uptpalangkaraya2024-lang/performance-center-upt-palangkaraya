@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import {
   CE_MONTH_ABBR,
   CE_MONTH_FULL_ID,
@@ -484,6 +486,43 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
             Kembali ke Periode Ini
           </Button>
         ) : null}
+
+        <ExportPdfButton />
+        <ExportExcelButton
+          filename={`CE-UPT-Palangkaraya-${weekLabel}.xlsx`}
+          sheets={[
+            {
+              name: "Item Periode",
+              rows: filteredPeriodItems.map((item) => ({
+                Status: item.done ? "CLOSE" : "OPEN",
+                ULTG: item.ultg,
+                GI: item.gardu,
+                Bay: item.bay,
+                "Jenis Aset": item.jenisAsset,
+                Program: item.namaProgram,
+                "Kriteria Before": item.kriteriaBefore,
+                "Kriteria After": item.kriteriaAfter,
+                "Target Minggu": item.targetWeekLabel ?? "",
+                "Realisasi Minggu": item.realisasiWeekLabel ?? "",
+                "Status Text": item.status,
+              })),
+            },
+            {
+              name: "Ringkasan ULTG",
+              rows: ultgIdeal.map((u) => ({
+                ULTG: u.ultg,
+                Total: u.total,
+                Close: u.close,
+                Open: u.open,
+                "On Target": u.onTarget,
+                Lagging: u.lagging,
+                "Aktual (%)": u.actualPercent ?? "",
+                "Ideal (%)": u.idealPercent,
+                "Gap (pts)": u.gapPts ?? "",
+              })),
+            },
+          ]}
+        />
 
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />

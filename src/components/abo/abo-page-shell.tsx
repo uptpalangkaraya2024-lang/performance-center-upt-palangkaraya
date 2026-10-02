@@ -58,6 +58,7 @@ export function AboPageShell({ proteksi, hargi }: { proteksi: AboSnapshot; hargi
       ) : (
         <AboSnapshotView
           snapshot={snapshot}
+          moduleLabel={active.label}
           emptyMessage={`Data ABO ${active.label} belum tersedia — lihat halaman Data & Sync untuk detail.`}
         />
       )}

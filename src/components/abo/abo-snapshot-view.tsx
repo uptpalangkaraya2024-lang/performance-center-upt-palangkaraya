@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import {
   ABO_MONTH_ABBR,
   ABO_MONTH_FULL,
@@ -330,7 +332,17 @@ function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComput
   );
 }
 
-export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnapshot; emptyMessage: string }) {
+export function AboSnapshotView({
+  snapshot,
+  emptyMessage,
+  moduleLabel = "ABO",
+}: {
+  snapshot: AboSnapshot;
+  emptyMessage: string;
+  /** "Proteksi" / "Hargi" — which ABO sub-module this is, for the Excel
+   *  filename/sheet name (AboPageShell owns the tab state this comes from). */
+  moduleLabel?: string;
+}) {
   const currentWeekLabel = useMemo(() => defaultAboWeekLabel(), []);
   const [weekLabel, setWeekLabel] = useState(currentWeekLabel);
   const [search, setSearch] = useState("");
@@ -390,6 +402,42 @@ export function AboSnapshotView({ snapshot, emptyMessage }: { snapshot: AboSnaps
             Kembali ke Periode Ini
           </Button>
         ) : null}
+
+        <ExportPdfButton />
+        <ExportExcelButton
+          filename={`ABO-${moduleLabel}-${weekLabel}.xlsx`}
+          sheets={[
+            {
+              name: "Resume Program",
+              rows: filteredPrograms.map((p) => ({
+                Kode: p.code,
+                Program: p.description,
+                "Target UPT": p.master,
+                "Target Rencana": p.targetRencana,
+                "Target s.d. Periode": p.targetToDate,
+                "Realisasi s.d. Periode": p.realisasiToDate,
+                "% Realisasi": Math.round(p.percentRealisasi * 100),
+                GAP: p.gap,
+                Status: p.status === "tercapai" ? "Tercapai" : "Belum",
+              })),
+            },
+            {
+              name: "Breakdown ULTG",
+              rows: filteredPrograms.flatMap((p) =>
+                p.ultgBreakdown.map((u) => ({
+                  Program: p.code,
+                  ULTG: u.ultg,
+                  "Target ULTG": u.master,
+                  "Target Rencana": u.targetRencana,
+                  "Target s.d. Periode": u.targetToDate,
+                  "Realisasi s.d. Periode": u.realisasiToDate,
+                  "% Realisasi": Math.round(u.percentRealisasi * 100),
+                  Status: u.status === "tercapai" ? "Tercapai" : "Belum",
+                })),
+              ),
+            },
+          ]}
+        />
 
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
