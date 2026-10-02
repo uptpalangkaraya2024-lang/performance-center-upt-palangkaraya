@@ -128,3 +128,35 @@ export function AssetInfoField({ label, value }: { label: string; value: string 
     </div>
   );
 }
+
+/** Shown in place of any breakdown while the filter hasn't reached its final,
+ *  specific level yet — mirrors AHI's own Bay Line Report ("Pilih Bay Line
+ *  untuk melihat detail report"): filters alone are not useful, so nothing
+ *  renders below them until one exact ruas/GI is picked. */
+export function AssetSelectPrompt({ message }: { message: string }) {
+  return <p className="py-10 text-center text-sm text-muted-foreground print:hidden">{message}</p>;
+}
+
+/** The single selected item's own title band — same purpose as AHI's
+ *  `selected.bay` banner (primary-tinted, bay name + one line of context) —
+ *  reused across all 4 Data Aset panels so the "you picked this one item"
+ *  moment always reads the same way. */
+export function AssetReportBanner({
+  title,
+  subtitle,
+  badge,
+}: {
+  title: string;
+  subtitle: string;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-primary/30 bg-primary/15 p-3 print:border-0 print:bg-transparent print:p-0">
+      <div>
+        <p className="text-base font-extrabold text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      </div>
+      {badge}
+    </div>
+  );
+}

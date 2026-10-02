@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ALL_VALUE, buildBayGiOptions, buildUltgOptions, filterAnomaliRows } from "@/lib/asset-scanning-compute";
 import type { AssetAnomaliRow, AssetRelayObsoleteRow } from "@/types";
-import { AssetFilterBar, AssetInfoField, AssetStatTile, AssetStatusBadge } from "./asset-shared";
+import { AssetFilterBar, AssetInfoField, AssetReportBanner, AssetSelectPrompt, AssetStatTile, AssetStatusBadge } from "./asset-shared";
 
 function statusTone(status: string | null): "good" | "warn" | "neutral" {
   const s = (status ?? "").toUpperCase();
@@ -14,6 +14,11 @@ function statusTone(status: string | null): "good" | "warn" | "neutral" {
   return "warn";
 }
 
+// Same "filter only, then one report" UX as the other 3 panels — but unlike
+// a bay line or a gardu (one row each), one ruas/GI here legitimately holds
+// several separate anomali findings, so the "report" for a selected ruas is
+// itself a small breakdown (stat tiles + one card per finding) rather than a
+// single card.
 export function AnomaliPanel({
   anomali,
   relayObsolete,
@@ -26,10 +31,23 @@ export function AnomaliPanel({
 
   const ultgOptions = useMemo(() => buildUltgOptions(anomali), [anomali]);
   const bayGiOptions = useMemo(() => buildBayGiOptions(anomali, ultg), [anomali, ultg]);
-  const filtered = useMemo(() => filterAnomaliRows(anomali, ultg, bayGi), [anomali, ultg, bayGi]);
 
-  const selesaiCount = filtered.filter((r) => (r.status ?? "").toUpperCase() === "SELESAI").length;
-  const belumCount = filtered.length - selesaiCount;
+  const selected = useMemo(
+    () => (bayGi === ALL_VALUE ? [] : filterAnomaliRows(anomali, ultg, bayGi)),
+    [anomali, ultg, bayGi],
+  );
+  // Relay-obsolete is a separate forward-planning list (not itself part of
+  // "data anomali"), kept scoped to the same ULTG but shown regardless of
+  // which ruas is picked — matching bay/Gi names across the two sheets
+  // isn't guaranteed to be exact, so this stays an ULTG-level reference
+  // rather than risking silently hiding real rows behind a strict match.
+  const relayObsoleteForUltg = useMemo(
+    () => (ultg === ALL_VALUE ? relayObsolete : relayObsolete.filter((r) => r.ultg === ultg)),
+    [relayObsolete, ultg],
+  );
+
+  const selesaiCount = selected.filter((r) => (r.status ?? "").toUpperCase() === "SELESAI").length;
+  const belumCount = selected.length - selesaiCount;
 
   if (anomali.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">Data Anomali belum tersedia.</p>;
@@ -49,32 +67,39 @@ export function AnomaliPanel({
             },
             allLabel: "Semua ULTG",
           },
-          { key: "baygi", value: bayGi, options: bayGiOptions, onChange: setBayGi, allLabel: "Semua Ruas/GI", width: "w-[260px]" },
+          { key: "baygi", value: bayGi, options: bayGiOptions, onChange: setBayGi, allLabel: "Pilih Ruas/GI...", width: "w-[260px]" },
         ]}
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <AssetStatTile value={filtered.length} label="Total Temuan" />
-        <AssetStatTile value={selesaiCount} label="Selesai" className="text-success" />
-        <AssetStatTile value={belumCount} label="Belum Selesai" className="text-warning-foreground" />
-        <AssetStatTile value={new Set(filtered.map((r) => r.peralatan).filter(Boolean)).size} label="Jenis Peralatan" />
-      </div>
+      {bayGi === ALL_VALUE ? (
+        <AssetSelectPrompt message="Pilih Ruas/GI untuk melihat detail temuan Anomali." />
+      ) : selected.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">Tidak ada data untuk filter ini.</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <AssetReportBanner
+            title={bayGi}
+            subtitle={`${selected[0].ultg} · ${selected.length} temuan`}
+          />
 
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-bold tracking-wide text-foreground uppercase">Breakdown per Ruas/GI</p>
-        {filtered.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Tidak ada data untuk filter ini.</p>
-        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <AssetStatTile value={selected.length} label="Total Temuan" />
+            <AssetStatTile value={selesaiCount} label="Selesai" className="text-success" />
+            <AssetStatTile value={belumCount} label="Belum Selesai" className="text-warning-foreground" />
+            <AssetStatTile value={new Set(selected.map((r) => r.peralatan).filter(Boolean)).size} label="Jenis Peralatan" />
+          </div>
+
           <div className="flex flex-col gap-3">
-            {filtered.map((row, i) => (
-              <Card key={`${row.bayGi}-${i}`}>
+            {selected.map((row, i) => (
+              <Card key={`${row.bayGi}-${i}`} className="border-l-4 border-l-primary print:break-inside-avoid print:border print:shadow-none">
                 <CardContent className="flex flex-col gap-3 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="text-base font-bold text-foreground">{row.bayGi}</p>
+                      <p className="text-base font-bold text-foreground">{row.peralatan}</p>
                       <p className="text-xs text-muted-foreground">
-                        {row.ultg} · {row.peralatan}
+                        {row.ultg}
                         {row.merk ? ` · ${row.merk}${row.type ? " " + row.type : ""}` : ""}
+                        {row.sn ? ` · SN ${row.sn}` : ""}
                       </p>
                     </div>
                     <AssetStatusBadge label={row.status ?? "—"} tone={statusTone(row.status)} />
@@ -101,15 +126,16 @@ export function AnomaliPanel({
               </Card>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {relayObsolete.length > 0 ? (
+      {relayObsoleteForUltg.length > 0 ? (
         <Card className="print:break-inside-avoid">
           <CardHeader>
             <CardTitle className="text-lg font-extrabold">Rencana Penggantian Relay Obsolete</CardTitle>
             <p className="text-xs text-muted-foreground">
-              {relayObsolete.length} relay direncanakan diganti karena sudah obsolete — tabel terpisah dari daftar anomali di atas.
+              {relayObsoleteForUltg.length} relay direncanakan diganti karena sudah obsolete
+              {ultg !== ALL_VALUE ? ` di ${ultg}` : ""} — tabel terpisah dari daftar anomali di atas.
             </p>
           </CardHeader>
           <CardContent>
@@ -126,7 +152,7 @@ export function AnomaliPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {relayObsolete.map((row, i) => (
+                  {relayObsoleteForUltg.map((row, i) => (
                     <tr key={`${row.bay}-${i}`} className="border-b last:border-0">
                       <td className="px-3 py-2 text-foreground">{row.ultg}</td>
                       <td className="px-3 py-2 text-muted-foreground">{row.gi}</td>
