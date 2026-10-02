@@ -1029,3 +1029,117 @@ export interface CeSnapshot {
   items: CeItem[];
   error: string | null;
 }
+
+// --- Data Aset — "REKAPITULASI SCANNING" ------------------------------
+//
+// A protection-relay asset register (MPU = Main Protection Unit, BPU =
+// Backup Protection Unit, BUSPRO = Bus Protection) — each row is one
+// physical relay device, with dozens of deep engineering columns (CT/VT
+// ratios, OCR/GFR settings, zone delays, test checklists, approval/report
+// links). Confirmed live: MPU BAY LINE alone has ~100 columns. Rather than
+// a dedicated TS field per column, each row keeps a small CURATED set of
+// fields actually needed for filtering/summary (ULTG, GI, Bay, status,
+// merk/tipe) plus the full row verbatim in `raw` (keyed by its own header
+// text) for the detail view's auto-generated, non-empty-only breakdown —
+// see src/services/asset-scanning.ts.
+export interface AssetMpuBayLineRow {
+  ultg: string;
+  dariGi: string;
+  keGi: string;
+  /** "1" / "2" / null — a bay without a line number suffix (single circuit). */
+  line: string | null;
+  bay: string;
+  anomaliStatus: string;
+  idBay: string | null;
+  jarakKm: number | null;
+  merk: string;
+  tipe: string;
+  serialNumber: string | null;
+  tahunOperasi: number | null;
+  remoteRelai: string | null;
+  raw: Record<string, string>;
+}
+
+export interface AssetBpuBayLineRow {
+  ultg: string;
+  dariGi: string;
+  keGi: string;
+  line: string | null;
+  bay: string;
+  anomaliStatus: string;
+  merk: string;
+  tipe: string;
+  serialNumber: string | null;
+  tahunOperasi: number | null;
+  remoteRelai: string | null;
+  raw: Record<string, string>;
+}
+
+export interface AssetMpuBusproRow {
+  ultg: string;
+  gardu: string;
+  /** "ADA" / "TIDAK ADA" — whether this GI even has bus protection. */
+  adaTidak: string;
+  merk: string | null;
+  tipe: string | null;
+  serialNumber: string | null;
+  tahunOperasi: number | null;
+  remoteRelai: string | null;
+  fungsi: string | null;
+  /** "Normal" / "Abnormal" — the sheet's own status column. */
+  normalAbnormal: string | null;
+  raw: Record<string, string>;
+}
+
+/** One row from the ANOMALI sheet's first (main) table — the sheet's own
+ *  "KETERANGAN" header appears twice (once for the problem description,
+ *  once trailing after STATUS), so this is read raw by column position
+ *  rather than through the header-keyed reader, which would silently drop
+ *  one of the two. */
+export interface AssetAnomaliRow {
+  no: number | null;
+  ultg: string;
+  bayGi: string;
+  peralatan: string;
+  merk: string | null;
+  type: string | null;
+  sn: string | null;
+  anomali: string;
+  keteranganAnomali: string | null;
+  tindakLanjut: string | null;
+  merkPengganti: string | null;
+  typePengganti: string | null;
+  snPengganti: string | null;
+  target: string | null;
+  realisasi: string | null;
+  hasil: string | null;
+  status: string | null;
+  keteranganLanjutan: string | null;
+}
+
+/** The ANOMALI sheet's own SECOND, separate table further down (relay
+ *  obsolescence replacement planning) — confirmed live to be a distinct
+ *  block with its own header row, not part of the main anomaly list. */
+export interface AssetRelayObsoleteRow {
+  no: number | null;
+  ultg: string;
+  gi: string;
+  bay: string;
+  anomali: string;
+  tipeEksisting: string | null;
+  merk: string | null;
+  tipePengganti: string | null;
+}
+
+export interface AssetScanningSnapshot {
+  mpuBayLine: AssetMpuBayLineRow[];
+  bpuBayLine: AssetBpuBayLineRow[];
+  mpuBuspro: AssetMpuBusproRow[];
+  anomali: AssetAnomaliRow[];
+  relayObsolete: AssetRelayObsoleteRow[];
+}
+
+export interface AssetScanningResult {
+  data: AssetScanningSnapshot | null;
+  error: string | null;
+}

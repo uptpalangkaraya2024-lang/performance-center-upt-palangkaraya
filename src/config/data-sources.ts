@@ -322,4 +322,30 @@ export const dataSources = {
       },
     ],
   },
+  // A protection-relay asset register (MPU/BPU/BUSPRO), confirmed live to
+  // have dozens of sheets beyond the 4 requested so far (MPU FASOP, BATTERY
+  // & RECTIFIER, TWS, MPU BAY TRAFO, BPU BAY TRAFO, ...) — more will likely
+  // be added here as the Data Aset module grows, per the user's own stated
+  // plan. Each sheet's real header is its own literal row 1, no helper row.
+  // ANOMALI is read raw (readConfiguredSourceRaw), not header-keyed: its
+  // "KETERANGAN" header appears twice (confirmed live, columns 8 and 17),
+  // which a header-keyed Record<string,string> read would silently collapse
+  // to one; it also has a second, separate block (relay obsolescence
+  // replacement planning) further down the same sheet with its own header
+  // row, found by content match — see src/services/asset-scanning.ts.
+  assetScanning: {
+    id: "asset-scanning",
+    label: "Data Aset — Scanning Proteksi",
+    sources: [
+      {
+        file: "REKAPITULASI SCANNING",
+        sheets: [
+          { name: "MPU BAY LINE", required: false, purpose: "Main Protection Unit per bay line — one row per circuit (ULTG, GI asal/tujuan, merk/tipe relay, CT/VT, dan ~90 kolom setting proteksi lainnya)." },
+          { name: "BPU BAY LINE", required: false, purpose: "Backup Protection Unit per bay line — pasangan MPU BAY LINE, dengan setting OCR/GFR dan tanggal pemeliharaan/approval sendiri." },
+          { name: "MPU BUSPRO", required: false, purpose: "Bus Protection per Gardu Induk (bukan per bay) — status Ada/Tidak, bay-bay yang terkoneksi (s.d. 14 bay), dan setting differensial." },
+          { name: "ANOMALI", required: false, purpose: "Dua tabel dalam satu sheet: daftar anomali aktif (baris 1 dst.) dan rencana penggantian relay obsolete (blok terpisah lebih bawah, header sendiri) — dibedakan lewat readSheetRaw, bukan header-keyed." },
+        ],
+      },
+    ],
+  },
 } satisfies Record<string, DataSourceConfig>;
