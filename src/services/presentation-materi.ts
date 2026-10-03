@@ -25,9 +25,12 @@ import { getAssetScanning } from "@/services/asset-scanning";
 import { buildAboSnapshotComputed, collectAboAttentionItems, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
 import { buildCeSummary, buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 import { buildFourDxAchievementSummaries, resolvePeriodRange } from "@/lib/four-dx-compute";
+import { buildChartSpec, buildParetoChart } from "@/lib/presentation-chart-compute";
+import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import type {
   AboProgramComputed,
   DisturbanceCategoryResult,
+  PresentationChartSpec,
   PresentationMateriCatalog,
   PresentationMateriOption,
   PresentationSlide,
@@ -50,10 +53,37 @@ function num(v: number | null | undefined): string {
   return v === null || v === undefined || !Number.isFinite(v) ? "—" : String(v);
 }
 
+/** overallWeightedScore (UPT/ULTG) is already on a 0-100 scale — confirmed
+ *  against src/components/dashboard/upt-performance-status.tsx, which
+ *  appends "%" directly to the raw number. Kept separate from pct() (which
+ *  expects a 0-1 fraction and would silently 100x this) after that exact
+ *  mix-up already bit the 4DX and AHI materi once in this same file. */
+function score(v: number | null | undefined): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? "—" : `${v.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%`;
+}
+
 let slideSeq = 0;
-function slide(partial: Omit<PresentationSlide, "id">): PresentationSlide {
+/** `charts` are every chart option this slide COULD show; `activeChartIds`
+ *  defaults to ALL of them when omitted — a module that only ever computes
+ *  one chart doesn't need to repeat its id just to turn it on. A module
+ *  offering more than one angle (e.g. Gangguan's pareto + category pie)
+ *  passes activeChartIds explicitly to pick just the most informative one
+ *  as the default, leaving the rest as opt-in alternatives in the per-slide
+ *  editor. */
+function slide(
+  partial: Omit<PresentationSlide, "id" | "chartOptions" | "activeChartIds"> & {
+    charts?: PresentationChartSpec[];
+    activeChartIds?: string[];
+  },
+): PresentationSlide {
   slideSeq += 1;
-  return { id: `materi-${slideSeq}`, ...partial };
+  const { charts, activeChartIds, ...rest } = partial;
+  return {
+    id: `materi-${slideSeq}`,
+    ...rest,
+    chartOptions: charts,
+    activeChartIds: activeChartIds ?? charts?.map((c) => c.id),
+  };
 }
 
 // --- Per-module slide builders ----------------------------------------------
@@ -69,10 +99,18 @@ async function buildKinerjaUptMateri(): Promise<PresentationMateriOption> {
         title: "Kinerja UPT Palangkaraya",
         subtitle: `Periode ${d.periodLabel}`,
         stats: [
-          { value: num(d.overallWeightedScore), label: "Skor Bobot Keseluruhan" },
+          { value: score(d.overallWeightedScore), label: "Skor Bobot Keseluruhan" },
           { value: num(d.overall.achieved), label: "KPI Tercapai" },
           { value: num(d.overall.warning + d.overall.critical), label: "KPI Belum Tercapai" },
           { value: num(d.overall.total), label: "Total KPI Kontrak" },
+        ],
+        charts: [
+          buildChartSpec("kinerja-upt-status", "pie", "Distribusi Status KPI", [
+            { name: "Tercapai", value: d.overall.achieved },
+            { name: "Warning", value: d.overall.warning },
+            { name: "Critical", value: d.overall.critical },
+            { name: "Tidak Ada Data", value: d.overall.noData },
+          ]),
         ],
         bullets:
           bermasalah.length > 0
@@ -101,11 +139,19 @@ async function buildKinerjaUltgMateri(): Promise<PresentationMateriOption> {
       slide({
         title: "Kinerja ULTG",
         subtitle: `Periode ${rows[0].periodLabel}`,
+        charts: [
+          buildChartSpec(
+            "kinerja-ultg-skor",
+            "bar",
+            "Skor Bobot per ULTG",
+            rows.map((s) => ({ name: s.ultg, value: s.overallWeightedScore ?? 0 })),
+          ),
+        ],
         table: {
           headers: ["ULTG", "Skor Bobot", "Tercapai", "Belum Tercapai"],
-          rows: rows.map((s) => [s.ultg, num(s.overallWeightedScore), num(s.overall.achieved), num(s.overall.warning + s.overall.critical)]),
+          rows: rows.map((s) => [s.ultg, score(s.overallWeightedScore), num(s.overall.achieved), num(s.overall.warning + s.overall.critical)]),
         },
-        bullets: rows.map((s) => `${s.ultg}: skor bobot ${num(s.overallWeightedScore)} dari ${s.overall.total} KPI kontrak.`),
+        bullets: rows.map((s) => `${s.ultg}: skor bobot ${score(s.overallWeightedScore)} dari ${s.overall.total} KPI kontrak.`),
         sourceNote: `Sumber: Kinerja ULTG — periode ${rows[0].periodLabel}`,
       }),
     );
@@ -142,6 +188,22 @@ async function buildGangguanMateri(): Promise<PresentationMateriOption> {
     for (const [, cat] of categories) for (const u of cat.ultgBreakdown) ultgCounts.set(u.ultg, (ultgCounts.get(u.ultg) ?? 0) + u.total);
     const topUltg = [...ultgCounts.entries()].sort((a, b) => b[1] - a[1]);
 
+    // Full cause list (not the pre-sliced topCauses used for the bullet
+    // text) — buildParetoChart computes the cumulative % against the true
+    // total and does its own top-N truncation for display, so the last bar
+    // shown reports honest coverage instead of implying the chart's own
+    // handful of bars already explain 100% of every disturbance.
+    const paretoChart = buildParetoChart(
+      "gangguan-pareto",
+      "Pareto Penyebab Gangguan",
+      [...causeCounts.entries()].map(([cause, count]) => ({ name: cause, value: count })),
+    );
+    const kategoriPie = buildChartSpec(
+      "gangguan-kategori",
+      "pie",
+      "Proporsi per Kategori",
+      totals.map((t) => ({ name: t.label, value: t.total })),
+    );
     slides.push(
       slide({
         title: "Rekapitulasi Gangguan — UPT Palangkaraya",
@@ -150,6 +212,12 @@ async function buildGangguanMateri(): Promise<PresentationMateriOption> {
           { value: num(grandTotal), label: "Total Gangguan" },
           ...totals.map((t) => ({ value: num(t.total), label: t.label })),
         ],
+        // Pareto is the default (per the user's own explicit "gabarkan
+        // pareto" request) — the category pie is kept as an opt-in
+        // alternative in the per-slide editor rather than shown alongside
+        // it by default, so the slide doesn't open already crowded.
+        charts: [paretoChart, kategoriPie],
+        activeChartIds: [paretoChart.id],
         bullets: [
           ...totals.map((t) => `${t.label}: ${t.total} kejadian (${t.trip} Trip, ${t.arSukses} AR Sukses).`),
           topCauses.length > 0 ? `Penyebab terbanyak: ${topCauses.map(([c, n]) => `${c} (${n})`).join(", ")}.` : "Belum ada data penyebab.",
@@ -188,6 +256,10 @@ async function buildAboMateri(): Promise<PresentationMateriOption> {
       ...collectAboAttentionItems(hargiPrograms, weekLabel),
     ];
     const bullets = [...summarizeAboPrograms(proteksiPrograms), ...summarizeAboPrograms(hargiPrograms)];
+    const belumTercapai = [...proteksiPrograms, ...hargiPrograms]
+      .filter((p) => p.status !== "tercapai")
+      .sort((a, b) => a.percentRealisasi - b.percentRealisasi)
+      .slice(0, 8);
     slides.push(
       slide({
         title: "ABO — Realisasi Program Kerja Proteksi & Hargi",
@@ -196,6 +268,17 @@ async function buildAboMateri(): Promise<PresentationMateriOption> {
           { value: num(proteksiPrograms.length + hargiPrograms.length), label: "Total Program" },
           { value: num(attention.length), label: "Perlu Perhatian" },
         ],
+        charts:
+          belumTercapai.length > 0
+            ? [
+                buildChartSpec(
+                  "abo-realisasi",
+                  "bar",
+                  "% Realisasi — Program Belum Tercapai",
+                  belumTercapai.map((p) => ({ name: p.code, value: Math.round(p.percentRealisasi * 100) })),
+                ),
+              ]
+            : undefined,
         bullets: bullets.length > 0 ? bullets : ["Seluruh program ABO tercapai pada minggu berjalan."],
         sourceNote: `Sumber: ABO Proteksi & Hargi — minggu ${weekLabel}`,
       }),
@@ -227,6 +310,14 @@ async function buildFourDxMateri(): Promise<PresentationMateriOption> {
       slide({
         title: "4DX — Pencapaian WIG Year-to-Date",
         subtitle: `Periode berjalan: ${snapshot.currentPeriodLabel}`,
+        charts: [
+          buildChartSpec(
+            "4dx-ytd",
+            "bar",
+            "% Pencapaian YTD per WIG",
+            achievement.map((a) => ({ name: `WIG ${a.wigNumber}`, value: a.ytdPercent !== null ? Math.round(a.ytdPercent * 100) : 0 })),
+          ),
+        ],
         table: {
           headers: ["WIG", "Tercapai YTD", "Total YTD", "% YTD"],
           rows: achievement.map((a) => [`WIG ${a.wigNumber}`, num(a.ytdTercapai), num(a.ytdTotal), pct(a.ytdPercent, 1)]),
@@ -263,6 +354,19 @@ async function buildCeMateri(): Promise<PresentationMateriOption> {
           { value: num(summary.open), label: "Belum Selesai (Open)" },
           { value: pct(summary.percentAchieve), label: "% Pencapaian" },
         ],
+        charts: [
+          buildChartSpec("ce-status", "pie", "Status Temuan", [
+            { name: "Selesai (Close)", value: summary.close },
+            { name: "Belum Selesai (Open)", value: summary.open },
+          ]),
+          buildChartSpec(
+            "ce-ultg",
+            "bar",
+            "Temuan per ULTG",
+            summary.byUltg.map((u) => ({ name: u.label, value: u.total })),
+          ),
+        ],
+        activeChartIds: ["ce-status"],
         bullets: [
           ...summary.byUltg.map((u) => `${u.label}: ${u.total} temuan (${u.close} selesai, ${u.open} belum).`),
           attention.length > 0 ? `${attention.length} temuan perlu perhatian (Critical/Alert/terlambat).` : "Tidak ada temuan Critical/Alert yang menonjol.",
@@ -291,10 +395,31 @@ async function buildAhiMateri(): Promise<PresentationMateriOption> {
       slide({
         title: "AHI — Kondisi Kesehatan Aset",
         subtitle: `Pembaruan terakhir: ${d.lastUpdate ?? "—"}`,
-        stats: d.sections.map((s) => ({ value: num(s.score), label: s.displayName })),
+        // AHI's own score is a 0-1 fraction (confirmed against
+        // src/components/ahi/format.ts's formatPercent, which the real AHI
+        // page uses for this exact field) — shown as a percentage here too,
+        // not the raw fraction, which would otherwise render as "0.91"
+        // instead of "91%" and a nearly-invisible bar on the chart.
+        stats: d.sections.map((s) => ({ value: pct(s.score), label: s.displayName })),
+        charts: [
+          buildChartSpec(
+            "ahi-skor",
+            "bar",
+            "Skor per Kategori (%)",
+            d.sections.map((s) => ({ name: s.displayName, value: s.score !== null ? Math.round(s.score * 100) : 0 })),
+          ),
+        ],
         bullets:
           priority.length > 0
-            ? priority.map((a) => `${a.ultg} · GI ${a.gi} · ${a.bay} (${a.jenisAset}): ${a.keterangan ?? "kondisi Poor/Critical"}.`)
+            ? priority.map((a) => {
+                // The source sheet uses a bare "-" for an empty cell (same
+                // convention as several other modules' own raw data) — not
+                // caught by a plain `?? fallback` since the value isn't
+                // null, it's literally the string "-", which printed as a
+                // dead-end "...: -." bullet before this check.
+                const keterangan = a.keterangan && a.keterangan.trim() !== "-" ? a.keterangan : "kondisi Poor/Critical";
+                return `${a.ultg} · GI ${a.gi} · ${a.bay} (${a.jenisAset}): ${keterangan}.`;
+              })
             : ["Tidak ada temuan kondisi Poor/Critical yang menonjol."],
         sourceNote: "Sumber: Asset Health Index (AHI)",
       }),
@@ -314,6 +439,9 @@ async function buildRenusMateri(): Promise<PresentationMateriOption> {
   const data = await getRenusData();
   const slides: PresentationSlide[] = [];
   if (!data.error) {
+    const overdueCount = data.rows.filter(
+      (r) => !isRenusCancelled(r) && !isRenusDone(r) && r.rencanaDate < data.today,
+    ).length;
     slides.push(
       slide({
         title: "RENUS — Rencana Pemeliharaan & Pekerjaan",
@@ -323,6 +451,14 @@ async function buildRenusMateri(): Promise<PresentationMateriOption> {
           { value: num(data.summary.thisWeek), label: "Minggu Ini" },
           { value: num(data.summary.highRisk), label: "Risiko Tinggi" },
           { value: num(data.summary.upcoming), label: "Akan Datang" },
+        ],
+        charts: [
+          buildChartSpec("renus-status", "bar", "Status Pekerjaan", [
+            { name: "Terlambat", value: overdueCount },
+            { name: "Minggu Ini", value: data.summary.thisWeek },
+            { name: "Risiko Tinggi", value: data.summary.highRisk },
+            { name: "Akan Datang", value: data.summary.upcoming },
+          ]),
         ],
         bullets: data.reminders.length > 0 ? data.reminders.map((r) => r.text) : ["Tidak ada pekerjaan yang terlambat atau berisiko tinggi saat ini."],
         sourceNote: `Sumber: RENUS — per ${data.today}`,
@@ -366,6 +502,19 @@ async function buildDataAsetMateri(): Promise<PresentationMateriOption> {
           { value: num(belum), label: "Belum Selesai" },
           { value: num(d.relayObsolete.length), label: "Rencana Penggantian Relay Obsolete" },
         ],
+        charts: [
+          buildChartSpec("data-aset-status", "pie", "Status Tindak Lanjut", [
+            { name: "Selesai", value: selesai },
+            { name: "Belum Selesai", value: belum },
+          ]),
+          buildChartSpec(
+            "data-aset-ultg",
+            "bar",
+            "Temuan Anomali per ULTG",
+            [...byUltg.entries()].map(([ultg, c]) => ({ name: ultg, value: c.total })),
+          ),
+        ],
+        activeChartIds: ["data-aset-status"],
         bullets: [
           ...[...byUltg.entries()].map(([ultg, c]) => `${ultg}: ${c.total} temuan anomali, ${c.selesai} selesai ditindaklanjuti.`),
           `${anomaliRelay} dari ${d.mpuBayLine.length + d.bpuBayLine.length} relay Bay Line (MPU+BPU) berstatus anomali (bukan Normal).`,

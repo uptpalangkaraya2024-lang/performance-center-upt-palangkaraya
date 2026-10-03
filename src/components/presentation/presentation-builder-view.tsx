@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Check, Loader2, Sparkles, TriangleAlert, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, Loader2, Pencil, Sparkles, TriangleAlert, Wand2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { PresentationMateriOption, PresentationSlide } from "@/types";
@@ -13,6 +14,22 @@ const AI_STARTER_EXAMPLES = [
   "Slide 1: rekap gangguan bulan ini. Slide 2: bagaimana cara mengatasi penyebab gangguan terbanyak tersebut.",
   "Buatkan 1 slide kesimpulan kinerja UPT secara umum berdasarkan seluruh modul yang ada.",
 ];
+
+/** A materi's slide(s) go into the deck as an independent COPY the moment
+ *  its checkbox is checked — editing that copy afterward (title, bullets,
+ *  which chart is shown) never reaches back into the catalog, so toggling
+ *  the checkbox off and back on always gives a fresh, un-edited version
+ *  again, and editing one slide never affects another checkbox's slides. */
+function cloneSlide(s: PresentationSlide): PresentationSlide {
+  return {
+    ...s,
+    bullets: [...s.bullets],
+    stats: s.stats?.map((x) => ({ ...x })),
+    table: s.table ? { headers: [...s.table.headers], rows: s.table.rows.map((r) => [...r]) } : undefined,
+    chartOptions: s.chartOptions?.map((c) => ({ ...c, data: [...c.data] })),
+    activeChartIds: s.activeChartIds ? [...s.activeChartIds] : undefined,
+  };
+}
 
 /** One selectable card in the materi picker — "data" materi toggle on/off
  *  directly (slides already computed server-side); "ai-prompt" materi (only
@@ -88,9 +105,100 @@ function MateriCard({
   );
 }
 
+/** Inline per-slide editor — title/subtitle text, bullets (one per line),
+ *  and which of the slide's precomputed chart options are shown. This is
+ *  the "tidak perlu mengulang dari awal" piece: adjusting one slide never
+ *  touches any other slide or re-fetches anything, it just edits the
+ *  already-staged copy in place. */
+function SlideEditorPanel({
+  slide,
+  onSave,
+  onCancel,
+}: {
+  slide: PresentationSlide;
+  onSave: (patch: Partial<PresentationSlide>) => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState(slide.title);
+  const [subtitle, setSubtitle] = useState(slide.subtitle ?? "");
+  const [bulletsText, setBulletsText] = useState(slide.bullets.join("\n"));
+  const [activeChartIds, setActiveChartIds] = useState<string[]>(slide.activeChartIds ?? []);
+
+  function toggleChart(id: string) {
+    setActiveChartIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  }
+
+  function handleSave() {
+    onSave({
+      title: title.trim() || slide.title,
+      subtitle: subtitle.trim() || undefined,
+      bullets: bulletsText
+        .split("\n")
+        .map((b) => b.trim())
+        .filter(Boolean),
+      activeChartIds,
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
+          Judul Slide
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
+          Subjudul (opsional)
+          <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="—" />
+        </label>
+      </div>
+
+      <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
+        Poin-poin (satu baris = satu poin)
+        <Textarea value={bulletsText} onChange={(e) => setBulletsText(e.target.value)} className="min-h-24 resize-y" />
+      </label>
+
+      {slide.chartOptions && slide.chartOptions.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-semibold text-muted-foreground">Grafik yang ditampilkan di slide ini</p>
+          <div className="flex flex-wrap gap-2">
+            {slide.chartOptions.map((c) => {
+              const active = activeChartIds.includes(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => toggleChart(c.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50",
+                  )}
+                >
+                  {active ? <Check className="size-3" /> : null}
+                  {c.title ?? c.type}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+          Batal
+        </Button>
+        <Button type="button" size="sm" onClick={handleSave}>
+          Simpan
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function PresentationBuilderView({ catalog }: { catalog: PresentationMateriOption[] }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [aiSlides, setAiSlides] = useState<PresentationSlide[]>([]);
+  const [stagedSlides, setStagedSlides] = useState<PresentationSlide[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [instruction, setInstruction] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -106,19 +214,20 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
     return [...byGroup.entries()];
   }, [catalog]);
 
-  const dataSlides = useMemo(
-    () => catalog.filter((o) => o.kind === "data" && selectedIds.has(o.id)).flatMap((o) => o.slides),
-    [catalog, selectedIds],
-  );
-  const stagedSlides = useMemo(() => [...dataSlides, ...aiSlides], [dataSlides, aiSlides]);
+  function toggleMateri(option: PresentationMateriOption) {
+    const wasSelected = selectedIds.has(option.id);
+    const nextIds = new Set(selectedIds);
+    if (wasSelected) nextIds.delete(option.id);
+    else nextIds.add(option.id);
+    setSelectedIds(nextIds);
 
-  function toggleMateri(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    if (wasSelected) {
+      const ownedIds = new Set(option.slides.map((s) => s.id));
+      setStagedSlides((prev) => prev.filter((s) => !ownedIds.has(s.id)));
+      if (editingId && ownedIds.has(editingId)) setEditingId(null);
+    } else {
+      setStagedSlides((prev) => [...prev, ...option.slides.map(cloneSlide)]);
+    }
   }
 
   function removeSlide(id: string) {
@@ -129,9 +238,14 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
         next.delete(owner.id);
         return next;
       });
-    } else {
-      setAiSlides((prev) => prev.filter((s) => s.id !== id));
     }
+    setStagedSlides((prev) => prev.filter((s) => s.id !== id));
+    if (editingId === id) setEditingId(null);
+  }
+
+  function updateSlide(id: string, patch: Partial<PresentationSlide>) {
+    setStagedSlides((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setEditingId(null);
   }
 
   function useAiPrompt(prompt: string) {
@@ -156,7 +270,7 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
         setAiError(data.error ?? "Terjadi kesalahan tak terduga.");
         return;
       }
-      setAiSlides((prev) => [...prev, ...data.slides!]);
+      setStagedSlides((prev) => [...prev, ...data.slides!]);
       setInstruction("");
     } catch (err) {
       setAiError(`Gagal menghubungi server: ${err instanceof Error ? err.message : String(err)}`);
@@ -178,7 +292,7 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
                   key={option.id}
                   option={option}
                   selected={selectedIds.has(option.id)}
-                  onToggle={() => toggleMateri(option.id)}
+                  onToggle={() => toggleMateri(option)}
                   onUseAiPrompt={useAiPrompt}
                 />
               ))}
@@ -196,8 +310,8 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
             <p className="text-sm font-bold text-foreground">2. AI Assistant — untuk materi yang belum tersedia sebagai data</p>
             <p className="text-xs text-muted-foreground">
               Ketik rencana slide dalam bahasa natural (mis. &quot;slide 1: rekap gangguan, slide 2: bagaimana mengatasi gangguan
-              tersebut&quot;) — AI akan mengambil data nyata lewat modul terkait untuk slide berbasis data, dan menyusun analisis
-              berdasar data tsb untuk slide yang butuh rekomendasi/kesimpulan.
+              tersebut&quot;) — AI akan mengambil data nyata lewat modul terkait, menyertakan grafik bila relevan, dan menyusun
+              analisis berdasar data tsb untuk slide yang butuh rekomendasi/kesimpulan.
             </p>
           </div>
         </div>
@@ -257,23 +371,39 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
           <>
             <div className="flex flex-col gap-1.5">
               {stagedSlides.map((s, i) => (
-                <div key={s.id} className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5">
-                  <span className="text-xs font-bold tabular-nums text-muted-foreground">{i + 1}.</span>
-                  <span className="flex-1 truncate text-sm font-medium text-foreground">{s.title}</span>
-                  {s.aiGenerated ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                      <Sparkles className="size-2.5" />
-                      AI
-                    </span>
+                <div key={s.id} className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5">
+                    <span className="text-xs font-bold tabular-nums text-muted-foreground">{i + 1}.</span>
+                    <span className="flex-1 truncate text-sm font-medium text-foreground">{s.title}</span>
+                    {s.aiGenerated ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                        <Sparkles className="size-2.5" />
+                        AI
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setEditingId((prev) => (prev === s.id ? null : s.id))}
+                      aria-label={`Ubah slide ${s.title}`}
+                      className={cn(
+                        "flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground",
+                        editingId === s.id && "bg-background text-foreground",
+                      )}
+                    >
+                      {editingId === s.id ? <ChevronDown className="size-3.5" /> : <Pencil className="size-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeSlide(s.id)}
+                      aria-label={`Hapus slide ${s.title}`}
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-critical"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                  {editingId === s.id ? (
+                    <SlideEditorPanel slide={s} onSave={(patch) => updateSlide(s.id, patch)} onCancel={() => setEditingId(null)} />
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => removeSlide(s.id)}
-                    aria-label={`Hapus slide ${s.title}`}
-                    className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-critical"
-                  >
-                    <X className="size-3.5" />
-                  </button>
                 </div>
               ))}
             </div>

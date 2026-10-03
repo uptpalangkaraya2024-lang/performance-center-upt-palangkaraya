@@ -1152,6 +1152,21 @@ export interface AssetScanningResult {
 // handful of stat tiles. This keeps the deck viewer (one renderer) and the
 // PPTX export (one mapping function) from needing a case per source module.
 
+/** A single-series chart attached to a slide. "pareto" is the one special
+ *  case: `data` is sorted descending by value and `cumulativePercent` runs
+ *  alongside it (same length, same order) for the classic bar+cumulative-%
+ *  line combo — built by src/lib/presentation-chart-compute.ts so both the
+ *  server-side materi builders AND the AI route (whose own "pareto" slides
+ *  go through the same helper) produce it identically. */
+export interface PresentationChartSpec {
+  id: string;
+  type: "bar" | "pie" | "pareto";
+  title?: string;
+  data: { name: string; value: number }[];
+  /** "pareto" only — running cumulative percentage (0-100), same order/length as `data`. */
+  cumulativePercent?: number[];
+}
+
 export interface PresentationSlide {
   id: string;
   title: string;
@@ -1160,6 +1175,16 @@ export interface PresentationSlide {
   bullets: string[];
   stats?: { value: string; label: string }[];
   table?: { headers: string[]; rows: string[][] };
+  /** Every chart this slide COULD show — a module like Gangguan computes
+   *  more than one relevant angle (pareto penyebab, pie kategori), and the
+   *  per-slide editor lets the user turn each on/off without regenerating
+   *  anything else. `activeChartIds` is what's actually rendered right now;
+   *  it starts pre-populated with whichever option is most informative for
+   *  that module, per the user's own "dibuat default... informatif" request
+   *  — a slide is never a plain bullet list by default when real numeric
+   *  breakdown data exists for it. */
+  chartOptions?: PresentationChartSpec[];
+  activeChartIds?: string[];
   /** e.g. "Sumber: Kinerja UPT — periode Agustus 2026". Null/undefined when
    *  the slide is pure AI analysis with nothing from a tool to cite. */
   sourceNote?: string | null;

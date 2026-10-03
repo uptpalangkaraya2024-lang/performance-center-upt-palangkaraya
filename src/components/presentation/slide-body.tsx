@@ -2,6 +2,7 @@ import { Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { PresentationSlide } from "@/types";
+import { SlideChart } from "./slide-chart";
 
 /** One stat tile inside a slide — same visual role as every other module's
  *  own stat tiles (Data Aset, Gangguan presentation mode, ...), kept local
@@ -17,10 +18,32 @@ function SlideStatTile({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** A slide's body content — stats grid, bullet list, and/or a small table —
- *  shared between the stacked/print view and the fullscreen present mode in
- *  presentation-slide-deck.tsx so the two never visually drift apart. */
+function BulletList({ bullets }: { bullets: string[] }) {
+  return (
+    <ul className="flex flex-col gap-2">
+      {bullets.map((b, i) => (
+        <li key={i} className="flex items-start gap-2 text-sm text-foreground sm:text-base">
+          <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
+          <span>{b}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A slide's body content — stats grid, chart(s), bullet list, and/or a
+ *  small table — shared between the stacked/print view and the fullscreen
+ *  present mode in presentation-slide-deck.tsx so the two never visually
+ *  drift apart.
+ *
+ *  When a slide has an active chart AND bullets, they sit side by side
+ *  (chart wider, since that's the thing doing the visual work) rather than
+ *  stacked — a plain bullet list under a chart under stats reads as a
+ *  report, not a slide. Per the user's explicit "jangan hanya list, buat
+ *  informatif" request, mirroring Gangguan's own Mode Presentasi layout. */
 export function SlideBody({ slide }: { slide: PresentationSlide }) {
+  const activeCharts = (slide.chartOptions ?? []).filter((c) => (slide.activeChartIds ?? []).includes(c.id));
+
   return (
     <div className="flex flex-1 flex-col gap-4">
       {slide.aiGenerated ? (
@@ -38,15 +61,27 @@ export function SlideBody({ slide }: { slide: PresentationSlide }) {
         </div>
       ) : null}
 
-      {slide.bullets.length > 0 ? (
-        <ul className="flex flex-col gap-2">
-          {slide.bullets.map((b, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-foreground sm:text-base">
-              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
-              <span>{b}</span>
-            </li>
+      {activeCharts.length > 0 && slide.bullets.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          <div className={cn("grid gap-3", activeCharts.length > 1 ? "sm:grid-cols-2" : "grid-cols-1")}>
+            {activeCharts.map((c) => (
+              <div key={c.id} className="h-72">
+                <SlideChart spec={c} />
+              </div>
+            ))}
+          </div>
+          <BulletList bullets={slide.bullets} />
+        </div>
+      ) : activeCharts.length > 0 ? (
+        <div className={cn("grid gap-3", activeCharts.length > 1 ? "sm:grid-cols-2" : "grid-cols-1")}>
+          {activeCharts.map((c) => (
+            <div key={c.id} className="h-72">
+              <SlideChart spec={c} />
+            </div>
           ))}
-        </ul>
+        </div>
+      ) : slide.bullets.length > 0 ? (
+        <BulletList bullets={slide.bullets} />
       ) : null}
 
       {slide.table ? (
