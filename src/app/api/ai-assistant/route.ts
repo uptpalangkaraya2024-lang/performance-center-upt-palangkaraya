@@ -1,7 +1,8 @@
-import { ApiError, GoogleGenAI, type Content, type GenerateContentResponse, type Part } from "@google/genai";
+import type { Content } from "@google/genai";
 import { NextResponse } from "next/server";
 
 import { AI_ASSISTANT_TOOLS, runAiTool, type AiToolName } from "@/lib/ai-assistant-tools";
+import { isRetryableGeminiError, runGeminiToolChat } from "@/lib/gemini-tool-chat";
 
 // AI Assistant chat backend — the one place in this app that actually calls
 // an LLM (see src/lib/ai-assistant-tools.ts's own top comment for why the
@@ -16,58 +17,9 @@ import { AI_ASSISTANT_TOOLS, runAiTool, type AiToolName } from "@/lib/ai-assista
 // pay-as-you-go-only Console.
 export const maxDuration = 60;
 
-// A hardcoded version number turned out to churn fast: gemini-2.5-flash was
-// rejected live ("no longer available to new users"), and its suggested
-// replacement gemini-3.8-flash then came back 503 "high demand" (a brand-new
-// model's launch-week capacity crunch). "gemini-flash-latest" is Google's
-// own alias for "whichever flash model is currently the recommended,
-// generally-available one" — it sidesteps this exact version-pin churn
-// instead of chasing it again next time a model gets retired/replaced.
-//
-// Even the alias hit a sustained 503 "high demand" live (confirmed across
-// several retries a minute apart — not a one-off blip), which free-tier
-// flash capacity is apparently prone to. FALLBACK_MODEL gives one more
-// shot on a separate, usually-less-congested capacity pool before giving up.
-const MODEL = "gemini-flash-latest";
-const FALLBACK_MODEL = "gemini-flash-lite-latest";
-
-function isRetryableApiError(err: unknown): boolean {
-  return err instanceof ApiError && (err.status === 503 || err.status === 429);
-}
-
-async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Calls generateContent against MODEL, retrying a transient 503/429 with a
- *  short backoff, then falling back to FALLBACK_MODEL for the rest of this
- *  request if MODEL is still unavailable — rather than failing the whole
- *  question over what Google itself calls a "usually temporary" spike. */
-async function generateContentWithRetry(
-  ai: GoogleGenAI,
-  params: Omit<Parameters<GoogleGenAI["models"]["generateContent"]>[0], "model">,
-  currentModel: { name: string },
-): Promise<GenerateContentResponse> {
-  const attempts: { model: string; delayMs: number }[] = [
-    { model: currentModel.name, delayMs: 0 },
-    { model: currentModel.name, delayMs: 1500 },
-    { model: FALLBACK_MODEL, delayMs: 0 },
-    { model: FALLBACK_MODEL, delayMs: 1500 },
-  ];
-  let lastErr: unknown;
-  for (const attempt of attempts) {
-    if (attempt.delayMs > 0) await sleep(attempt.delayMs);
-    try {
-      const response = await ai.models.generateContent({ ...params, model: attempt.model });
-      currentModel.name = attempt.model; // stick with whichever model actually answered for the rest of this request
-      return response;
-    } catch (err) {
-      lastErr = err;
-      if (!isRetryableApiError(err)) throw err;
-    }
-  }
-  throw lastErr;
-}
+// Model selection / retry-fallback logic lives in src/lib/gemini-tool-chat.ts
+// (shared with /api/presentation-assistant) — see that file's own comment
+// for why "gemini-flash-latest" is an alias rather than a pinned version.
 
 const SYSTEM_PROMPT = `Anda adalah AI Assistant Performance Center UPT Palangkaraya — asisten operasional untuk tim UPT Palangkaraya (unit transmisi listrik PLN).
 
@@ -118,72 +70,22 @@ export async function POST(request: Request) {
   }
   const messages: ChatMessage[] = rawMessages;
 
-  const ai = new GoogleGenAI({ apiKey });
   const contents: Content[] = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
-  const toolsUsed = new Set<string>();
 
-  // Tool-use loop: Gemini may call one or more tools before giving a final
-  // text answer. Capped at a handful of round-trips as a safety net against
-  // a runaway loop — every tool here is a fast, cheap read (existing service
-  // caches), so this cap is generous relative to how many calls a real
-  // question ever needs.
-  const MAX_ROUNDS = 6;
-  let finalText: string | null = null;
-  const currentModel = { name: MODEL };
-
+  let result;
   try {
-    for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await generateContentWithRetry(
-        ai,
-        {
-          contents,
-          config: {
-            systemInstruction: SYSTEM_PROMPT,
-            tools: [
-              {
-                functionDeclarations: AI_ASSISTANT_TOOLS.map((t) => ({
-                  name: t.name,
-                  description: t.description,
-                  parametersJsonSchema: t.parameters,
-                })),
-              },
-            ],
-          },
-        },
-        currentModel,
-      );
-
-      const functionCalls = response.functionCalls ?? [];
-      if (functionCalls.length === 0) {
-        finalText = (response.text ?? "").trim();
-        break;
-      }
-
-      // Echo the model's own function-call turn back into the conversation
-      // before appending the results — Gemini expects to see its own
-      // request alongside the matching response on the next turn.
-      const modelContent = response.candidates?.[0]?.content;
-      contents.push(modelContent ?? { role: "model", parts: functionCalls.map((fc) => ({ functionCall: fc })) });
-
-      const responseParts: Part[] = [];
-      for (const call of functionCalls) {
-        const name = call.name as AiToolName;
-        toolsUsed.add(name);
-        let output: unknown;
-        try {
-          output = await runAiTool(name, call.args ?? {});
-        } catch (err) {
-          output = { error: `Gagal memanggil data: ${err instanceof Error ? err.message : String(err)}` };
-        }
-        responseParts.push({ functionResponse: { id: call.id, name: call.name, response: { output } } });
-      }
-      contents.push({ role: "user", parts: responseParts });
-    }
+    result = await runGeminiToolChat({
+      apiKey,
+      systemPrompt: SYSTEM_PROMPT,
+      initialContents: contents,
+      tools: AI_ASSISTANT_TOOLS,
+      runTool: (name, args) => runAiTool(name as AiToolName, args),
+    });
   } catch (err) {
-    if (isRetryableApiError(err)) {
+    if (isRetryableGeminiError(err)) {
       return NextResponse.json(
         { error: "Layanan Gemini sedang mengalami lonjakan permintaan tinggi (masalah sementara dari Google, bukan konfigurasi Anda) — coba lagi dalam beberapa saat." },
         { status: 503 },
@@ -193,12 +95,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Gagal menghubungi Gemini API: ${message}` }, { status: 502 });
   }
 
-  if (finalText === null) {
+  if (result.finalText === null) {
     return NextResponse.json(
       { error: "Asisten tidak memberikan jawaban akhir dalam batas percakapan yang wajar — coba pertanyaan yang lebih spesifik." },
       { status: 502 },
     );
   }
 
-  return NextResponse.json({ reply: finalText, toolsUsed: [...toolsUsed] });
+  return NextResponse.json({ reply: result.finalText, toolsUsed: result.toolsUsed });
 }

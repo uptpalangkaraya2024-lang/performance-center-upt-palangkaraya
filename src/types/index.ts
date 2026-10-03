@@ -1143,3 +1143,51 @@ export interface AssetScanningResult {
   data: AssetScanningSnapshot | null;
   error: string | null;
 }
+
+// --- Presentasi (cross-module slide builder) --------------------------
+//
+// One generic shape covers every slide regardless of which module it came
+// from (Kinerja UPT, Gangguan, ABO, the AI assistant, ...) — a slide is
+// just a title + a short list of facts, optionally a small table and a
+// handful of stat tiles. This keeps the deck viewer (one renderer) and the
+// PPTX export (one mapping function) from needing a case per source module.
+
+export interface PresentationSlide {
+  id: string;
+  title: string;
+  subtitle?: string;
+  /** Short, presentation-ready points — never a raw data dump. */
+  bullets: string[];
+  stats?: { value: string; label: string }[];
+  table?: { headers: string[]; rows: string[][] };
+  /** e.g. "Sumber: Kinerja UPT — periode Agustus 2026". Null/undefined when
+   *  the slide is pure AI analysis with nothing from a tool to cite. */
+  sourceNote?: string | null;
+  /** True when this slide's content is AI-authored analysis/recommendation
+   *  rather than a direct readout of dashboard data — rendered with a
+   *  distinct badge so a viewer never mistakes a suggestion for an official
+   *  record, per the user's own "AI digunakan ketika data tidak sepenuhnya
+   *  tersedia" framing. */
+  aiGenerated?: boolean;
+}
+
+/** One selectable item in the "Materi Presentasi" picker. "data" materi
+ *  already have their slide(s) precomputed from real service data (checking
+ *  it just adds those slides to the deck) — "ai-prompt" materi have none:
+ *  the data for them (e.g. "kendala & usulan") isn't something any module
+ *  tracks directly, so picking it only offers a ready-made instruction the
+ *  user can hand to the AI Assistant box below. */
+export interface PresentationMateriOption {
+  id: string;
+  label: string;
+  description: string;
+  group: string;
+  kind: "data" | "ai-prompt";
+  slides: PresentationSlide[];
+  suggestedPrompt?: string;
+}
+
+export interface PresentationMateriCatalog {
+  options: PresentationMateriOption[];
+  error: string | null;
+}

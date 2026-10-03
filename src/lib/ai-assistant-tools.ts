@@ -35,6 +35,7 @@ import { getAhiPerformance } from "@/services/ahi-performance";
 import { getDisturbances } from "@/services/disturbances";
 import { getFourDxSnapshot } from "@/services/four-dx";
 import { getRenusData } from "@/services/renus";
+import { getAssetScanning } from "@/services/asset-scanning";
 import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import {
   buildAboSnapshotComputed,
@@ -116,6 +117,12 @@ export const AI_ASSISTANT_TOOLS = [
     name: "renus",
     description:
       "RENUS (rencana pemeliharaan/pekerjaan) — pekerjaan terlambat, hari ini, minggu berjalan (berisiko tinggi), dan rencana bulan depan.",
+    parameters: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "data_aset",
+    description:
+      "Data Aset — hasil scanning proteksi (MPU/BPU Bay Line, Bus Protection) dan temuan anomali per ULTG/GI/ruas dari REKAPITULASI SCANNING: status normal vs anomali per relay, temuan terbuka/selesai, dan rencana penggantian relay obsolete.",
     parameters: { type: "object" as const, properties: {} },
   },
   {
@@ -333,6 +340,23 @@ export async function runAiTool(name: AiToolName, input: Record<string, unknown>
         catatan: data.reminders.map((r) => r.text),
         terlambat: overdue.slice(0, 10).map((r) => ({ ultg: r.ultg, gi: r.gi, pekerjaan: r.workDetail, tanggalRencana: r.rencanaDate })),
         hariIniDaftar: today.slice(0, 10).map((r) => ({ ultg: r.ultg, gi: r.gi, pekerjaan: r.workDetail })),
+      };
+    }
+    case "data_aset": {
+      const result = await getAssetScanning();
+      if (result.error || !result.data) return { error: result.error ?? "Data Aset tidak tersedia." };
+      const d = result.data;
+      const anomaliSelesai = d.anomali.filter((a) => (a.status ?? "").toUpperCase() === "SELESAI").length;
+      return {
+        mpuBayLine: { total: d.mpuBayLine.length, anomali: d.mpuBayLine.filter((r) => r.anomaliStatus.toUpperCase() !== "NORMAL").length },
+        bpuBayLine: { total: d.bpuBayLine.length, anomali: d.bpuBayLine.filter((r) => r.anomaliStatus.toUpperCase() !== "NORMAL").length },
+        mpuBuspro: { total: d.mpuBuspro.length, adaBusProtection: d.mpuBuspro.filter((r) => r.adaTidak.toUpperCase() === "ADA").length },
+        temuanAnomali: { total: d.anomali.length, selesai: anomaliSelesai, belumSelesai: d.anomali.length - anomaliSelesai },
+        rencanaPenggantianRelayObsolete: d.relayObsolete.length,
+        temuanBelumSelesai: d.anomali
+          .filter((a) => (a.status ?? "").toUpperCase() !== "SELESAI")
+          .slice(0, 15)
+          .map((a) => ({ ultg: a.ultg, bayGi: a.bayGi, peralatan: a.peralatan, anomali: a.anomali, status: a.status })),
       };
     }
     case "management_attention": {

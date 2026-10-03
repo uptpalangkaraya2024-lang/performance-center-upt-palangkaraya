@@ -12,6 +12,7 @@ import {
   ClipboardList,
   DatabaseZap,
   Sparkles,
+  Presentation,
   Settings,
 } from "lucide-react";
 
@@ -57,6 +58,10 @@ export const navGroups: NavGroup[] = [
   {
     label: "Planning",
     items: [{ title: "RENUS", href: "/dashboard/renus", icon: ClipboardList }],
+  },
+  {
+    label: "Presentasi",
+    items: [{ title: "Presentasi", href: "/dashboard/presentasi", icon: Presentation }],
   },
   {
     label: "Data",
