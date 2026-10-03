@@ -1216,3 +1216,27 @@ export interface PresentationMateriCatalog {
   options: PresentationMateriOption[];
   error: string | null;
 }
+
+/** A presentation the user explicitly saved from the Presentasi builder —
+ *  persisted in Redis (src/services/saved-presentations.ts), not derived
+ *  from any spreadsheet. `id` is stable across edits so re-saving the same
+ *  presentation updates it in place instead of creating a duplicate. */
+export interface SavedPresentation {
+  id: string;
+  name: string;
+  slides: PresentationSlide[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The list view's own shape — full `slides` left out on purpose (a saved
+ *  deck's slides can carry a fair amount of chart data; the "Presentasi
+ *  Tersimpan" browser only ever needs the name/count/date to render each
+ *  row, the full record is fetched only when one is actually opened). */
+export interface SavedPresentationSummary {
+  id: string;
+  name: string;
+  slideCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
