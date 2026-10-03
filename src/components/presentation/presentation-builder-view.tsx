@@ -1,10 +1,9 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Loader2, Pencil, Sparkles, TriangleAlert, Wand2, X } from "lucide-react";
+import { Check, Loader2, Sparkles, TriangleAlert, Wand2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { PresentationMateriOption, PresentationSlide } from "@/types";
@@ -105,100 +104,9 @@ function MateriCard({
   );
 }
 
-/** Inline per-slide editor — title/subtitle text, bullets (one per line),
- *  and which of the slide's precomputed chart options are shown. This is
- *  the "tidak perlu mengulang dari awal" piece: adjusting one slide never
- *  touches any other slide or re-fetches anything, it just edits the
- *  already-staged copy in place. */
-function SlideEditorPanel({
-  slide,
-  onSave,
-  onCancel,
-}: {
-  slide: PresentationSlide;
-  onSave: (patch: Partial<PresentationSlide>) => void;
-  onCancel: () => void;
-}) {
-  const [title, setTitle] = useState(slide.title);
-  const [subtitle, setSubtitle] = useState(slide.subtitle ?? "");
-  const [bulletsText, setBulletsText] = useState(slide.bullets.join("\n"));
-  const [activeChartIds, setActiveChartIds] = useState<string[]>(slide.activeChartIds ?? []);
-
-  function toggleChart(id: string) {
-    setActiveChartIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
-  }
-
-  function handleSave() {
-    onSave({
-      title: title.trim() || slide.title,
-      subtitle: subtitle.trim() || undefined,
-      bullets: bulletsText
-        .split("\n")
-        .map((b) => b.trim())
-        .filter(Boolean),
-      activeChartIds,
-    });
-  }
-
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
-          Judul Slide
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
-          Subjudul (opsional)
-          <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="—" />
-        </label>
-      </div>
-
-      <label className="flex flex-col gap-1 text-xs font-semibold text-muted-foreground">
-        Poin-poin (satu baris = satu poin)
-        <Textarea value={bulletsText} onChange={(e) => setBulletsText(e.target.value)} className="min-h-24 resize-y" />
-      </label>
-
-      {slide.chartOptions && slide.chartOptions.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-semibold text-muted-foreground">Grafik yang ditampilkan di slide ini</p>
-          <div className="flex flex-wrap gap-2">
-            {slide.chartOptions.map((c) => {
-              const active = activeChartIds.includes(c.id);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => toggleChart(c.id)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50",
-                  )}
-                >
-                  {active ? <Check className="size-3" /> : null}
-                  {c.title ?? c.type}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-          Batal
-        </Button>
-        <Button type="button" size="sm" onClick={handleSave}>
-          Simpan
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export function PresentationBuilderView({ catalog }: { catalog: PresentationMateriOption[] }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [stagedSlides, setStagedSlides] = useState<PresentationSlide[]>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [instruction, setInstruction] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -224,7 +132,6 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
     if (wasSelected) {
       const ownedIds = new Set(option.slides.map((s) => s.id));
       setStagedSlides((prev) => prev.filter((s) => !ownedIds.has(s.id)));
-      if (editingId && ownedIds.has(editingId)) setEditingId(null);
     } else {
       setStagedSlides((prev) => [...prev, ...option.slides.map(cloneSlide)]);
     }
@@ -240,12 +147,25 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
       });
     }
     setStagedSlides((prev) => prev.filter((s) => s.id !== id));
-    if (editingId === id) setEditingId(null);
   }
 
   function updateSlide(id: string, patch: Partial<PresentationSlide>) {
     setStagedSlides((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-    setEditingId(null);
+  }
+
+  // "Menggeser" a slide up/down one position — a reliable click target
+  // beats a drag handle for a deck that's often a dozen+ slides tall, and
+  // it's what the user explicitly asked for.
+  function moveSlide(id: string, direction: "up" | "down") {
+    setStagedSlides((prev) => {
+      const idx = prev.findIndex((s) => s.id === id);
+      if (idx === -1) return prev;
+      const swapWith = direction === "up" ? idx - 1 : idx + 1;
+      if (swapWith < 0 || swapWith >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+      return next;
+    });
   }
 
   function useAiPrompt(prompt: string) {
@@ -311,7 +231,8 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
             <p className="text-xs text-muted-foreground">
               Ketik rencana slide dalam bahasa natural (mis. &quot;slide 1: rekap gangguan, slide 2: bagaimana mengatasi gangguan
               tersebut&quot;) — AI akan mengambil data nyata lewat modul terkait, menyertakan grafik bila relevan, dan menyusun
-              analisis berdasar data tsb untuk slide yang butuh rekomendasi/kesimpulan.
+              analisis berdasar data tsb untuk slide yang butuh rekomendasi/kesimpulan. Sudah ada slide di bawah? Buka tombol
+              pensil pada slide itu sendiri untuk perintah AI yang lebih spesifik (mis. &quot;tambahkan grafik ...&quot;).
             </p>
           </div>
         </div>
@@ -361,55 +282,20 @@ export function PresentationBuilderView({ catalog }: { catalog: PresentationMate
 
       <div className="flex flex-col gap-3">
         <p className="text-sm font-bold tracking-wide text-foreground uppercase">
-          3. Slide Terpilih {stagedSlides.length > 0 ? `(${stagedSlides.length})` : ""}
+          3. Slide Presentasi {stagedSlides.length > 0 ? `(${stagedSlides.length})` : ""}
         </p>
         {stagedSlides.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Pilih materi di atas atau gunakan AI Assistant untuk mulai menyusun presentasi.
           </p>
         ) : (
-          <>
-            <div className="flex flex-col gap-1.5">
-              {stagedSlides.map((s, i) => (
-                <div key={s.id} className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5">
-                    <span className="text-xs font-bold tabular-nums text-muted-foreground">{i + 1}.</span>
-                    <span className="flex-1 truncate text-sm font-medium text-foreground">{s.title}</span>
-                    {s.aiGenerated ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                        <Sparkles className="size-2.5" />
-                        AI
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setEditingId((prev) => (prev === s.id ? null : s.id))}
-                      aria-label={`Ubah slide ${s.title}`}
-                      className={cn(
-                        "flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground",
-                        editingId === s.id && "bg-background text-foreground",
-                      )}
-                    >
-                      {editingId === s.id ? <ChevronDown className="size-3.5" /> : <Pencil className="size-3.5" />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeSlide(s.id)}
-                      aria-label={`Hapus slide ${s.title}`}
-                      className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-critical"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                  {editingId === s.id ? (
-                    <SlideEditorPanel slide={s} onSave={(patch) => updateSlide(s.id, patch)} onCancel={() => setEditingId(null)} />
-                  ) : null}
-                </div>
-              ))}
-            </div>
-
-            <PresentationSlideDeck slides={stagedSlides} title="Presentasi UPT Palangkaraya" />
-          </>
+          <PresentationSlideDeck
+            slides={stagedSlides}
+            title="Presentasi UPT Palangkaraya"
+            onUpdateSlide={updateSlide}
+            onRemoveSlide={removeSlide}
+            onMoveSlide={moveSlide}
+          />
         )}
       </div>
     </div>

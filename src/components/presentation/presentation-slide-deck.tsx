@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Maximize2, Printer, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Maximize2, Pencil, Printer, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { PresentationSlide } from "@/types";
 import { SlideBody } from "./slide-body";
+import { SlideEditorPanel } from "./slide-editor-panel";
 import { ExportPptxButton } from "./export-pptx-button";
 
 /** Injects `@page { size: landscape; }` only while this view is mounted —
@@ -23,19 +25,97 @@ function useLandscapePrint() {
   }, []);
 }
 
+/** Move-up / move-down / edit / delete, attached directly to the slide they
+ *  act on — per explicit user feedback that the old top-of-page "Slide
+ *  Terpilih" list forced scrolling back up for every edit. Hidden from print
+ *  and from the fullscreen "present" mode (that view is for presenting to an
+ *  audience, not editing). */
+function SlideToolbar({
+  isFirst,
+  isLast,
+  isEditing,
+  onMoveUp,
+  onMoveDown,
+  onToggleEdit,
+  onRemove,
+}: {
+  isFirst: boolean;
+  isLast: boolean;
+  isEditing: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onToggleEdit: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1 print:hidden">
+      <button
+        type="button"
+        onClick={onMoveUp}
+        disabled={isFirst}
+        aria-label="Pindahkan slide ke atas"
+        className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+      >
+        <ChevronUp className="size-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onMoveDown}
+        disabled={isLast}
+        aria-label="Pindahkan slide ke bawah"
+        className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+      >
+        <ChevronDown className="size-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onToggleEdit}
+        aria-label="Ubah slide"
+        className={cn(
+          "flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
+          isEditing && "bg-muted text-foreground",
+        )}
+      >
+        <Pencil className="size-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Hapus slide"
+        className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-critical/10 hover:text-critical"
+      >
+        <X className="size-4" />
+      </button>
+    </div>
+  );
+}
+
 /**
- * Renders a composed deck two ways at once — a stacked, printable list (one
- * section per slide, `print:break-after-page`) and an on-demand fullscreen
- * "Mulai Presentasi" overlay with prev/next + keyboard navigation — the same
- * pattern already proven for Gangguan's own Mode Presentasi
- * (src/components/disturbances/disturbance-presentation-view.tsx), reused
- * here so a cross-module deck feels native to the rest of the app instead of
- * introducing a second, different presentation UX.
+ * Renders a composed deck two ways at once — a stacked, printable, EDITABLE
+ * list (one section per slide, each with its own move/edit/delete controls)
+ * and an on-demand fullscreen "Mulai Presentasi" overlay with prev/next +
+ * keyboard navigation — the same pattern already proven for Gangguan's own
+ * Mode Presentasi (src/components/disturbances/disturbance-presentation-view.tsx),
+ * reused here so a cross-module deck feels native to the rest of the app
+ * instead of introducing a second, different presentation UX.
  */
-export function PresentationSlideDeck({ slides, title }: { slides: PresentationSlide[]; title: string }) {
+export function PresentationSlideDeck({
+  slides,
+  title,
+  onUpdateSlide,
+  onRemoveSlide,
+  onMoveSlide,
+}: {
+  slides: PresentationSlide[];
+  title: string;
+  onUpdateSlide: (id: string, patch: Partial<PresentationSlide>) => void;
+  onRemoveSlide: (id: string) => void;
+  onMoveSlide: (id: string, direction: "up" | "down") => void;
+}) {
   useLandscapePrint();
   const [mode, setMode] = useState<"edit" | "present">("edit");
   const [activeSlide, setActiveSlide] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const clampSlide = useCallback((i: number) => Math.max(0, Math.min(slides.length - 1, i)), [slides.length]);
 
@@ -79,16 +159,51 @@ export function PresentationSlideDeck({ slides, title }: { slides: PresentationS
       </div>
 
       <div className="flex flex-col gap-5">
-        {slides.map((s) => (
+        {slides.map((s, i) => (
           <section
             key={s.id}
             className="flex min-h-[60vh] flex-col gap-4 rounded-2xl border bg-card p-6 print:min-h-[calc(100vh-24mm)] print:break-after-page print:rounded-none print:border-0 print:shadow-none"
           >
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight text-foreground">{s.title}</h2>
-              {s.subtitle ? <p className="text-base text-muted-foreground">{s.subtitle}</p> : null}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <span className="mt-1 text-sm font-bold tabular-nums text-muted-foreground print:hidden">{i + 1}.</span>
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">{s.title}</h2>
+                  {s.subtitle ? <p className="text-base text-muted-foreground">{s.subtitle}</p> : null}
+                </div>
+                {s.aiGenerated ? (
+                  <span className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary print:hidden">
+                    <Sparkles className="size-2.5" />
+                    AI
+                  </span>
+                ) : null}
+              </div>
+              <SlideToolbar
+                isFirst={i === 0}
+                isLast={i === slides.length - 1}
+                isEditing={editingId === s.id}
+                onMoveUp={() => onMoveSlide(s.id, "up")}
+                onMoveDown={() => onMoveSlide(s.id, "down")}
+                onToggleEdit={() => setEditingId((prev) => (prev === s.id ? null : s.id))}
+                onRemove={() => {
+                  if (editingId === s.id) setEditingId(null);
+                  onRemoveSlide(s.id);
+                }}
+              />
             </div>
-            <SlideBody slide={s} />
+
+            {editingId === s.id ? (
+              <SlideEditorPanel
+                slide={s}
+                onSave={(patch) => {
+                  onUpdateSlide(s.id, patch);
+                  setEditingId(null);
+                }}
+                onCancel={() => setEditingId(null)}
+              />
+            ) : (
+              <SlideBody slide={s} />
+            )}
           </section>
         ))}
       </div>

@@ -52,3 +52,35 @@ export function buildParetoChart(
     cumulativePercent: truncated.map((d) => d.cumulative),
   };
 }
+
+/** Dispatches to the right builder by type — shared by both AI routes
+ *  (presentation-assistant for a whole new slide plan, presentation-slide-edit
+ *  for patching one existing slide) so "pareto" always goes through
+ *  buildParetoChart's true-total math, never a one-off reimplementation. */
+export function buildChart(id: string, type: "bar" | "pie" | "pareto", title: string, data: { name: string; value: number }[]): PresentationChartSpec {
+  return type === "pareto" ? buildParetoChart(id, title, data) : buildChartSpec(id, type, title, data);
+}
+
+// --- AI JSON-response parsing helpers ---------------------------------------
+// Both /api/presentation-assistant and /api/presentation-slide-edit ask
+// Gemini for a JSON-only final answer and both need the same defensive
+// cleanup — Gemini sometimes wraps it in a ```json fence despite being told
+// not to, and both need to turn a raw {name, value} array into real numbers
+// a chart can use without trusting the model's own types.
+
+export function stripJsonFence(text: string): string {
+  return text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+}
+
+export function parseNameValuePoints(raw: unknown): { name: string; value: number }[] {
+  if (!Array.isArray(raw)) return [];
+  const points: { name: string; value: number }[] = [];
+  for (const entry of raw) {
+    const name = (entry as { name?: unknown })?.name;
+    const value = (entry as { value?: unknown })?.value;
+    if (typeof name === "string" && typeof value === "number" && Number.isFinite(value)) {
+      points.push({ name, value });
+    }
+  }
+  return points;
+}

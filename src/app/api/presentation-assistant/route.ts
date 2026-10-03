@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { AI_ASSISTANT_TOOLS, runAiTool, type AiToolName } from "@/lib/ai-assistant-tools";
 import { isRetryableGeminiError, runGeminiToolChat } from "@/lib/gemini-tool-chat";
-import { buildChartSpec, buildParetoChart } from "@/lib/presentation-chart-compute";
+import { buildChart, parseNameValuePoints, stripJsonFence } from "@/lib/presentation-chart-compute";
 import type { PresentationSlide } from "@/types";
 
 // The AI half of the Presentasi builder (src/app/dashboard/presentasi):
@@ -55,27 +55,10 @@ interface RawSlide {
   aiGenerated?: unknown;
 }
 
-function parseChartData(raw: unknown): { name: string; value: number }[] {
-  if (!Array.isArray(raw)) return [];
-  const points: { name: string; value: number }[] = [];
-  for (const entry of raw) {
-    const name = (entry as { name?: unknown })?.name;
-    const value = (entry as { value?: unknown })?.value;
-    if (typeof name === "string" && typeof value === "number" && Number.isFinite(value)) {
-      points.push({ name, value });
-    }
-  }
-  return points;
-}
-
 function parseSlides(text: string): PresentationSlide[] | null {
-  // Gemini sometimes wraps JSON in a ```json fence despite the instruction
-  // not to — stripped defensively rather than trusting the system prompt
-  // to be followed perfectly every time.
-  const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   let parsed: unknown;
   try {
-    parsed = JSON.parse(cleaned);
+    parsed = JSON.parse(stripJsonFence(text));
   } catch {
     return null;
   }
@@ -88,15 +71,10 @@ function parseSlides(text: string): PresentationSlide[] | null {
     const bullets = Array.isArray(raw.bullets) ? raw.bullets.filter((b): b is string => typeof b === "string") : [];
 
     const chartId = `ai-chart-${Date.now()}-${idx}`;
-    const chartData = raw.chart ? parseChartData(raw.chart.data) : [];
+    const chartData = raw.chart ? parseNameValuePoints(raw.chart.data) : [];
     const chartType = raw.chart?.type === "pie" || raw.chart?.type === "pareto" || raw.chart?.type === "bar" ? raw.chart.type : null;
     const chartTitle = typeof raw.chart?.title === "string" ? raw.chart.title : undefined;
-    const chart =
-      chartType && chartData.length > 0
-        ? chartType === "pareto"
-          ? buildParetoChart(chartId, chartTitle ?? "Pareto", chartData)
-          : buildChartSpec(chartId, chartType, chartTitle ?? "Grafik", chartData)
-        : null;
+    const chart = chartType && chartData.length > 0 ? buildChart(chartId, chartType, chartTitle ?? "Grafik", chartData) : null;
 
     slides.push({
       id: `ai-${Date.now()}-${idx}`,
