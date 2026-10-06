@@ -373,6 +373,79 @@ export function buildFourDxAchievementSummaries(
   });
 }
 
+export interface FourDxUltgLmDetail {
+  wigNumber: number;
+  lmCode: string;
+  lmDescription: string;
+  targetThisWeek: number;
+  realizedCount: number;
+  done: boolean;
+}
+
+export interface FourDxUltgResumeEntry {
+  ultg: string;
+  lmsEvaluated: number;
+  lmsTercapai: number;
+  percentTercapai: number | null;
+  details: FourDxUltgLmDetail[];
+}
+
+const ULTG_DISPLAY_ORDER = ["ULTG PALANGKARAYA", "ULTG PANGKALAN BUN", "ULTG MUARA TEWEH"];
+
+/** Per-ULTG achievement resume for the currently-selected week — scoped to
+ *  WIG 2 & 4 only, the two WIGs whose Lead Measures are genuinely tracked
+ *  per ULTG (see buildFourDxLm's `isUltgLevelLm` / the Monitoring sheet's
+ *  own per-ULTG rows). WIG 1 & 3's targets are per-bay/ruas, not pre-split
+ *  by ULTG in the source sheet at all, so folding them into a per-ULTG
+ *  target/realisasi number here would mean inventing a split the data
+ *  doesn't actually have — left out rather than guessed.
+ *
+ *  An (ULTG, LM) pair only counts toward lmsEvaluated/lmsTercapai when that
+ *  ULTG actually had a target > 0 that week — the same rule already used by
+ *  buildFourDxAchievementSummaries for the UPT-wide version (see its own
+ *  `targetMingguan > 0` filter), so a week with nothing assigned to an ULTG
+ *  doesn't silently count as a free pass or get ignored as a fail. */
+export function buildFourDxUltgResume(wigs: FourDxWig[]): FourDxUltgResumeEntry[] {
+  const byUltg = new Map<string, FourDxUltgResumeEntry>();
+
+  for (const wig of wigs) {
+    if (wig.number !== 2 && wig.number !== 4) continue;
+    for (const lm of wig.lms) {
+      for (const asset of lm.assets) {
+        const ultg = asset.asset;
+        let entry = byUltg.get(ultg);
+        if (!entry) {
+          entry = { ultg, lmsEvaluated: 0, lmsTercapai: 0, percentTercapai: null, details: [] };
+          byUltg.set(ultg, entry);
+        }
+        entry.details.push({
+          wigNumber: wig.number,
+          lmCode: lm.code,
+          lmDescription: lm.description,
+          targetThisWeek: asset.targetThisWeek,
+          realizedCount: asset.realizedCount,
+          done: asset.done,
+        });
+        if (asset.targetThisWeek > 0) {
+          entry.lmsEvaluated += 1;
+          if (asset.done) entry.lmsTercapai += 1;
+        }
+      }
+    }
+  }
+
+  const entries = [...byUltg.values()];
+  for (const entry of entries) {
+    entry.percentTercapai = entry.lmsEvaluated > 0 ? entry.lmsTercapai / entry.lmsEvaluated : null;
+  }
+  entries.sort((a, b) => {
+    const ai = ULTG_DISPLAY_ORDER.indexOf(a.ultg.toUpperCase());
+    const bi = ULTG_DISPLAY_ORDER.indexOf(b.ultg.toUpperCase());
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+  return entries;
+}
+
 /** WhatsApp-style recap text for one chosen period — mirrors the manual
  *  weekly update format (confirmed against a real example the user pasted):
  *  per-asset LMs get a plain "- <asset> ✅" line, ULTG-level LMs (WIG 2 & 4)

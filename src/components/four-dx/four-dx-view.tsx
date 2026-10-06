@@ -41,6 +41,7 @@ import {
   buildFourDxInsightRecap,
   buildFourDxOutcomeChart,
   buildFourDxOutcomeStatuses,
+  buildFourDxUltgResume,
   buildFourDxWigs,
   extractWigOutcomeTarget,
   formatFourDxWaRecap,
@@ -49,6 +50,7 @@ import {
   type FourDxAchievementSummary,
   type FourDxOutcomeChartPoint,
   type FourDxOutcomeStatus,
+  type FourDxUltgResumeEntry,
 } from "@/lib/four-dx-compute";
 import { cn } from "@/lib/utils";
 import type { FourDxLm, FourDxOutcomeSnapshot, FourDxSnapshot, FourDxWig } from "@/types";
@@ -128,6 +130,49 @@ function ResumeTable({ wigs }: { wigs: FourDxWig[] }) {
                 </tr>
               ))}
             </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Scoped to WIG 2 & 4 only — see buildFourDxUltgResume's own comment for
+// why WIG 1 & 3 can't honestly be split per ULTG with the data available.
+function UltgResumeTable({ entries }: { entries: FourDxUltgResumeEntry[] }) {
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted-foreground">Belum ada Lead Measure tingkat ULTG terjadwal pada periode ini.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2.5 font-bold">ULTG</th>
+            <th className="px-3 py-2.5 font-bold text-right">LM Dievaluasi</th>
+            <th className="px-3 py-2.5 font-bold text-right">Tercapai</th>
+            <th className="px-3 py-2.5 font-bold text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <tr key={entry.ultg} className="border-b last:border-0">
+              <td className="px-3 py-2 font-medium text-foreground">{entry.ultg}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{entry.lmsEvaluated}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-success">{entry.lmsTercapai}</td>
+              <td
+                className={cn(
+                  "px-3 py-2 text-right font-bold tabular-nums",
+                  entry.percentTercapai === null
+                    ? "text-muted-foreground"
+                    : entry.percentTercapai >= 1
+                      ? "text-success"
+                      : "text-warning-foreground",
+                )}
+              >
+                {formatPercent(entry.percentTercapai)}
+              </td>
+            </tr>
           ))}
         </tbody>
       </table>
@@ -582,6 +627,8 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
     [snapshot.wigs, snapshot.realizations, snapshot.monitoring, period],
   );
 
+  const ultgResume = useMemo(() => buildFourDxUltgResume(wigs), [wigs]);
+
   const waRecap = useMemo(
     () => formatFourDxWaRecap(period, snapshot.currentYear, wigs),
     [period, snapshot.currentYear, wigs],
@@ -746,6 +793,17 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
       </div>
 
       <AchievementSummaryCards wigs={wigs} summaries={achievementSummaries} wigLabels={wigLabels} />
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">
+          Resume Pencapaian per ULTG — Periode {MONTH_FULL_ID[monthAbbrIndex(monthAbbr)]}-M{weekOfMonth}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Lingkup WIG 2 &amp; 4 — satu-satunya Lead Measure yang targetnya benar-benar dipecah per ULTG di sheet sumber.
+          WIG 1 &amp; 3 bersifat per-bay/ruas dan tidak memiliki target per ULTG.
+        </p>
+        <UltgResumeTable entries={ultgResume} />
+      </div>
 
       <div className="flex flex-col gap-2">
         <h3 className="text-base font-extrabold tracking-tight text-foreground">Resume Semua Lead Measure</h3>
