@@ -777,6 +777,13 @@ export interface FourDxSnapshot {
  *  enough matching realization rows were found for it. */
 export interface FourDxAssetStatus {
   asset: string;
+  /** Which ULTG this ruas/bay belongs to — looked up from the realization
+   *  log's own per-record ULTG attribution (see buildAssetUltgLookup in
+   *  four-dx-compute.ts), since the TARGET WIG sheet's own per-asset rows
+   *  carry no ULTG column. Null only for a per-ULTG LM (WIG 2 & 4), where
+   *  `asset` already IS the ULTG name, or for a ruas with no realization
+   *  history anywhere to infer it from. */
+  ultg: string | null;
   targetThisWeek: number;
   realizedCount: number;
   done: boolean;

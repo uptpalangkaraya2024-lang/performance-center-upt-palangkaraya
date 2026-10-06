@@ -38,6 +38,39 @@ function isUltgLevelAsset(asset: string): boolean {
   return normalize(asset).startsWith("ULTG ");
 }
 
+/** Title-cases an all-caps ULTG string ("ULTG PALANGKARAYA" -> "ULTG
+ *  Palangkaraya") for display consistency with the Monitoring sheet's own
+ *  already-mixed-case "ULTG" column, which the per-ULTG resume table reads
+ *  from directly. */
+function titleCaseUltg(ultg: string): string {
+  return ultg
+    .toLowerCase()
+    .split(" ")
+    .map((w) => (w === "ultg" ? "ULTG" : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+
+/** Maps a ruas/bay asset name to the ULTG that logged its realizations —
+ *  the TARGET WIG sheet's own per-asset rows (WIG 1 & 3) carry no ULTG
+ *  column at all, but every realization record does (it's read from which
+ *  ULTG-specific sheet tab the completed action was logged in). Built from
+ *  the FULL realization history, not just the selected period, since a
+ *  ruas with nothing realized this particular week should still show which
+ *  ULTG it belongs to. Confirmed against live data: every one of the 45
+ *  currently-scheduled WIG 1 & 3 assets maps to exactly one ULTG with no
+ *  conflicting attribution — if a future asset ever did log under two
+ *  different ULTGs, the first one seen wins rather than erroring, since
+ *  this is a display aid, not a gate on any pass/fail number. */
+function buildAssetUltgLookup(realizations: FourDxRealization[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const r of realizations) {
+    if (!r.asset || !r.ultg) continue;
+    const key = normalize(r.asset);
+    if (!map.has(key)) map.set(key, titleCaseUltg(r.ultg));
+  }
+  return map;
+}
+
 export interface FourDxPeriodRange {
   /** Uncapped — can be "M5" for the trailing days of a long month. */
   label: string;
@@ -109,6 +142,7 @@ export function buildFourDxLm(
   useTargetTotalRow = false,
   isUltgLevelLm = false,
   fallbackMonitoringDescription: string | null = null,
+  assetUltgLookup: Map<string, string> | null = null,
 ): FourDxLm {
   let targetMingguanFromAssets = 0;
   let targetBulananFromAssets = 0;
@@ -199,6 +233,9 @@ export function buildFourDxLm(
         const realizedCount = m.weeklyRealisasi[period.lookupLabel] ?? 0;
         return {
           asset: m.ultg,
+          // Already IS the ULTG name on this branch — repeating it in its
+          // own `ultg` field would be redundant, so this stays null here.
+          ultg: null,
           targetThisWeek,
           realizedCount,
           done: targetThisWeek > 0 ? realizedCount >= targetThisWeek : realizedCount > 0,
@@ -210,6 +247,7 @@ export function buildFourDxLm(
         const targetThisWeek = asset.weeklyTargets[period.lookupLabel] ?? 0;
         return {
           asset: asset.asset,
+          ultg: assetUltgLookup?.get(normalize(asset.asset)) ?? null,
           targetThisWeek,
           realizedCount: matches.length,
           done: matches.length >= targetThisWeek,
@@ -235,6 +273,10 @@ export function buildFourDxWigs(
   realizations: FourDxRealization[],
   monitoring: FourDxMonitoringRow[],
 ): FourDxWig[] {
+  // Built once per call (not once per LM) — same realization history feeds
+  // every WIG 1 & 3 LM's breakdown below.
+  const assetUltgLookup = buildAssetUltgLookup(realizations);
+
   return wigsRaw.map((wig) => {
     // Monitoring's own "Wildly Important Goals (WIG)" column holds the same
     // goal statement as this WIG's title (minus the "WIG N. " prefix) —
@@ -268,6 +310,7 @@ export function buildFourDxWigs(
           wig.number === 4,
           wig.number === 2 || wig.number === 4,
           orderedMonitoringDescriptions[index] ?? null,
+          assetUltgLookup,
         ),
       ),
     };

@@ -207,6 +207,9 @@ function LmCard({ lm, wigNumber }: { lm: FourDxLm; wigNumber: number }) {
   // the WA recap's own formatFourDxWaRecap treatment for WIG 4.
   const isWig4 = wigNumber === 4;
   const breakdownAssets = isWig4 ? lm.assets.filter((asset) => asset.realizedCount > 0) : lm.assets;
+  // WIG 2 & 4 rows already ARE the ULTG name — only WIG 1 & 3's per-ruas
+  // rows need their own ULTG shown alongside.
+  const isUltgLevel = wigNumber === 2 || wigNumber === 4;
 
   // Colored LEFT-edge accent, not a full-width top stripe — see the
   // matching comment on ABO's ProgramCard for why (a solid bar across every
@@ -273,6 +276,11 @@ function LmCard({ lm, wigNumber }: { lm: FourDxLm; wigNumber: number }) {
                   )}
                   <span className={cn("flex-1 font-medium", isWig4 || asset.done ? "text-foreground" : "text-muted-foreground")}>
                     {asset.asset}
+                    {!isUltgLevel && asset.ultg ? (
+                      <span className="ml-2 rounded-full border bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                        {asset.ultg}
+                      </span>
+                    ) : null}
                   </span>
                   {isWig4 ? (
                     <span className="text-xs text-muted-foreground">({asset.realizedCount})</span>
