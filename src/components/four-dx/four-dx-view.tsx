@@ -41,6 +41,7 @@ import {
   buildFourDxInsightRecap,
   buildFourDxOutcomeChart,
   buildFourDxOutcomeStatuses,
+  buildFourDxUltgDetailRows,
   buildFourDxUltgResume,
   buildFourDxWigs,
   extractWigOutcomeTarget,
@@ -50,6 +51,7 @@ import {
   type FourDxAchievementSummary,
   type FourDxOutcomeChartPoint,
   type FourDxOutcomeStatus,
+  type FourDxUltgDetailRow,
   type FourDxUltgResumeEntry,
 } from "@/lib/four-dx-compute";
 import { cn } from "@/lib/utils";
@@ -173,6 +175,94 @@ function UltgResumeTable({ entries }: { entries: FourDxUltgResumeEntry[] }) {
                 {formatPercent(entry.percentTercapai)}
               </td>
             </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Short labels for the per-ULTG column groups — "ULTG " is already implied
+// by the section heading, so dropping it keeps 3 extra column-pairs legible.
+const ULTG_SHORT_LABELS = ["Palangkaraya", "Pangkalan Bun", "Muara Teweh"];
+
+// Full target/realisasi matrix behind UltgResumeTable's own summary counts —
+// one row per WIG 2/4 Lead Measure, UPT total alongside each ULTG's own
+// target & realisasi side by side. Scoped to WIG 2 & 4 for the same reason
+// as UltgResumeTable (see buildFourDxUltgDetailRows's own comment).
+function UltgDetailTable({ rows }: { rows: FourDxUltgDetailRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">Belum ada Lead Measure tingkat ULTG terjadwal pada periode ini.</p>;
+  }
+  const grouped = new Map<number, FourDxUltgDetailRow[]>();
+  for (const row of rows) {
+    if (!grouped.has(row.wigNumber)) grouped.set(row.wigNumber, []);
+    grouped.get(row.wigNumber)!.push(row);
+  }
+  const colCount = 1 + 3 + ULTG_SHORT_LABELS.length * 2;
+
+  return (
+    <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2 font-bold" rowSpan={2}>
+              WIG / Lead Measure
+            </th>
+            <th className="border-l px-3 py-2 text-right font-bold" colSpan={3}>
+              Target &amp; Realisasi UPT
+            </th>
+            {ULTG_SHORT_LABELS.map((label) => (
+              <th key={label} className="border-l px-3 py-2 text-right font-bold" colSpan={2}>
+                {label}
+              </th>
+            ))}
+          </tr>
+          <tr className="border-b bg-muted/70 text-right text-xs text-muted-foreground uppercase">
+            <th className="border-l px-3 py-1.5 font-bold">Target</th>
+            <th className="px-3 py-1.5 font-bold">Realisasi</th>
+            <th className="px-3 py-1.5 font-bold">%</th>
+            {ULTG_SHORT_LABELS.map((label) => (
+              <Fragment key={label}>
+                <th className="border-l px-3 py-1.5 font-bold">Target</th>
+                <th className="px-3 py-1.5 font-bold">Realisasi</th>
+              </Fragment>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {[...grouped.entries()].map(([wigNumber, wigRows]) => (
+            <Fragment key={wigNumber}>
+              <tr className="border-b bg-muted/20">
+                <td colSpan={colCount} className="px-3 py-1.5 text-xs font-bold tracking-tight text-foreground">
+                  WIG {wigNumber}
+                </td>
+              </tr>
+              {wigRows.map((row) => (
+                <tr key={row.lmCode} className="border-b last:border-0">
+                  <td className="px-3 py-2 pl-6 text-foreground">
+                    <span className="font-medium">LM {row.lmCode}</span>{" "}
+                    <span className="text-muted-foreground">{row.lmDescription}</span>
+                  </td>
+                  <td className="border-l px-3 py-2 text-right tabular-nums text-muted-foreground">{row.uptTarget}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{row.uptRealisasi}</td>
+                  <td className="px-3 py-2 text-right font-bold tabular-nums">{formatPercent(row.uptPercent)}</td>
+                  {row.byUltg.map((cell) => (
+                    <Fragment key={cell.ultg}>
+                      <td className="border-l px-3 py-2 text-right tabular-nums text-muted-foreground">{cell.target}</td>
+                      <td
+                        className={cn(
+                          "px-3 py-2 text-right tabular-nums",
+                          cell.target === 0 ? "text-muted-foreground" : cell.done ? "text-success" : "text-warning-foreground",
+                        )}
+                      >
+                        {cell.realisasi}
+                      </td>
+                    </Fragment>
+                  ))}
+                </tr>
+              ))}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -636,6 +726,7 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
   );
 
   const ultgResume = useMemo(() => buildFourDxUltgResume(wigs), [wigs]);
+  const ultgDetailRows = useMemo(() => buildFourDxUltgDetailRows(wigs), [wigs]);
 
   const waRecap = useMemo(
     () => formatFourDxWaRecap(period, snapshot.currentYear, wigs),
@@ -811,6 +902,18 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
           WIG 1 &amp; 3 bersifat per-bay/ruas dan tidak memiliki target per ULTG.
         </p>
         <UltgResumeTable entries={ultgResume} />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">
+          Detail Target &amp; Realisasi — UPT, Palangkaraya, Pangkalan Bun, Muara Teweh
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Kolom % UPT tetap jadi patokan tercapai/belum yang sebenarnya — realisasi UPT bisa lebih tinggi dari jumlah
+          realisasi ketiga ULTG (ada top-up manual di level UPT yang tidak diatribusikan ke ULTG manapun). Khusus WIG 4,
+          target per ULTG juga bersifat indikatif saja karena diambil dari baris target yang terpisah dari target UPT-nya.
+        </p>
+        <UltgDetailTable rows={ultgDetailRows} />
       </div>
 
       <div className="flex flex-col gap-2">

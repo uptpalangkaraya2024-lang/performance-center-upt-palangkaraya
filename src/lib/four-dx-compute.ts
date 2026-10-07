@@ -489,6 +489,61 @@ export function buildFourDxUltgResume(wigs: FourDxWig[]): FourDxUltgResumeEntry[
   return entries;
 }
 
+/** Canonical display names, title-cased to match the Monitoring sheet's own
+ *  "ULTG" column text (which `FourDxAssetStatus.asset` carries verbatim for
+ *  WIG 2 & 4) — same 3 ULTGs as ULTG_DISPLAY_ORDER above, just not shouting. */
+const ULTG_CANONICAL_NAMES = ["ULTG Palangkaraya", "ULTG Pangkalan Bun", "ULTG Muara Teweh"];
+
+export interface FourDxUltgDetailCell {
+  ultg: string;
+  target: number;
+  realisasi: number;
+  done: boolean;
+}
+
+export interface FourDxUltgDetailRow {
+  wigNumber: number;
+  lmCode: string;
+  lmDescription: string;
+  uptTarget: number;
+  uptRealisasi: number;
+  uptPercent: number | null;
+  byUltg: FourDxUltgDetailCell[];
+}
+
+/** One row per WIG-2/4 Lead Measure, UPT target/realisasi alongside each of
+ *  the 3 ULTGs' own target/realisasi side by side — the detailed matrix
+ *  view of buildFourDxUltgResume's own summary. Always emits all 3 ULTG
+ *  columns in a fixed order (even an ULTG with nothing scheduled this LM
+ *  shows 0/0) so every row has the same shape for the table to render. */
+export function buildFourDxUltgDetailRows(wigs: FourDxWig[]): FourDxUltgDetailRow[] {
+  const rows: FourDxUltgDetailRow[] = [];
+  for (const wig of wigs) {
+    if (wig.number !== 2 && wig.number !== 4) continue;
+    for (const lm of wig.lms) {
+      const byUltg = ULTG_CANONICAL_NAMES.map((canonicalName) => {
+        const match = lm.assets.find((a) => normalize(a.asset) === normalize(canonicalName));
+        return {
+          ultg: canonicalName,
+          target: match?.targetThisWeek ?? 0,
+          realisasi: match?.realizedCount ?? 0,
+          done: match?.done ?? false,
+        };
+      });
+      rows.push({
+        wigNumber: wig.number,
+        lmCode: lm.code,
+        lmDescription: lm.description,
+        uptTarget: lm.targetMingguan,
+        uptRealisasi: lm.realisasiMingguan,
+        uptPercent: lm.percentRealisasiMingguan,
+        byUltg,
+      });
+    }
+  }
+  return rows;
+}
+
 /** WhatsApp-style recap text for one chosen period — mirrors the manual
  *  weekly update format (confirmed against a real example the user pasted):
  *  per-asset LMs get a plain "- <asset> ✅" line, ULTG-level LMs (WIG 2 & 4)
