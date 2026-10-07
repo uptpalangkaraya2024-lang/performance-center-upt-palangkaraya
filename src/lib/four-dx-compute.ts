@@ -416,82 +416,10 @@ export function buildFourDxAchievementSummaries(
   });
 }
 
-export interface FourDxUltgLmDetail {
-  wigNumber: number;
-  lmCode: string;
-  lmDescription: string;
-  targetThisWeek: number;
-  realizedCount: number;
-  done: boolean;
-}
-
-export interface FourDxUltgResumeEntry {
-  ultg: string;
-  lmsEvaluated: number;
-  lmsTercapai: number;
-  percentTercapai: number | null;
-  details: FourDxUltgLmDetail[];
-}
-
-const ULTG_DISPLAY_ORDER = ["ULTG PALANGKARAYA", "ULTG PANGKALAN BUN", "ULTG MUARA TEWEH"];
-
-/** Per-ULTG achievement resume for the currently-selected week — scoped to
- *  WIG 2 & 4 only, the two WIGs whose Lead Measures are genuinely tracked
- *  per ULTG (see buildFourDxLm's `isUltgLevelLm` / the Monitoring sheet's
- *  own per-ULTG rows). WIG 1 & 3's targets are per-bay/ruas, not pre-split
- *  by ULTG in the source sheet at all, so folding them into a per-ULTG
- *  target/realisasi number here would mean inventing a split the data
- *  doesn't actually have — left out rather than guessed.
- *
- *  An (ULTG, LM) pair only counts toward lmsEvaluated/lmsTercapai when that
- *  ULTG actually had a target > 0 that week — the same rule already used by
- *  buildFourDxAchievementSummaries for the UPT-wide version (see its own
- *  `targetMingguan > 0` filter), so a week with nothing assigned to an ULTG
- *  doesn't silently count as a free pass or get ignored as a fail. */
-export function buildFourDxUltgResume(wigs: FourDxWig[]): FourDxUltgResumeEntry[] {
-  const byUltg = new Map<string, FourDxUltgResumeEntry>();
-
-  for (const wig of wigs) {
-    if (wig.number !== 2 && wig.number !== 4) continue;
-    for (const lm of wig.lms) {
-      for (const asset of lm.assets) {
-        const ultg = asset.asset;
-        let entry = byUltg.get(ultg);
-        if (!entry) {
-          entry = { ultg, lmsEvaluated: 0, lmsTercapai: 0, percentTercapai: null, details: [] };
-          byUltg.set(ultg, entry);
-        }
-        entry.details.push({
-          wigNumber: wig.number,
-          lmCode: lm.code,
-          lmDescription: lm.description,
-          targetThisWeek: asset.targetThisWeek,
-          realizedCount: asset.realizedCount,
-          done: asset.done,
-        });
-        if (asset.targetThisWeek > 0) {
-          entry.lmsEvaluated += 1;
-          if (asset.done) entry.lmsTercapai += 1;
-        }
-      }
-    }
-  }
-
-  const entries = [...byUltg.values()];
-  for (const entry of entries) {
-    entry.percentTercapai = entry.lmsEvaluated > 0 ? entry.lmsTercapai / entry.lmsEvaluated : null;
-  }
-  entries.sort((a, b) => {
-    const ai = ULTG_DISPLAY_ORDER.indexOf(a.ultg.toUpperCase());
-    const bi = ULTG_DISPLAY_ORDER.indexOf(b.ultg.toUpperCase());
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-  });
-  return entries;
-}
-
 /** Canonical display names, title-cased to match the Monitoring sheet's own
  *  "ULTG" column text (which `FourDxAssetStatus.asset` carries verbatim for
- *  WIG 2 & 4) — same 3 ULTGs as ULTG_DISPLAY_ORDER above, just not shouting. */
+ *  WIG 2 & 4, and `FourDxAssetStatus.ultg` carries — looked up, see
+ *  buildAssetUltgLookup — for WIG 1 & 3). */
 const ULTG_CANONICAL_NAMES = ["ULTG Palangkaraya", "ULTG Pangkalan Bun", "ULTG Muara Teweh"];
 
 export interface FourDxUltgDetailCell {
@@ -511,23 +439,42 @@ export interface FourDxUltgDetailRow {
   byUltg: FourDxUltgDetailCell[];
 }
 
-/** One row per WIG-2/4 Lead Measure, UPT target/realisasi alongside each of
- *  the 3 ULTGs' own target/realisasi side by side — the detailed matrix
- *  view of buildFourDxUltgResume's own summary. Always emits all 3 ULTG
- *  columns in a fixed order (even an ULTG with nothing scheduled this LM
- *  shows 0/0) so every row has the same shape for the table to render. */
+/** One row per Lead Measure across all 4 WIGs, UPT target/realisasi
+ *  alongside each of the 3 ULTGs' own target & realisasi side by side.
+ *
+ *  WIG 2 & 4 are genuinely tracked per ULTG in the Monitoring sheet itself
+ *  — `lm.assets[].asset` already IS the ULTG name, read directly.
+ *
+ *  WIG 1 & 3's TARGET sheet has no ULTG column at all — each ruas/bay's
+ *  ULTG is instead looked up from its own realization history
+ *  (`FourDxAssetStatus.ultg`, see buildAssetUltgLookup), then every ruas
+ *  sharing an ULTG is summed into that ULTG's target & realisasi for the
+ *  LM. A ruas with no realization history anywhere to infer its ULTG from
+ *  (`ultg: null`) is left out of all 3 ULTG columns here — it's still
+ *  counted in the UPT total, just not attributable to one specific ULTG. */
 export function buildFourDxUltgDetailRows(wigs: FourDxWig[]): FourDxUltgDetailRow[] {
   const rows: FourDxUltgDetailRow[] = [];
   for (const wig of wigs) {
-    if (wig.number !== 2 && wig.number !== 4) continue;
+    const isUltgLevel = wig.number === 2 || wig.number === 4;
     for (const lm of wig.lms) {
-      const byUltg = ULTG_CANONICAL_NAMES.map((canonicalName) => {
-        const match = lm.assets.find((a) => normalize(a.asset) === normalize(canonicalName));
+      const byUltg: FourDxUltgDetailCell[] = ULTG_CANONICAL_NAMES.map((canonicalName) => {
+        if (isUltgLevel) {
+          const match = lm.assets.find((a) => normalize(a.asset) === normalize(canonicalName));
+          return {
+            ultg: canonicalName,
+            target: match?.targetThisWeek ?? 0,
+            realisasi: match?.realizedCount ?? 0,
+            done: match?.done ?? false,
+          };
+        }
+        const matchingAssets = lm.assets.filter((a) => a.ultg && normalize(a.ultg) === normalize(canonicalName));
+        const target = matchingAssets.reduce((sum, a) => sum + a.targetThisWeek, 0);
+        const realisasi = matchingAssets.reduce((sum, a) => sum + a.realizedCount, 0);
         return {
           ultg: canonicalName,
-          target: match?.targetThisWeek ?? 0,
-          realisasi: match?.realizedCount ?? 0,
-          done: match?.done ?? false,
+          target,
+          realisasi,
+          done: target > 0 ? realisasi >= target : realisasi > 0,
         };
       });
       rows.push({
@@ -542,6 +489,43 @@ export function buildFourDxUltgDetailRows(wigs: FourDxWig[]): FourDxUltgDetailRo
     }
   }
   return rows;
+}
+
+export interface FourDxUltgResumeEntry {
+  ultg: string;
+  lmsEvaluated: number;
+  lmsTercapai: number;
+  percentTercapai: number | null;
+}
+
+/** Per-ULTG achievement resume for the currently-selected week — derived
+ *  from buildFourDxUltgDetailRows, across all 4 WIGs. An (ULTG, LM) pair
+ *  only counts toward lmsEvaluated/lmsTercapai when that ULTG actually had
+ *  a target > 0 for that LM — the same rule already used by
+ *  buildFourDxAchievementSummaries for the UPT-wide version (see its own
+ *  `targetMingguan > 0` filter), so a week with nothing assigned to an ULTG
+ *  doesn't silently count as a free pass or get ignored as a fail. */
+export function buildFourDxUltgResume(wigs: FourDxWig[]): FourDxUltgResumeEntry[] {
+  const tallies = new Map(ULTG_CANONICAL_NAMES.map((name) => [name, { lmsEvaluated: 0, lmsTercapai: 0 }]));
+
+  for (const row of buildFourDxUltgDetailRows(wigs)) {
+    for (const cell of row.byUltg) {
+      if (cell.target <= 0) continue;
+      const tally = tallies.get(cell.ultg)!;
+      tally.lmsEvaluated += 1;
+      if (cell.done) tally.lmsTercapai += 1;
+    }
+  }
+
+  return ULTG_CANONICAL_NAMES.map((ultg) => {
+    const tally = tallies.get(ultg)!;
+    return {
+      ultg,
+      lmsEvaluated: tally.lmsEvaluated,
+      lmsTercapai: tally.lmsTercapai,
+      percentTercapai: tally.lmsEvaluated > 0 ? tally.lmsTercapai / tally.lmsEvaluated : null,
+    };
+  });
 }
 
 /** WhatsApp-style recap text for one chosen period — mirrors the manual

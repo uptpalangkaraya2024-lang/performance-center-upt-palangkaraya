@@ -898,8 +898,9 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
           Resume Pencapaian per ULTG — Periode {MONTH_FULL_ID[monthAbbrIndex(monthAbbr)]}-M{weekOfMonth}
         </h3>
         <p className="text-xs text-muted-foreground">
-          Lingkup WIG 2 &amp; 4 — satu-satunya Lead Measure yang targetnya benar-benar dipecah per ULTG di sheet sumber.
-          WIG 1 &amp; 3 bersifat per-bay/ruas dan tidak memiliki target per ULTG.
+          Mencakup WIG 1-4. WIG 2 &amp; 4 dibaca langsung dari target per ULTG di sheet Monitoring; WIG 1 &amp; 3 (per
+          bay/ruas, sheet TARGET-nya tidak punya kolom ULTG) dijumlahkan per ULTG berdasarkan ULTG tiap ruas yang
+          dikenali dari riwayat realisasinya — lihat breakdown per LM di bawah untuk ULTG masing-masing ruas.
         </p>
         <UltgResumeTable entries={ultgResume} />
       </div>
@@ -909,9 +910,11 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
           Detail Target &amp; Realisasi — UPT, Palangkaraya, Pangkalan Bun, Muara Teweh
         </h3>
         <p className="text-xs text-muted-foreground">
-          Kolom % UPT tetap jadi patokan tercapai/belum yang sebenarnya — realisasi UPT bisa lebih tinggi dari jumlah
-          realisasi ketiga ULTG (ada top-up manual di level UPT yang tidak diatribusikan ke ULTG manapun). Khusus WIG 4,
-          target per ULTG juga bersifat indikatif saja karena diambil dari baris target yang terpisah dari target UPT-nya.
+          Kolom % UPT tetap jadi patokan tercapai/belum yang sebenarnya. Untuk WIG 2 &amp; 4, realisasi UPT bisa lebih
+          tinggi dari jumlah realisasi ketiga ULTG (ada top-up manual di level UPT yang tidak diatribusikan ke ULTG
+          manapun), dan target per ULTG WIG 4 bersifat indikatif saja karena diambil dari baris target yang terpisah
+          dari target UPT-nya. Untuk WIG 1 &amp; 3, satu ruas tanpa riwayat realisasi sama sekali tidak bisa
+          diatribusikan ke ULTG manapun, sehingga totalnya bisa sedikit lebih rendah dari target/realisasi UPT.
         </p>
         <UltgDetailTable rows={ultgDetailRows} />
       </div>
