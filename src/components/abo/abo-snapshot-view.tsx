@@ -20,9 +20,13 @@ import {
   ABO_MONTH_FULL,
   aboMonthAbbrIndex,
   buildAboSnapshotComputed,
+  buildAboUltgDetailRows,
+  buildAboUltgResume,
   collectAboAttentionItems,
   defaultAboWeekLabel,
   type AboAttentionItem,
+  type AboUltgDetailRow,
+  type AboUltgResumeEntry,
 } from "@/lib/abo-proteksi-compute";
 import { cn } from "@/lib/utils";
 import type { AboProgramComputed, AboSnapshot, AboUltgComputed } from "@/types";
@@ -147,6 +151,115 @@ function ResumeTable({ programs }: { programs: AboProgramComputed[] }) {
               <td className="px-3 py-2">
                 <StatusPill status={p.status} />
               </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function UltgResumeTable({ entries }: { entries: AboUltgResumeEntry[] }) {
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted-foreground">Belum ada breakdown per ULTG pada data ini.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2.5 font-bold">ULTG</th>
+            <th className="px-3 py-2.5 font-bold text-right">Program Dievaluasi</th>
+            <th className="px-3 py-2.5 font-bold text-right">Tercapai</th>
+            <th className="px-3 py-2.5 font-bold text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <tr key={entry.ultg} className="border-b last:border-0">
+              <td className="px-3 py-2 font-medium text-foreground">{entry.ultg}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{entry.programsEvaluated}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-success">{entry.programsTercapai}</td>
+              <td
+                className={cn(
+                  "px-3 py-2 text-right font-bold tabular-nums",
+                  entry.percentTercapai === null
+                    ? "text-muted-foreground"
+                    : entry.percentTercapai >= 1
+                      ? "text-success"
+                      : "text-warning-foreground",
+                )}
+              >
+                {entry.percentTercapai === null ? "—" : formatPercent(entry.percentTercapai)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const ULTG_DETAIL_SHORT_LABELS = ["Palangkaraya", "Pangkalan Bun", "Muara Teweh"];
+
+// Full target/realisasi-to-date matrix behind UltgResumeTable's own summary
+// counts — one row per program, UPT total alongside each ULTG's own target
+// & realisasi side by side.
+function UltgDetailTable({ rows }: { rows: AboUltgDetailRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">Belum ada breakdown per ULTG pada data ini.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-lg border print:break-inside-avoid">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2 font-bold" rowSpan={2}>
+              Program
+            </th>
+            <th className="border-l px-3 py-2 text-right font-bold" colSpan={3}>
+              Target &amp; Realisasi UPT
+            </th>
+            {ULTG_DETAIL_SHORT_LABELS.map((label) => (
+              <th key={label} className="border-l px-3 py-2 text-right font-bold" colSpan={2}>
+                {label}
+              </th>
+            ))}
+          </tr>
+          <tr className="border-b bg-muted/70 text-right text-xs text-muted-foreground uppercase">
+            <th className="border-l px-3 py-1.5 font-bold">Target</th>
+            <th className="px-3 py-1.5 font-bold">Realisasi</th>
+            <th className="px-3 py-1.5 font-bold">%</th>
+            {ULTG_DETAIL_SHORT_LABELS.map((label) => (
+              <Fragment key={label}>
+                <th className="border-l px-3 py-1.5 font-bold">Target</th>
+                <th className="px-3 py-1.5 font-bold">Realisasi</th>
+              </Fragment>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.code} className="border-b last:border-0">
+              <td className="px-3 py-2 text-foreground">
+                <span className="font-medium">{row.code}</span> <span className="text-muted-foreground">{row.description}</span>
+              </td>
+              <td className="border-l px-3 py-2 text-right tabular-nums text-muted-foreground">{row.uptTarget}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{row.uptRealisasi}</td>
+              <td className="px-3 py-2 text-right font-bold tabular-nums">{formatPercent(row.uptPercent)}</td>
+              {row.byUltg.map((cell) => (
+                <Fragment key={cell.ultg}>
+                  <td className="border-l px-3 py-2 text-right tabular-nums text-muted-foreground">{cell.target}</td>
+                  <td
+                    className={cn(
+                      "px-3 py-2 text-right tabular-nums",
+                      cell.status === "tercapai" ? "text-success" : "text-warning-foreground",
+                    )}
+                  >
+                    {cell.realisasi}
+                  </td>
+                </Fragment>
+              ))}
             </tr>
           ))}
         </tbody>
@@ -350,6 +463,8 @@ export function AboSnapshotView({
 
   const programs = buildAboSnapshotComputed(snapshot, weekLabel);
   const attentionItems = useMemo(() => collectAboAttentionItems(programs, weekLabel), [programs, weekLabel]);
+  const ultgResume = useMemo(() => buildAboUltgResume(programs), [programs]);
+  const ultgDetailRows = useMemo(() => buildAboUltgDetailRows(programs), [programs]);
 
   const filteredPrograms = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -458,6 +573,28 @@ export function AboSnapshotView({
       </div>
 
       <AttentionCard items={attentionItems} onJump={(code) => jumpTo(programAnchorId(code))} />
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">
+          Resume Pencapaian per ULTG — Periode {ABO_MONTH_FULL[aboMonthAbbrIndex(monthAbbr)]}-M{weekOfMonth}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Dihitung dari breakdown per ULTG yang sudah tersedia untuk setiap program di sheet sumber — status
+          tercapai/belum per ULTG s.d. periode yang dipilih, dijumlahkan di seluruh {programs.length} program.
+        </p>
+        <UltgResumeTable entries={ultgResume} />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">
+          Detail Target &amp; Realisasi s.d. Periode — UPT, Palangkaraya, Pangkalan Bun, Muara Teweh
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Angka Target/Realisasi bersifat kumulatif sejak Jan-M1 s.d. periode yang dipilih, sama seperti kolom
+          &quot;s.d. Periode&quot; pada resume program.
+        </p>
+        <UltgDetailTable rows={ultgDetailRows} />
+      </div>
 
       <div className="flex flex-col gap-2">
         <h3 className="text-base font-extrabold tracking-tight text-foreground">Resume Semua Program</h3>

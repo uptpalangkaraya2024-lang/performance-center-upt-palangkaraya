@@ -195,6 +195,108 @@ export function collectAboAttentionItems(programs: AboProgramComputed[], selecte
   return items;
 }
 
+const ULTG_KEY_ORDER = ["PALANGKARAYA", "PANGKALANBUN", "MUARATEWEH"];
+
+function ultgKey(raw: string): string {
+  return raw.replace(/\s+/g, "").toUpperCase();
+}
+
+/** Canonical display name for an ULTG, tolerant of the live sheet's own
+ *  inconsistent spelling — confirmed live: the "🖥️ PKY" sheet's own
+ *  per-ULTG block label literally reads "PANGKALANBUN" with no space (vs
+ *  "PALANGKARAYA" / "MUARA TEWEH" for the other two), and "📝 INPUT PKY"'s
+ *  own ULTG column mixes "PANGKALAN BUN" and "PANGKALANBUN" across rows for
+ *  the same ULTG. Grouped by a space-stripped key so both spellings land in
+ *  one bucket, displayed with a normalized "ULTG <Name>" label either way. */
+function ultgDisplayName(raw: string): string {
+  const key = ultgKey(raw);
+  if (key === "PALANGKARAYA") return "ULTG Palangkaraya";
+  if (key === "PANGKALANBUN") return "ULTG Pangkalan Bun";
+  if (key === "MUARATEWEH") return "ULTG Muara Teweh";
+  return raw.toUpperCase().startsWith("ULTG") ? raw : `ULTG ${raw}`;
+}
+
+export interface AboUltgResumeEntry {
+  ultg: string;
+  programsEvaluated: number;
+  programsTercapai: number;
+  percentTercapai: number | null;
+}
+
+/** Per-ULTG achievement resume across every program for the selected week —
+ *  ABO's own "🖥️ PKY" sheet already carries a genuine per-ULTG target &
+ *  realisasi block for every program (unlike 4DX's WIG 1 & 3, which needed
+ *  a realization-history lookup just to attribute a ruas to an ULTG at
+ *  all), so this reads AboProgramComputed.ultgBreakdown directly — no
+ *  inference needed. */
+export function buildAboUltgResume(programs: AboProgramComputed[]): AboUltgResumeEntry[] {
+  const tallies = new Map<string, { evaluated: number; tercapai: number }>();
+  for (const p of programs) {
+    for (const u of p.ultgBreakdown) {
+      const key = ultgKey(u.ultg);
+      const tally = tallies.get(key) ?? { evaluated: 0, tercapai: 0 };
+      tally.evaluated += 1;
+      if (u.status === "tercapai") tally.tercapai += 1;
+      tallies.set(key, tally);
+    }
+  }
+
+  return ULTG_KEY_ORDER.filter((key) => tallies.has(key)).map((key) => {
+    const tally = tallies.get(key)!;
+    return {
+      ultg: ultgDisplayName(key),
+      programsEvaluated: tally.evaluated,
+      programsTercapai: tally.tercapai,
+      percentTercapai: tally.evaluated > 0 ? tally.tercapai / tally.evaluated : null,
+    };
+  });
+}
+
+export interface AboUltgDetailCell {
+  ultg: string;
+  target: number;
+  realisasi: number;
+  status: "tercapai" | "belum";
+}
+
+export interface AboUltgDetailRow {
+  code: string;
+  description: string;
+  uptTarget: number;
+  uptRealisasi: number;
+  uptPercent: number;
+  byUltg: AboUltgDetailCell[];
+}
+
+/** One row per program, UPT target/realisasi-to-date alongside each of the
+ *  3 ULTGs' own target/realisasi-to-date side by side — the detailed matrix
+ *  view behind buildAboUltgResume's own summary counts. Always emits all 3
+ *  ULTG columns in a fixed order, even if a program's own sheet block
+ *  happened to be missing one (shows 0/0 "belum" rather than skip the
+ *  column), so every row has the same shape for the table to render. */
+export function buildAboUltgDetailRows(programs: AboProgramComputed[]): AboUltgDetailRow[] {
+  return programs.map((p) => {
+    const byKey = new Map(p.ultgBreakdown.map((u) => [ultgKey(u.ultg), u]));
+    const byUltg: AboUltgDetailCell[] = ULTG_KEY_ORDER.map((key) => {
+      const match = byKey.get(key);
+      return {
+        ultg: ultgDisplayName(key),
+        target: match?.targetToDate ?? 0,
+        realisasi: match?.realisasiToDate ?? 0,
+        status: match?.status ?? "belum",
+      };
+    });
+    return {
+      code: p.code,
+      description: p.description,
+      uptTarget: p.targetToDate,
+      uptRealisasi: p.realisasiToDate,
+      uptPercent: p.percentRealisasi,
+      byUltg,
+    };
+  });
+}
+
 /** Today's week label via a plain ceil(day/7) estimate (capped at M4) — no
  *  DATASET-style real-date lookup needed here, since ABO's own week labels
  *  are matched by label alone, not real calendar boundaries (confirmed with
