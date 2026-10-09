@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, CircleDashed, MonitorPlay, TrendingUp, XCircle } from "lucide-react";
+import { CheckCircle2, CircleDashed, MonitorPlay, TrendingUp, XCircle, Zap } from "lucide-react";
 
 import {
   Table,
@@ -44,6 +44,14 @@ export const maxDuration = 60;
 function formatTime(date: Date | null): string | null {
   if (!date) return null;
   return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB";
+}
+
+// Switches to MWh above 1000 KWh purely for readability — the underlying
+// number (data.summary.totalEnsKwh) is always the raw KWh sum, this is
+// display-only.
+function formatEnsKwh(kwh: number): string {
+  if (kwh >= 1000) return `${(kwh / 1000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} MWh`;
+  return `${kwh.toLocaleString("id-ID", { maximumFractionDigits: 1 })} KWh`;
 }
 
 // Colored top accent per tile — a scannable status stripe before reading
@@ -243,6 +251,21 @@ function CategorySection({
           </div>
         </div>
       </div>
+
+      {data.summary.ensRowCount > 0 ? (
+        <div className="flex items-center gap-2.5 rounded-lg border border-warning/40 bg-warning/10 p-3">
+          <Zap className="size-5 shrink-0 text-warning-foreground" />
+          <div>
+            <div className="text-xl font-extrabold tabular-nums text-foreground">
+              {formatEnsKwh(data.summary.totalEnsKwh)}
+            </div>
+            <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Energi Tidak Tersalur (ENS) — dari {data.summary.ensRowCount} dari {data.summary.total} kejadian yang
+              tercatat ENS-nya
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="rounded-lg border bg-secondary p-3">
         <p className="mb-2 text-xs font-bold tracking-wide text-foreground uppercase">Penyebab Gangguan Keseluruhan</p>

@@ -77,6 +77,20 @@ function normalizeFollowUpStatus(raw: string | null): "OPEN" | "CLOSED" | "UNKNO
   return "UNKNOWN";
 }
 
+// "ENS (KWH)" is the one column in this sheet confirmed live to arrive
+// comma-thousands-formatted (e.g. "17,136.00") rather than the plain
+// unformatted number every other numeric column here uses (see parseNumber
+// in src/lib/parse.ts) — kept as its own local parser rather than changing
+// that shared one, since every other caller's column is confirmed NOT to
+// need comma-stripping and this is the one deliberate exception.
+function parseEnsKwh(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/,/g, "").trim();
+  if (cleaned === "") return null;
+  const value = Number(cleaned);
+  return Number.isFinite(value) ? value : null;
+}
+
 function formatDateLabel(raw: string): string | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
   if (!match) return null;
@@ -99,6 +113,7 @@ interface DisturbanceRow {
   ultg: string | null; // ULTG — UPT Palangkaraya's own sub-unit, used as-is
   durationMinutes: number | null; // DURASI GGN (MENIT)
   followUp: "OPEN" | "CLOSED" | "UNKNOWN";
+  ensKwh: number | null; // ENS (KWH) — Energi Tidak Tersalur, blank on many rows
 }
 
 // "KODE BAY" values confirmed against live data: "T/L Bay" (Transmisi/Line),
@@ -141,13 +156,14 @@ function normalizeRow(row: Record<string, string>): DisturbanceRow | null {
   const ultg = requireText(row["ULTG"]);
   const durationMinutes = parseDurationMinutes(row["DURASI GGN (MENIT)"]);
   const followUp = normalizeFollowUpStatus(requireText(row["STATUS TINDAK LANJUT GGN"]));
+  const ensKwh = parseEnsKwh(row["ENS (KWH)"]);
 
-  return { year, month, tgl, namaBay, category, kind, cause, gi, ultg, durationMinutes, followUp };
+  return { year, month, tgl, namaBay, category, kind, cause, gi, ultg, durationMinutes, followUp, ensKwh };
 }
 
 function emptyCategory(): DisturbanceCategoryResult {
   return {
-    summary: { total: 0, trip: 0, arSukses: 0, tidakTrip: 0, latestDisturbance: null },
+    summary: { total: 0, trip: 0, arSukses: 0, tidakTrip: 0, totalEnsKwh: 0, ensRowCount: 0, latestDisturbance: null },
     causePareto: [],
     kindBreakdown: [],
     monthlyByYear: [],
@@ -215,6 +231,7 @@ function buildUltgBreakdown(rows: DisturbanceRow[]): DisturbanceUltgSummary[] {
   return [...byUltg.entries()]
     .map(([ultg, ultgRows]) => {
       const { trip, arSukses, tidakTrip } = kindSplit(ultgRows);
+      const totalEnsKwh = ultgRows.reduce((sum, r) => sum + (r.ensKwh ?? 0), 0);
       return {
         ultg,
         total: ultgRows.length,
@@ -223,6 +240,7 @@ function buildUltgBreakdown(rows: DisturbanceRow[]): DisturbanceUltgSummary[] {
         tidakTrip,
         followUp: followUpFor(ultgRows),
         causePareto: causeParetoFor(ultgRows),
+        totalEnsKwh,
       };
     })
     .sort((a, b) => b.total - a.total);
@@ -418,11 +436,16 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
       durationMinutes: r.durationMinutes,
     }));
 
+  const ensRows = rows.filter((r): r is DisturbanceRow & { ensKwh: number } => r.ensKwh !== null);
+  const totalEnsKwh = ensRows.reduce((sum, r) => sum + r.ensKwh, 0);
+
   const summary: DisturbanceCategorySummary = {
     total: rows.length,
     trip: kindCounts.get("TRIP") ?? 0,
     arSukses: kindCounts.get("RECLOSE SUKSES") ?? 0,
     tidakTrip: kindCounts.get("TIDAK TRIP") ?? 0,
+    totalEnsKwh,
+    ensRowCount: ensRows.length,
     latestDisturbance: latestTgl ? formatDateLabel(latestTgl) : null,
   };
 

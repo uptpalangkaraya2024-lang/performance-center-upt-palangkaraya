@@ -54,6 +54,10 @@ export interface DisturbanceUltgSummary {
   tidakTrip: number;
   followUp: DisturbanceFollowUpSummary;
   causePareto: DisturbanceCause[];
+  /** Sum of the sheet's own "ENS (KWH)" column (Energi Tidak Tersalur) for
+   *  this ULTG's rows that have it filled in — see DisturbanceCategorySummary
+   *  for why this is a sum, not an average, and why it's never guessed. */
+  totalEnsKwh: number;
 }
 
 /** Per-bay ("ruas") breakdown — the same NAMA BAY GANGGUAN values as
@@ -76,6 +80,15 @@ export interface DisturbanceCategorySummary {
   trip: number;
   arSukses: number;
   tidakTrip: number;
+  /** Sum of the sheet's own "ENS (KWH)" column (Energi Tidak Tersalur —
+   *  energy not supplied) across every row that has it filled in. A sum,
+   *  not an average, since this is a cumulative impact figure, same
+   *  framing as the sheet's own column. Many rows leave this blank
+   *  (confirmed live), so `ensRowCount` says how many of `total` events
+   *  this sum is actually drawn from — never silently treated as "0 KWH
+   *  lost" when the cell was simply never filled in. */
+  totalEnsKwh: number;
+  ensRowCount: number;
   /** Formatted "DD Mon YYYY", or null if the category has no data. */
   latestDisturbance: string | null;
 }
