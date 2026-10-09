@@ -12,12 +12,14 @@ import { cn } from "@/lib/utils";
 import type { GiCorrelationRow } from "@/lib/asset-correlation";
 
 export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
-  const withSignal = rows.filter((r) => r.gangguanTotal > 0 || r.ahiTotal > 0);
+  const withSignal = rows.filter(
+    (r) => r.gangguanTotal > 0 || r.ahiTotal > 0 || r.ceTotal > 0 || r.renusTotal > 0,
+  );
 
   if (withSignal.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        Belum ada GI dengan data Gangguan maupun AHI yang dapat dikorelasikan.
+        Belum ada GI dengan data Gangguan, AHI, CE, maupun RENUS yang dapat dikorelasikan.
       </p>
     );
   }
@@ -25,7 +27,9 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        GI diambil langsung dari kolom &quot;Gardu Induk&quot; pada data Gangguan — bukan tebakan dari nama bay.
+        GI diambil langsung dari kolom sumber tiap modul (Gangguan: &quot;Gardu Induk&quot;, AHI: &quot;GI&quot;, CE:
+        &quot;Gardu&quot;, RENUS: &quot;GI&quot;) — bukan tebakan dari nama bay. Diurutkan dari skor risiko tertinggi
+        (AHI Critical dibobot paling berat, lalu AHI Poor/CE Open/RENUS Overdue, lalu jumlah gangguan).
       </p>
       <div className="overflow-x-auto rounded-lg border">
         <Table>
@@ -36,6 +40,9 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
               <TableHead className="text-right">Gangguan Transmisi</TableHead>
               <TableHead className="text-right">AHI Poor</TableHead>
               <TableHead className="text-right">AHI Critical</TableHead>
+              <TableHead className="text-right">CE Open</TableHead>
+              <TableHead className="text-right">RENUS Overdue</TableHead>
+              <TableHead className="border-l text-right">Skor Risiko</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -61,6 +68,13 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
                 <TableCell className={cn("text-right text-sm tabular-nums", row.ahiCritical > 0 && "text-critical font-bold")}>
                   {row.ahiCritical || "-"}
                 </TableCell>
+                <TableCell className={cn("text-right text-sm tabular-nums", row.ceOpen > 0 && "text-warning-foreground font-bold")}>
+                  {row.ceOpen || "-"}
+                </TableCell>
+                <TableCell className={cn("text-right text-sm tabular-nums", row.renusOverdue > 0 && "text-warning-foreground font-bold")}>
+                  {row.renusOverdue || "-"}
+                </TableCell>
+                <TableCell className="border-l text-right font-bold tabular-nums text-foreground">{row.riskScore}</TableCell>
               </TableRow>
             ))}
           </TableBody>

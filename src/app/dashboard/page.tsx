@@ -195,15 +195,20 @@ export default function OverviewPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg font-extrabold">Gangguan &amp; Asset Health per GI</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Skor Risiko Aset per GI</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Gabungan data Gangguan (per bay) dan AHI (per GI) — membantu melihat GI mana yang sekaligus sering
-            gangguan dan asset health-nya bermasalah.
+            Gabungan Gangguan, AHI, CE, dan RENUS per GI — bukan cuma ULTG mana yang perlu perhatian, tapi GI mana
+            persisnya yang harus dikunjungi lebih dulu.
           </p>
         </CardHeader>
         <CardContent>
           <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-            <GiCorrelationSection disturbancesPromise={disturbancesPromise} ahiPromise={ahiPromise} />
+            <GiCorrelationSection
+              disturbancesPromise={disturbancesPromise}
+              ahiPromise={ahiPromise}
+              cePromise={cePromise}
+              renusPromise={renusPromise}
+            />
           </Suspense>
         </CardContent>
       </Card>
@@ -599,11 +604,20 @@ async function ParetoSection({ disturbancesPromise }: { disturbancesPromise: Pro
 async function GiCorrelationSection({
   disturbancesPromise,
   ahiPromise,
+  cePromise,
+  renusPromise,
 }: {
   disturbancesPromise: Promise<DisturbancesResult>;
   ahiPromise: Promise<AhiResult>;
+  cePromise: Promise<CeSnapshot>;
+  renusPromise: Promise<RenusData>;
 }) {
-  const [disturbances, ahi] = await Promise.all([disturbancesPromise, ahiPromise]);
+  const [disturbances, ahi, ce, renus] = await Promise.all([
+    disturbancesPromise,
+    ahiPromise,
+    cePromise,
+    renusPromise,
+  ]);
   const giCorrelation =
     !disturbances.error && ahi.data
       ? buildGiCorrelation({
@@ -614,6 +628,8 @@ async function GiCorrelationSection({
           trafoGi: [...disturbances.trafoHv.giBreakdown, ...disturbances.trafoLv.giBreakdown],
           transmisiGi: disturbances.transmisi.giBreakdown,
           anomalies: ahi.data.anomalies,
+          ceItems: ce.error ? [] : ce.items,
+          renusRows: renus.error ? [] : renus.rows,
         })
       : null;
 
