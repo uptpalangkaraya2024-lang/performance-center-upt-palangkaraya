@@ -39,6 +39,7 @@ import { getAssetScanning } from "@/services/asset-scanning";
 import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import {
   buildAboSnapshotComputed,
+  buildAboUltgResume,
   collectAboAttentionItems,
   defaultAboWeekLabel,
 } from "@/lib/abo-proteksi-compute";
@@ -46,8 +47,12 @@ import { buildCeSummary, buildCeAttentionItems, defaultCeWeekLabel } from "@/lib
 import {
   buildFourDxWigs,
   buildFourDxAchievementSummaries,
+  buildFourDxUltgResume,
   resolvePeriodRange,
 } from "@/lib/four-dx-compute";
+import { buildAhiUltgResume } from "@/lib/ahi-compute";
+import { buildRenusUltgResume } from "@/lib/renus-compute";
+import { buildUltgAttentionRollup, type UltgCountEntry } from "@/lib/ultg-attention-rollup";
 import { buildManagementAttention } from "@/lib/executive-insights";
 import type { AboProgramComputed, DisturbanceCategoryResult } from "@/types";
 
@@ -129,6 +134,12 @@ export const AI_ASSISTANT_TOOLS = [
     name: "management_attention",
     description:
       "Ringkasan lintas-modul 'apa yang perlu perhatian sekarang' — gabungan sinyal dari Kinerja UPT, Gangguan, AHI, ABO, 4DX, dan CE, sama seperti yang tampil di overview beranda.",
+    parameters: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "ultg_attention_rollup",
+    description:
+      "Rekap jumlah item 'perlu perhatian' per ULTG (Palangkaraya, Pangkalan Bun, Muara Teweh), dijumlahkan di seluruh modul (ABO, 4DX, CE, AHI, RENUS, Gangguan, Data Aset) — untuk menjawab 'ULTG mana yang paling banyak masalahnya secara keseluruhan', sama seperti tabel 'Perhatian per ULTG' di beranda.",
     parameters: { type: "object" as const, properties: {} },
   },
 ] satisfies { name: string; description: string; parameters: object }[];
@@ -397,6 +408,86 @@ export async function runAiTool(name: AiToolName, input: Record<string, unknown>
         ce: ceSnapshot.error ? null : ceSnapshot,
       });
       return { insights: insights.map((i) => ({ modul: i.module, tingkat: i.tone, teks: i.text })) };
+    }
+    case "ultg_attention_rollup": {
+      const [proteksi, hargi, fourDxSnapshot, ceSnapshot, ahiResult, renus, disturbances, assetScanning] =
+        await Promise.all([
+          getAboProteksiSnapshot(),
+          getAboHargiSnapshot(),
+          getFourDxSnapshot(),
+          getCeSnapshot(),
+          getAhiPerformance(),
+          getRenusData(),
+          getDisturbances(),
+          getAssetScanning(),
+        ]);
+
+      const aboWeekLabel = defaultAboWeekLabel();
+      const aboEntries: UltgCountEntry[] =
+        proteksi.error || hargi.error
+          ? []
+          : buildAboUltgResume([
+              ...buildAboSnapshotComputed(proteksi, aboWeekLabel),
+              ...buildAboSnapshotComputed(hargi, aboWeekLabel),
+            ]).map((e) => ({ ultg: e.ultg, count: e.programsEvaluated - e.programsTercapai }));
+
+      const fourDxEntries: UltgCountEntry[] = fourDxSnapshot.error
+        ? []
+        : buildFourDxUltgResume(
+            buildFourDxWigs(
+              fourDxSnapshot.wigs,
+              resolvePeriodRange(fourDxSnapshot.currentPeriodLabel, fourDxSnapshot.periodBoundaries, fourDxSnapshot.currentYear),
+              fourDxSnapshot.realizations,
+              fourDxSnapshot.monitoring,
+            ),
+          ).map((e) => ({ ultg: e.ultg, count: e.lmsEvaluated - e.lmsTercapai }));
+
+      const ceEntries: UltgCountEntry[] = ceSnapshot.error
+        ? []
+        : buildCeSummary(ceSnapshot.items).byUltg.map((e) => ({ ultg: e.label, count: e.open }));
+
+      const ahiEntries: UltgCountEntry[] = ahiResult.data
+        ? buildAhiUltgResume(ahiResult.data.anomalies).map((e) => ({ ultg: e.ultg, count: e.critical }))
+        : [];
+
+      const renusEntries: UltgCountEntry[] = renus.error
+        ? []
+        : buildRenusUltgResume(renus.rows, renus.today).map((e) => ({ ultg: e.ultg, count: e.overdue }));
+
+      const disturbanceOpenByUltg = new Map<string, number>();
+      if (!disturbances.error) {
+        for (const category of [disturbances.transmisi, disturbances.trafoHv, disturbances.trafoLv]) {
+          for (const u of category.ultgBreakdown) {
+            disturbanceOpenByUltg.set(u.ultg, (disturbanceOpenByUltg.get(u.ultg) ?? 0) + u.followUp.open);
+          }
+        }
+      }
+      const disturbanceEntries: UltgCountEntry[] = [...disturbanceOpenByUltg.entries()].map(([ultg, count]) => ({ ultg, count }));
+
+      const assetOpenByUltg = new Map<string, number>();
+      if (assetScanning.data) {
+        for (const a of assetScanning.data.anomali) {
+          if ((a.status ?? "").toUpperCase() === "SELESAI") continue;
+          assetOpenByUltg.set(a.ultg, (assetOpenByUltg.get(a.ultg) ?? 0) + 1);
+        }
+      }
+      const assetEntries: UltgCountEntry[] = [...assetOpenByUltg.entries()].map(([ultg, count]) => ({ ultg, count }));
+
+      const rollup = buildUltgAttentionRollup({
+        abo: aboEntries,
+        fourDx: fourDxEntries,
+        ce: ceEntries,
+        ahi: ahiEntries,
+        renus: renusEntries,
+        disturbances: disturbanceEntries,
+        dataAset: assetEntries,
+      });
+
+      return {
+        keterangan:
+          "Jumlah item per modul: ABO/4DX = program/Lead Measure belum tercapai, CE/Gangguan/Data Aset = temuan masih open, AHI = anomali Critical, RENUS = pekerjaan overdue.",
+        data: rollup.sort((a, b) => b.total - a.total),
+      };
     }
     default:
       return { error: `Tool tidak dikenal: ${name}` };
