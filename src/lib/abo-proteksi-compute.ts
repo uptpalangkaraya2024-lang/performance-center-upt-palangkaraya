@@ -5,6 +5,7 @@
 // source sheet itself shows for "today" — generalized to any selected week,
 // so the client's own month/week filter never needs a server round-trip
 // (same "load once, derive many things" shape as src/lib/four-dx-compute.ts).
+import { ULTG_CANONICAL_KEYS, ultgDisplayName, ultgKey } from "@/lib/ultg";
 import type {
   AboProgramBlockRaw,
   AboProgramComputed,
@@ -195,26 +196,7 @@ export function collectAboAttentionItems(programs: AboProgramComputed[], selecte
   return items;
 }
 
-const ULTG_KEY_ORDER = ["PALANGKARAYA", "PANGKALANBUN", "MUARATEWEH"];
-
-function ultgKey(raw: string): string {
-  return raw.replace(/\s+/g, "").toUpperCase();
-}
-
-/** Canonical display name for an ULTG, tolerant of the live sheet's own
- *  inconsistent spelling — confirmed live: the "🖥️ PKY" sheet's own
- *  per-ULTG block label literally reads "PANGKALANBUN" with no space (vs
- *  "PALANGKARAYA" / "MUARA TEWEH" for the other two), and "📝 INPUT PKY"'s
- *  own ULTG column mixes "PANGKALAN BUN" and "PANGKALANBUN" across rows for
- *  the same ULTG. Grouped by a space-stripped key so both spellings land in
- *  one bucket, displayed with a normalized "ULTG <Name>" label either way. */
-function ultgDisplayName(raw: string): string {
-  const key = ultgKey(raw);
-  if (key === "PALANGKARAYA") return "ULTG Palangkaraya";
-  if (key === "PANGKALANBUN") return "ULTG Pangkalan Bun";
-  if (key === "MUARATEWEH") return "ULTG Muara Teweh";
-  return raw.toUpperCase().startsWith("ULTG") ? raw : `ULTG ${raw}`;
-}
+const ULTG_KEY_ORDER = [...ULTG_CANONICAL_KEYS];
 
 export interface AboUltgResumeEntry {
   ultg: string;

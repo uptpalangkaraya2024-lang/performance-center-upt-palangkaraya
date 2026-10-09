@@ -24,6 +24,7 @@ import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
+import { buildRenusUltgResume, type RenusUltgResumeEntry } from "@/lib/renus-compute";
 import { RenusWorkTable } from "./renus-work-table";
 import type { RenusData, RenusRow, RenusWeekPeriod } from "@/types";
 
@@ -79,6 +80,41 @@ function WorkListPreview({ rows, limit = 5 }: { rows: RenusRow[]; limit?: number
         </li>
       ))}
     </ul>
+  );
+}
+
+// Per-ULTG resume over whatever rows are currently in scope (`filtered`) —
+// reacts to the active view/filter the same way the StatTile row above it
+// does, rather than always covering the whole dataset.
+function UltgResumeTable({ entries }: { entries: RenusUltgResumeEntry[] }) {
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted-foreground">Tidak ada data untuk breakdown per ULTG pada filter ini.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2.5 font-bold">ULTG</th>
+            <th className="px-3 py-2.5 font-bold text-right">Total</th>
+            <th className="px-3 py-2.5 font-bold text-right">Overdue</th>
+            <th className="px-3 py-2.5 font-bold text-right">High Risk</th>
+            <th className="px-3 py-2.5 font-bold text-right">Selesai</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <tr key={entry.ultg} className="border-b last:border-0">
+              <td className="px-3 py-2 font-medium text-foreground">{entry.ultg}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{entry.total}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-critical">{entry.overdue}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-warning-foreground">{entry.highRisk}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-success">{entry.done}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -229,6 +265,7 @@ export function RenusClient({ data }: { data: RenusData }) {
   // server uses for the unfiltered data.summary, just re-scoped to
   // `filtered` so the two never disagree.
   const summary = useMemo(() => computeSummaryFor(filtered, data.today, data.weekPeriod), [filtered, data.today, data.weekPeriod]);
+  const ultgResume = useMemo(() => buildRenusUltgResume(filtered, data.today), [filtered, data.today]);
 
   // Bumped on Clear Filter to remount RenusWorkTable — the cleanest way to
   // reset its internal search/pagination state without lifting it up.
@@ -288,6 +325,13 @@ export function RenusClient({ data }: { data: RenusData }) {
         <StatTile value={summary.thisWeek.toLocaleString("id-ID")} label="Minggu Ini" barClassName="bg-info" />
         <StatTile value={summary.highRisk.toLocaleString("id-ID")} label="High Risk (Semua Periode)" className="text-critical" barClassName="bg-critical" />
         <StatTile value={summary.upcoming.toLocaleString("id-ID")} label="Upcoming" barClassName="bg-brand" />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-base font-extrabold tracking-tight text-foreground">
+          Resume per ULTG{hasActiveFilter ? " (sesuai filter aktif)" : ""}
+        </h3>
+        <UltgResumeTable entries={ultgResume} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

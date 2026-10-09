@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Circle, RotateCcw, Search } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -28,6 +28,7 @@ import {
   buildCeSubBidangBreakdown,
   buildCeSummary,
   buildCeUltgIdeal,
+  buildCeUltgStreamMatrix,
   ceMonthAbbrIndex,
   defaultCeWeekLabel,
   filterCeItemsForPeriod,
@@ -35,6 +36,7 @@ import {
   type CeAttentionItem,
   type CeProgramRollupEntry,
   type CeUltgIdealEntry,
+  type CeUltgStreamRow,
 } from "@/lib/ce-compute";
 import { cn } from "@/lib/utils";
 import type { CeItem, CeSnapshot } from "@/types";
@@ -290,6 +292,66 @@ function UltgIdealTable({ entries }: { entries: CeUltgIdealEntry[] }) {
   );
 }
 
+// Detail view behind UltgIdealTable's own per-ULTG summary — that table
+// answers "which ULTG is behind," this one answers "behind on which kind
+// of equipment." One row per stream, each ULTG's own total/open/close
+// shown side by side.
+function UltgStreamMatrixTable({ rows }: { rows: CeUltgStreamRow[] }) {
+  if (rows.length === 0 || rows[0].byUltg.length === 0) {
+    return <p className="text-sm text-muted-foreground">Belum ada data ULTG untuk breakdown ini.</p>;
+  }
+  const ultgLabels = rows[0].byUltg.map((c) => c.ultg);
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-bold tracking-wide text-foreground uppercase">Detail Stream × ULTG — Open/Close</p>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+              <th className="px-3 py-2 font-bold" rowSpan={2}>
+                Stream
+              </th>
+              <th className="border-l px-3 py-2 text-right font-bold" colSpan={2}>
+                Total
+              </th>
+              {ultgLabels.map((ultg) => (
+                <th key={ultg} className="border-l px-3 py-2 text-right font-bold" colSpan={2}>
+                  {ultg}
+                </th>
+              ))}
+            </tr>
+            <tr className="border-b bg-muted/70 text-right text-xs text-muted-foreground uppercase">
+              <th className="border-l px-3 py-1.5 font-bold">Open</th>
+              <th className="px-3 py-1.5 font-bold">Close</th>
+              {ultgLabels.map((ultg) => (
+                <Fragment key={ultg}>
+                  <th className="border-l px-3 py-1.5 font-bold">Open</th>
+                  <th className="px-3 py-1.5 font-bold">Close</th>
+                </Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.streamCode} className="border-b last:border-0">
+                <td className="px-3 py-2 text-foreground">{row.streamLabel}</td>
+                <td className="border-l px-3 py-2 text-right tabular-nums text-warning-foreground">{row.open}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-success">{row.close}</td>
+                {row.byUltg.map((cell) => (
+                  <Fragment key={cell.ultg}>
+                    <td className="border-l px-3 py-2 text-right tabular-nums text-warning-foreground">{cell.open}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-success">{cell.close}</td>
+                  </Fragment>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function ProgramRollupCard({ entries }: { entries: CeProgramRollupEntry[] }) {
   if (entries.length === 0) return null;
   return (
@@ -422,6 +484,7 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
   const subBidangBreakdown = useMemo(() => buildCeSubBidangBreakdown(streamBreakdown), [streamBreakdown]);
   const monthlyTrend = useMemo(() => buildCeMonthlyTrend(snapshot.items), [snapshot.items]);
   const ultgIdeal = useMemo(() => buildCeUltgIdeal(snapshot.items, weekLabel), [snapshot.items, weekLabel]);
+  const ultgStreamMatrix = useMemo(() => buildCeUltgStreamMatrix(snapshot.items), [snapshot.items]);
   const programRollup = useMemo(() => buildCeProgramRollup(snapshot.items, todayISO), [snapshot.items, todayISO]);
   const recentActivity = useMemo(() => buildCeRecentActivity(snapshot.items, todayISO), [snapshot.items, todayISO]);
   const executiveSummary = useMemo(
@@ -576,6 +639,8 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
       <AttentionTable items={attention} />
 
       <UltgIdealTable entries={ultgIdeal} />
+
+      <UltgStreamMatrixTable rows={ultgStreamMatrix} />
 
       <BreakdownGrid title="Breakdown per Sub Bidang" entries={subBidangBreakdown} />
       <StreamBreakdownTable entries={streamBreakdown} />

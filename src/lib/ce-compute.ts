@@ -379,6 +379,59 @@ export function buildCeRecentActivity(items: CeItem[], todayISO: string): CeRece
     .sort((a, b) => b.tanggalRealisasi.localeCompare(a.tanggalRealisasi));
 }
 
+export interface CeUltgStreamCell {
+  ultg: string;
+  total: number;
+  open: number;
+  close: number;
+}
+
+export interface CeUltgStreamRow {
+  streamCode: string;
+  streamLabel: string;
+  total: number;
+  open: number;
+  close: number;
+  byUltg: CeUltgStreamCell[];
+}
+
+/** Stream × ULTG detail matrix — one row per of the 9 streams (same labels
+ *  as buildCeStreamBreakdown), each ULTG's own total/open/close shown side
+ *  by side. The detail view behind buildCeUltgIdeal's own per-ULTG summary:
+ *  that table answers "which ULTG is behind," this answers "behind on
+ *  which kind of equipment." ULTG column order follows first-seen order in
+ *  `items`, same convention already used by buildCeUltgIdeal above, rather
+ *  than a hardcoded list — keeps this resilient to however many distinct
+ *  ULTG values the sheet actually has. */
+export function buildCeUltgStreamMatrix(items: CeItem[]): CeUltgStreamRow[] {
+  const ultgOrder: string[] = [];
+  for (const item of items) {
+    const key = item.ultg || "Lainnya";
+    if (!ultgOrder.includes(key)) ultgOrder.push(key);
+  }
+
+  return Object.entries(CE_STREAM_LABELS).map(([code, label]) => {
+    const group = items.filter((i) => extractCeStreamCode(i.indikator) === code);
+    const byUltg = ultgOrder.map((ultg) => {
+      const ultgGroup = group.filter((i) => (i.ultg || "Lainnya") === ultg);
+      return {
+        ultg,
+        total: ultgGroup.length,
+        open: ultgGroup.filter((i) => !i.done).length,
+        close: ultgGroup.filter((i) => i.done).length,
+      };
+    });
+    return {
+      streamCode: code,
+      streamLabel: label,
+      total: group.length,
+      open: group.filter((i) => !i.done).length,
+      close: group.filter((i) => i.done).length,
+      byUltg,
+    };
+  });
+}
+
 export interface CeExecutiveSummary {
   criticalOpen: number;
   criticalTotal: number;

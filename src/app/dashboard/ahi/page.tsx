@@ -8,8 +8,10 @@ import { AhiExecutiveSummary } from "@/components/ahi/ahi-executive-summary";
 import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
 import { AhiAnomalyTable } from "@/components/ahi/ahi-anomaly-table";
 import { AhiCategoryDetail } from "@/components/ahi/ahi-category-detail";
+import { AhiUltgResumeCard } from "@/components/ahi/ahi-ultg-resume";
 import { CollapsibleDataDetail } from "@/components/ahi/collapsible-data-detail";
 import { BayLineReportView } from "@/components/ahi/bay-line-report";
+import { buildAhiUltgEquipmentMatrix, buildAhiUltgResume } from "@/lib/ahi-compute";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 
@@ -39,6 +41,8 @@ export default async function AhiPage() {
 
   const { sections, anomalies, lastUpdate } = result.data;
   const bayLineReports = await getAllBayLineReportsWithHistory();
+  const ultgResume = buildAhiUltgResume(anomalies);
+  const ultgEquipmentMatrix = buildAhiUltgEquipmentMatrix(anomalies);
 
   return (
     <div className="flex flex-col gap-6">
@@ -134,6 +138,8 @@ export default async function AhiPage() {
             <AhiCategoryDetail sections={sections} />
             <CollapsibleDataDetail sections={sections} />
           </section>
+
+          <AhiUltgResumeCard resume={ultgResume} matrix={ultgEquipmentMatrix} />
 
           <Card id="ahi-anomaly" className="scroll-mt-20">
             <CardHeader>

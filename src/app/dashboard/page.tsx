@@ -13,18 +13,34 @@ import type { ExcelSheetSpec } from "@/components/dashboard/export-excel-button"
 import { UltgGapToTarget } from "@/components/kinerja-ultg/ultg-gap-to-target";
 import { buildUltgRanking, RankBadge } from "@/components/kinerja-ultg/ultg-ranking-table";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
+import { UltgAttentionRollupTable } from "@/components/dashboard/ultg-attention-rollup-table";
 import { getUptPerformance } from "@/services/upt-performance";
 import { getUltgPerformance } from "@/services/ultg-performance";
 import { getDisturbances, type DisturbancesResult } from "@/services/disturbances";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
 import { getRenusData } from "@/services/renus";
+import { getAboProteksiSnapshot } from "@/services/abo-proteksi";
+import { getAboHargiSnapshot } from "@/services/abo-hargi";
+import { getFourDxSnapshot } from "@/services/four-dx";
+import { getCeSnapshot } from "@/services/ce-proteksi";
+import { getAssetScanning } from "@/services/asset-scanning";
 import { buildManagementAttention } from "@/lib/executive-insights";
 import { buildGiCorrelation } from "@/lib/asset-correlation";
 import { listSyncStatus } from "@/lib/sync-status";
+import { buildAboSnapshotComputed, buildAboUltgResume, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
+import { buildFourDxUltgResume, buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
+import { buildCeSummary } from "@/lib/ce-compute";
+import { buildAhiUltgResume } from "@/lib/ahi-compute";
+import { buildRenusUltgResume } from "@/lib/renus-compute";
+import { buildUltgAttentionRollup, type UltgCountEntry } from "@/lib/ultg-attention-rollup";
 import type {
+  AboSnapshot,
   AhiResult,
+  AssetScanningResult,
   BayLineReport,
+  CeSnapshot,
+  FourDxSnapshot,
   RenusData,
   StatusLevel,
   UltgPerformanceResult,
@@ -68,6 +84,11 @@ export default function OverviewPage() {
   const ahiPromise = getAhiPerformance();
   const renusPromise = getRenusData();
   const bayLineReportsPromise = getAllBayLineReports();
+  const aboProteksiPromise = getAboProteksiSnapshot();
+  const aboHargiPromise = getAboHargiSnapshot();
+  const fourDxPromise = getFourDxSnapshot();
+  const cePromise = getCeSnapshot();
+  const assetScanningPromise = getAssetScanning();
 
   return (
     <div className="flex flex-col gap-6">
@@ -118,9 +139,26 @@ export default function OverviewPage() {
             ahiPromise={ahiPromise}
             renusPromise={renusPromise}
             bayLineReportsPromise={bayLineReportsPromise}
+            aboProteksiPromise={aboProteksiPromise}
+            aboHargiPromise={aboHargiPromise}
+            fourDxPromise={fourDxPromise}
+            cePromise={cePromise}
           />
         </Suspense>
       </div>
+
+      <Suspense fallback={<ManagementAttentionFallback />}>
+        <UltgAttentionRollupSection
+          aboProteksiPromise={aboProteksiPromise}
+          aboHargiPromise={aboHargiPromise}
+          fourDxPromise={fourDxPromise}
+          cePromise={cePromise}
+          ahiPromise={ahiPromise}
+          renusPromise={renusPromise}
+          disturbancesPromise={disturbancesPromise}
+          assetScanningPromise={assetScanningPromise}
+        />
+      </Suspense>
 
       <Card>
         <CardHeader>
@@ -385,20 +423,38 @@ async function ManagementAttentionAsync({
   ahiPromise,
   renusPromise,
   bayLineReportsPromise,
+  aboProteksiPromise,
+  aboHargiPromise,
+  fourDxPromise,
+  cePromise,
 }: {
   uptPromise: Promise<UptPerformanceResult>;
   disturbancesPromise: Promise<DisturbancesResult>;
   ahiPromise: Promise<AhiResult>;
   renusPromise: Promise<RenusData>;
   bayLineReportsPromise: Promise<BayLineReport[]>;
+  aboProteksiPromise: Promise<AboSnapshot>;
+  aboHargiPromise: Promise<AboSnapshot>;
+  fourDxPromise: Promise<FourDxSnapshot>;
+  cePromise: Promise<CeSnapshot>;
 }) {
-  const [upt, disturbances, ahi, renus, bayLineReports] = await Promise.all([
+  const [upt, disturbances, ahi, renus, bayLineReports, aboProteksi, aboHargi, fourDx, ce] = await Promise.all([
     uptPromise,
     disturbancesPromise,
     ahiPromise,
     renusPromise,
     bayLineReportsPromise,
+    aboProteksiPromise,
+    aboHargiPromise,
+    fourDxPromise,
+    cePromise,
   ]);
+
+  // Same "today"'s period each module's own page/sidebar-badge already uses
+  // (see src/lib/nav-badges.ts) — the homepage has no month/week filter of
+  // its own, so this is always "right now," not a user-chosen period.
+  const aboWeekLabel = defaultAboWeekLabel();
+  const fourDxPeriod = resolvePeriodRange(fourDx.currentPeriodLabel, fourDx.periodBoundaries, fourDx.currentYear);
 
   const managementAttention = buildManagementAttention({
     upt: upt.data,
@@ -408,12 +464,116 @@ async function ManagementAttentionAsync({
     ahi: ahi.data,
     bayLineReports: bayLineReports.length > 0 ? bayLineReports : null,
     renusReminders: renus.error ? null : renus.reminders,
-    abo: null,
-    fourDx: null,
-    ce: null,
+    abo:
+      aboProteksi.error || aboHargi.error
+        ? null
+        : {
+            proteksiPrograms: buildAboSnapshotComputed(aboProteksi, aboWeekLabel),
+            hargiPrograms: buildAboSnapshotComputed(aboHargi, aboWeekLabel),
+            weekLabel: aboWeekLabel,
+          },
+    fourDx: fourDx.error ? null : buildFourDxWigs(fourDx.wigs, fourDxPeriod, fourDx.realizations, fourDx.monitoring),
+    ce: ce.error ? null : ce,
   });
 
   return <ManagementAttentionSection initialInsights={managementAttention} />;
+}
+
+async function UltgAttentionRollupSection({
+  aboProteksiPromise,
+  aboHargiPromise,
+  fourDxPromise,
+  cePromise,
+  ahiPromise,
+  renusPromise,
+  disturbancesPromise,
+  assetScanningPromise,
+}: {
+  aboProteksiPromise: Promise<AboSnapshot>;
+  aboHargiPromise: Promise<AboSnapshot>;
+  fourDxPromise: Promise<FourDxSnapshot>;
+  cePromise: Promise<CeSnapshot>;
+  ahiPromise: Promise<AhiResult>;
+  renusPromise: Promise<RenusData>;
+  disturbancesPromise: Promise<DisturbancesResult>;
+  assetScanningPromise: Promise<AssetScanningResult>;
+}) {
+  const [aboProteksi, aboHargi, fourDx, ce, ahi, renus, disturbances, assetScanning] = await Promise.all([
+    aboProteksiPromise,
+    aboHargiPromise,
+    fourDxPromise,
+    cePromise,
+    ahiPromise,
+    renusPromise,
+    disturbancesPromise,
+    assetScanningPromise,
+  ]);
+
+  const aboWeekLabel = defaultAboWeekLabel();
+  const aboEntries: UltgCountEntry[] =
+    aboProteksi.error || aboHargi.error
+      ? []
+      : buildAboUltgResume([
+          ...buildAboSnapshotComputed(aboProteksi, aboWeekLabel),
+          ...buildAboSnapshotComputed(aboHargi, aboWeekLabel),
+        ]).map((e) => ({ ultg: e.ultg, count: e.programsEvaluated - e.programsTercapai }));
+
+  const fourDxEntries: UltgCountEntry[] = fourDx.error
+    ? []
+    : buildFourDxUltgResume(
+        buildFourDxWigs(
+          fourDx.wigs,
+          resolvePeriodRange(fourDx.currentPeriodLabel, fourDx.periodBoundaries, fourDx.currentYear),
+          fourDx.realizations,
+          fourDx.monitoring,
+        ),
+      ).map((e) => ({ ultg: e.ultg, count: e.lmsEvaluated - e.lmsTercapai }));
+
+  const ceEntries: UltgCountEntry[] = ce.error
+    ? []
+    : buildCeSummary(ce.items).byUltg.map((e) => ({ ultg: e.label, count: e.open }));
+
+  const ahiEntries: UltgCountEntry[] = ahi.data
+    ? buildAhiUltgResume(ahi.data.anomalies).map((e) => ({ ultg: e.ultg, count: e.critical }))
+    : [];
+
+  // Same "overdue, all periods" definition as buildRenusReminders — not
+  // scoped to the page's own view/filter (there is none here on the
+  // homepage), just every active row past its own rencana date.
+  const renusEntries: UltgCountEntry[] = renus.error
+    ? []
+    : buildRenusUltgResume(renus.rows, renus.today).map((e) => ({ ultg: e.ultg, count: e.overdue }));
+
+  const disturbanceOpenByUltg = new Map<string, number>();
+  if (!disturbances.error) {
+    for (const category of [disturbances.transmisi, disturbances.trafoHv, disturbances.trafoLv]) {
+      for (const u of category.ultgBreakdown) {
+        disturbanceOpenByUltg.set(u.ultg, (disturbanceOpenByUltg.get(u.ultg) ?? 0) + u.followUp.open);
+      }
+    }
+  }
+  const disturbanceEntries: UltgCountEntry[] = [...disturbanceOpenByUltg.entries()].map(([ultg, count]) => ({ ultg, count }));
+
+  const assetOpenByUltg = new Map<string, number>();
+  if (assetScanning.data) {
+    for (const a of assetScanning.data.anomali) {
+      if ((a.status ?? "").toUpperCase() === "SELESAI") continue;
+      assetOpenByUltg.set(a.ultg, (assetOpenByUltg.get(a.ultg) ?? 0) + 1);
+    }
+  }
+  const assetEntries: UltgCountEntry[] = [...assetOpenByUltg.entries()].map(([ultg, count]) => ({ ultg, count }));
+
+  const rollup = buildUltgAttentionRollup({
+    abo: aboEntries,
+    fourDx: fourDxEntries,
+    ce: ceEntries,
+    ahi: ahiEntries,
+    renus: renusEntries,
+    disturbances: disturbanceEntries,
+    dataAset: assetEntries,
+  });
+
+  return <UltgAttentionRollupTable entries={rollup} />;
 }
 
 async function GapToTargetSection({ uptPromise }: { uptPromise: Promise<UptPerformanceResult> }) {
