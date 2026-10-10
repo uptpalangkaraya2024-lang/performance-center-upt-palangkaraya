@@ -18,6 +18,9 @@ import { getAllBayTrafoReportsWithHistory } from "@/services/ahi-bay-trafo-repor
 import { getAllBayKopelReportsWithHistory } from "@/services/ahi-bay-kopel-report";
 import { getAllBayReaktorReportsWithHistory } from "@/services/ahi-bay-reaktor-report";
 import { getAllBayKapasitorReportsWithHistory } from "@/services/ahi-bay-kapasitor-report";
+import { getAllBayGtReportsWithHistory } from "@/services/ahi-bay-gt-report";
+import { getAllBayBusReportsWithHistory } from "@/services/ahi-bay-bus-report";
+import { getAllBayDiameterReportsWithHistory } from "@/services/ahi-bay-diameter-report";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why — AHI is the module with the
@@ -44,12 +47,24 @@ export default async function AhiPage() {
   }
 
   const { sections, anomalies, lastUpdate } = result.data;
-  const [bayLineReports, bayTrafoReports, bayKopelReports, bayReaktorReports, bayKapasitorReports] = await Promise.all([
+  const [
+    bayLineReports,
+    bayTrafoReports,
+    bayKopelReports,
+    bayReaktorReports,
+    bayKapasitorReports,
+    bayGtReports,
+    bayBusReports,
+    bayDiameterReports,
+  ] = await Promise.all([
     getAllBayLineReportsWithHistory(),
     getAllBayTrafoReportsWithHistory(),
     getAllBayKopelReportsWithHistory(),
     getAllBayReaktorReportsWithHistory(),
     getAllBayKapasitorReportsWithHistory(),
+    getAllBayGtReportsWithHistory(),
+    getAllBayBusReportsWithHistory(),
+    getAllBayDiameterReportsWithHistory(),
   ]);
   const ultgResume = buildAhiUltgResume(anomalies);
   const ultgEquipmentMatrix = buildAhiUltgEquipmentMatrix(anomalies);
@@ -177,8 +192,8 @@ export default async function AhiPage() {
             <CardHeader className="print:hidden">
               <CardTitle className="text-lg font-extrabold">Report Bay</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Pilih jenis report (Bay Line, Bay Trafo, Bay Kopel, Bay Reaktor, atau Bay Kapasitor), lalu satu bay
-                untuk melihat resume, hasil uji, dan hasil evaluasi AHI tiap peralatan.
+                Pilih jenis report (Bay Line, Bay Trafo, Bay Kopel, Bay Reaktor, Bay Kapasitor, Bay GT, Bay Bus, atau
+                Bay Diameter), lalu satu bay untuk melihat resume, hasil uji, dan hasil evaluasi AHI tiap peralatan.
               </p>
             </CardHeader>
             <CardContent>
@@ -187,6 +202,9 @@ export default async function AhiPage() {
                   "bay-line": bayLineReports,
                   "bay-trafo": bayTrafoReports,
                   "bay-kopel": bayKopelReports,
+                  "bay-gt": bayGtReports,
+                  "bay-bus": bayBusReports,
+                  "bay-diameter": bayDiameterReports,
                   "bay-reaktor": bayReaktorReports,
                   "bay-kapasitor": bayKapasitorReports,
                 }}

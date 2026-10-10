@@ -485,7 +485,15 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
   );
 }
 
-export type ReportKind = "bay-line" | "bay-trafo" | "bay-kopel" | "bay-reaktor" | "bay-kapasitor";
+export type ReportKind =
+  | "bay-line"
+  | "bay-trafo"
+  | "bay-kopel"
+  | "bay-reaktor"
+  | "bay-kapasitor"
+  | "bay-gt"
+  | "bay-bus"
+  | "bay-diameter";
 
 const REPORT_KIND_LABEL: Record<ReportKind, string> = {
   "bay-line": "Bay Line",
@@ -493,12 +501,24 @@ const REPORT_KIND_LABEL: Record<ReportKind, string> = {
   "bay-kopel": "Bay Kopel",
   "bay-reaktor": "Bay Reaktor",
   "bay-kapasitor": "Bay Kapasitor",
+  "bay-gt": "Bay GT",
+  "bay-bus": "Bay Bus",
+  "bay-diameter": "Bay Diameter",
 };
 
-// Order the selector itself lists the 5 kinds in — not object key order,
+// Order the selector itself lists the kinds in — not object key order,
 // since REPORT_KIND_LABEL's own order isn't guaranteed stable once more
 // kinds get added later.
-const REPORT_KIND_ORDER: ReportKind[] = ["bay-line", "bay-trafo", "bay-kopel", "bay-reaktor", "bay-kapasitor"];
+const REPORT_KIND_ORDER: ReportKind[] = [
+  "bay-line",
+  "bay-trafo",
+  "bay-kopel",
+  "bay-reaktor",
+  "bay-kapasitor",
+  "bay-gt",
+  "bay-bus",
+  "bay-diameter",
+];
 
 export function BayLineReportView({ reportsByKind }: { reportsByKind: Record<ReportKind, BayLineReport[]> }) {
   const [kind, setKind] = useState<ReportKind>("bay-line");
