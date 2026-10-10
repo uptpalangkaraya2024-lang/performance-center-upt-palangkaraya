@@ -279,6 +279,43 @@ export function buildAboUltgDetailRows(programs: AboProgramComputed[]): AboUltgD
   });
 }
 
+export interface AboTrajectoryPoint {
+  weekLabel: string;
+  /** Cumulative target as % of MASTER, traced across all 48 weeks of the
+   *  year regardless of the selected period — the full plan line. */
+  targetPercent: number;
+  /** Cumulative realisasi as % of MASTER, only through the selected week —
+   *  null (not 0) for weeks not yet reached, so the line simply stops
+   *  there instead of dropping to the floor. */
+  realisasiPercent: number | null;
+}
+
+/** Full-year pacing line for one program (UPT-level or one ULTG's own
+ *  block) — the target line traced across every week of the year from the
+ *  sheet's own weekly targetWeekly column, alongside realisasi traced only
+ *  through the selected week. Both expressed as % of MASTER, the same
+ *  denominator computeStats already uses for percentTarget/percentRealisasi
+ *  above, so this chart's final realisasi point always matches that
+ *  program's own StatGrid % exactly — this just shows the shape of the
+ *  whole year's climb instead of a single end-of-period number. Unlike
+ *  CE's buildCeUltgIdeal (an artificial straight-line diagonal, since CE
+ *  has no per-week target series to read), ABO's own sheet already carries
+ *  real week-by-week targets, so the "ideal" line here is the actual plan,
+ *  not an assumed-even one. */
+export function buildAboTrajectory(raw: AboProgramRaw, selectedWeekLabel: string): AboTrajectoryPoint[] {
+  const selectedIndex = weekLabelIndex(selectedWeekLabel);
+  let targetCum = 0;
+  let realisasiCum = 0;
+  return ABO_WEEK_LABELS.map((label, idx) => {
+    targetCum += raw.targetWeekly[label] ?? 0;
+    realisasiCum += raw.realisasiWeekly[label] ?? 0;
+    // Mirrors computeStats' own IFERROR(...,1) fallback when master is 0.
+    const targetPercent = raw.master > 0 ? (targetCum / raw.master) * 100 : 100;
+    const realisasiPercent = idx <= selectedIndex ? (raw.master > 0 ? (realisasiCum / raw.master) * 100 : 100) : null;
+    return { weekLabel: label, targetPercent, realisasiPercent };
+  });
+}
+
 /** Today's week label via a plain ceil(day/7) estimate (capped at M4) — no
  *  DATASET-style real-date lookup needed here, since ABO's own week labels
  *  are matched by label alone, not real calendar boundaries (confirmed with

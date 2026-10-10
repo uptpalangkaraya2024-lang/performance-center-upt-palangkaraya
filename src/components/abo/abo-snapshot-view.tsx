@@ -20,14 +20,17 @@ import {
   ABO_MONTH_FULL,
   aboMonthAbbrIndex,
   buildAboSnapshotComputed,
+  buildAboTrajectory,
   buildAboUltgDetailRows,
   buildAboUltgResume,
   collectAboAttentionItems,
   defaultAboWeekLabel,
   type AboAttentionItem,
+  type AboTrajectoryPoint,
   type AboUltgDetailRow,
   type AboUltgResumeEntry,
 } from "@/lib/abo-proteksi-compute";
+import { AboTrajectoryChart } from "@/components/abo/abo-trajectory-chart";
 import { cn } from "@/lib/utils";
 import type { AboProgramComputed, AboSnapshot, AboUltgComputed } from "@/types";
 
@@ -410,7 +413,15 @@ function RuasChecklist({
   );
 }
 
-function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComputed; selectedWeekLabel: string }) {
+function ProgramCard({
+  program,
+  selectedWeekLabel,
+  trajectory,
+}: {
+  program: AboProgramComputed;
+  selectedWeekLabel: string;
+  trajectory: AboTrajectoryPoint[];
+}) {
   // A colored LEFT-edge accent (tercapai/belum), not a full-width top
   // stripe — a thin border reads as a status accent; a solid bar spanning
   // the whole card width started looking like "the whole card is green"
@@ -439,6 +450,7 @@ function ProgramCard({ program, selectedWeekLabel }: { program: AboProgramComput
           <StatGrid stats={program} />
         </div>
         <UltgBreakdown ultgBreakdown={program.ultgBreakdown} />
+        <AboTrajectoryChart trajectory={trajectory} selectedWeekLabel={selectedWeekLabel} />
         <RuasChecklist ruasItems={program.ruasItems} selectedWeekLabel={selectedWeekLabel} />
       </CardContent>
     </Card>
@@ -462,6 +474,10 @@ export function AboSnapshotView({
   const [monthAbbr, weekOfMonth] = weekLabel.split("-M");
 
   const programs = buildAboSnapshotComputed(snapshot, weekLabel);
+  const trajectories = useMemo(
+    () => new Map(snapshot.programs.map((p) => [p.code, buildAboTrajectory(p.upt, weekLabel)])),
+    [snapshot, weekLabel],
+  );
   const attentionItems = useMemo(() => collectAboAttentionItems(programs, weekLabel), [programs, weekLabel]);
   const ultgResume = useMemo(() => buildAboUltgResume(programs), [programs]);
   const ultgDetailRows = useMemo(() => buildAboUltgDetailRows(programs), [programs]);
@@ -604,7 +620,7 @@ export function AboSnapshotView({
       <div className="flex flex-col gap-5">
         {filteredPrograms.map((p) => (
           <Fragment key={p.code}>
-            <ProgramCard program={p} selectedWeekLabel={weekLabel} />
+            <ProgramCard program={p} selectedWeekLabel={weekLabel} trajectory={trajectories.get(p.code) ?? []} />
           </Fragment>
         ))}
       </div>
