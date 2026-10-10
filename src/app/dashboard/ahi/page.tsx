@@ -14,6 +14,7 @@ import { BayLineReportView } from "@/components/ahi/bay-line-report";
 import { buildAhiUltgEquipmentMatrix, buildAhiUltgResume } from "@/lib/ahi-compute";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
+import { getAllBayTrafoReportsWithHistory } from "@/services/ahi-bay-trafo-report";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why — AHI is the module with the
@@ -40,7 +41,10 @@ export default async function AhiPage() {
   }
 
   const { sections, anomalies, lastUpdate } = result.data;
-  const bayLineReports = await getAllBayLineReportsWithHistory();
+  const [bayLineReports, bayTrafoReports] = await Promise.all([
+    getAllBayLineReportsWithHistory(),
+    getAllBayTrafoReportsWithHistory(),
+  ]);
   const ultgResume = buildAhiUltgResume(anomalies);
   const ultgEquipmentMatrix = buildAhiUltgEquipmentMatrix(anomalies);
 
@@ -165,19 +169,19 @@ export default async function AhiPage() {
               neutralizes position: sticky for every descendant). */}
           <Card className="overflow-visible">
             <CardHeader className="print:hidden">
-              <CardTitle className="text-lg font-extrabold">Report Bay Line</CardTitle>
+              <CardTitle className="text-lg font-extrabold">Report Bay</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Pilih satu bay line untuk melihat resume, hasil uji, dan hasil evaluasi AHI tiap peralatan (LA, DS
-                Line/Bus, CVT, PMT, CT).
+                Pilih jenis report (Bay Line atau Bay Trafo), lalu satu bay untuk melihat resume, hasil uji, dan
+                hasil evaluasi AHI tiap peralatan.
               </p>
             </CardHeader>
             <CardContent>
-              <BayLineReportView reports={bayLineReports} />
+              <BayLineReportView lineReports={bayLineReports} trafoReports={bayTrafoReports} />
             </CardContent>
           </Card>
           <p className="text-[11px] text-muted-foreground print:hidden">
-            Source: AHI UPT Palangkaraya 2026 fixed · Sheet: Input LA, Input PMS, Input PT, Input PMT, Input CT ·
-            Provider: Apps Script
+            Source: AHI UPT Palangkaraya 2026 fixed · Sheet: Input LA, Input PMS, Input PT, Input PMT, Input CT, Input
+            Trafo, Input Trafo Mbl, Input NGR, Input NGR Mbl · Provider: Apps Script
           </p>
         </TabsContent>
       </Tabs>

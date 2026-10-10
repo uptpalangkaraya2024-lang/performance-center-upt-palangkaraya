@@ -485,7 +485,20 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
   );
 }
 
-export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
+type ReportKind = "bay-line" | "bay-trafo";
+
+const REPORT_KIND_LABEL: Record<ReportKind, string> = { "bay-line": "Bay Line", "bay-trafo": "Bay Trafo" };
+
+export function BayLineReportView({
+  lineReports,
+  trafoReports,
+}: {
+  lineReports: BayLineReport[];
+  trafoReports: BayLineReport[];
+}) {
+  const [kind, setKind] = useState<ReportKind>("bay-line");
+  const reports = kind === "bay-line" ? lineReports : trafoReports;
+
   const giOptions = useMemo(() => [...new Set(reports.map((r) => r.gi))].sort(), [reports]);
   const [gi, setGi] = useState(ALL_VALUE);
   const bayOptions = useMemo(
@@ -496,10 +509,10 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
 
   const selected = reports.find((r) => r.bay === bay) ?? null;
 
-  if (reports.length === 0) {
+  if (lineReports.length === 0 && trafoReports.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        Data Bay Line belum tersedia — lihat halaman Data & Sync untuk detail.
+        Data Report Bay belum tersedia — lihat halaman Data & Sync untuk detail.
       </p>
     );
   }
@@ -507,17 +520,24 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
-        {/* Report type is its own selector — the AHI page has a "Report" tab
-            (not "Bay Line") because the source spreadsheet has several report
-            sheets (Bay Line, Bay GT, Bus, Trafo). Only Bay Line is built so
-            far; this makes that scope explicit instead of the tab label
-            implying Bay Line is the only report that will ever exist. */}
-        <Select value="bay-line" onValueChange={() => {}}>
+        {/* The source spreadsheet has several more report sheets (Bay GT,
+            Bus, Kapasitor, Reaktor, ...) not built yet — this selector
+            stays explicit about which 2 are available rather than a tab
+            label implying only one report will ever exist. */}
+        <Select
+          value={kind}
+          onValueChange={(v) => {
+            setKind((v as ReportKind) ?? "bay-line");
+            setGi(ALL_VALUE);
+            setBay(null);
+          }}
+        >
           <SelectTrigger size="sm" className="w-[160px]">
-            <SelectValue placeholder="Jenis Report">Bay Line</SelectValue>
+            <SelectValue placeholder="Jenis Report">{REPORT_KIND_LABEL[kind]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="bay-line">Bay Line</SelectItem>
+            <SelectItem value="bay-trafo">Bay Trafo</SelectItem>
           </SelectContent>
         </Select>
 
@@ -543,7 +563,9 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
 
         <Select value={bay ?? ""} onValueChange={(v) => setBay(v || null)}>
           <SelectTrigger size="sm" className="w-[320px]">
-            <SelectValue placeholder="Pilih Bay Line">{bay ?? "Pilih Bay Line..."}</SelectValue>
+            <SelectValue placeholder={`Pilih ${REPORT_KIND_LABEL[kind]}`}>
+              {bay ?? `Pilih ${REPORT_KIND_LABEL[kind]}...`}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {bayOptions.map((b) => (
@@ -564,7 +586,7 @@ export function BayLineReportView({ reports }: { reports: BayLineReport[] }) {
 
       {!selected ? (
         <p className="py-8 text-center text-sm text-muted-foreground print:hidden">
-          Pilih Bay Line untuk melihat detail report.
+          Pilih {REPORT_KIND_LABEL[kind]} untuk melihat detail report.
         </p>
       ) : (
         <div className="flex flex-col gap-4">

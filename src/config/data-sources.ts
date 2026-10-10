@@ -126,6 +126,31 @@ export const dataSources = {
             required: false,
             purpose: "Per-equipment Current Transformer test results.",
           },
+          // The 4 sheets below feed the Bay Trafo report only (src/services/
+          // ahi-bay-trafo-report.ts) — Input LA/PMS/PMT/CT above are SHARED
+          // between Bay Line and Bay Trafo (same sheets, filtered by a
+          // different BAY-column prefix: "BAY TRAFO" instead of "BAY LINE").
+          {
+            name: "Input Trafo",
+            required: false,
+            purpose:
+              "Per-unit main transformer test results — the Bay Trafo report's own \"Trafo\" equipment (fixed-position trafo, not mobile). Read via readSheetRaw — same 2-row header shape as the other Input sheets.",
+          },
+          {
+            name: "Input Trafo Mbl",
+            required: false,
+            purpose: "Same as Input Trafo, for mobile/portable transformer units — confirmed live its own column set differs slightly (fewer DGA/oil-test columns), so resolved by header name independently, never assumed identical to Input Trafo's layout.",
+          },
+          {
+            name: "Input NGR",
+            required: false,
+            purpose: "Per-unit Neutral Grounding Resistor test results — the Bay Trafo report's \"NGR\" equipment.",
+          },
+          {
+            name: "Input NGR Mbl",
+            required: false,
+            purpose: "Same as Input NGR, for mobile/portable transformer units' own NGR.",
+          },
         ],
       },
     ],
