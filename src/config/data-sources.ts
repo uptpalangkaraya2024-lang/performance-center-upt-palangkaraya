@@ -151,6 +151,25 @@ export const dataSources = {
             required: false,
             purpose: "Same as Input NGR, for mobile/portable transformer units' own NGR.",
           },
+          // Feed the Bay Reaktor and Bay Kapasitor reports (src/services/
+          // ahi-bay-reaktor-report.ts / ahi-bay-kapasitor-report.ts) — same
+          // shared-vs-dedicated split as Bay Trafo: LA/PMS/PMT/CT above are
+          // reused (filtered to "BAY REAKTOR"/"BAY KAPASITOR"), these 2 are
+          // each report's own dedicated equipment. Confirmed live:
+          // "Input PMT INC"/"Input CT INC"/"Input PT INC" are stale,
+          // incomplete duplicates of Input PMT/CT/PT (same techident/merk/
+          // type, just missing TANGGAL PEMELIHARAAN TERAKHIR) — deliberately
+          // never read anywhere in this app.
+          {
+            name: "Input Reaktor",
+            required: false,
+            purpose: "Per-unit shunt reactor test results — the Bay Reaktor report's own \"Reaktor\" equipment. Same column shape as Input Trafo (confirmed live, near-identical Evaluasi AHI group), its own sheet since a reactor isn't a transformer.",
+          },
+          {
+            name: "Input Kapasitor",
+            required: false,
+            purpose: "Per-unit capacitor bank test results — the Bay Kapasitor report's own \"Kapasitor\" equipment. Confirmed live this sheet ALSO carries one other UIP3B Kalimantan UPT's own capacitor row (GI Sei Raya, UPT Pontianak) — excluded automatically by the same BAY-prefix filter every other equipment type already uses (that row's own BAY-ish text doesn't start with \"BAY KAPASITOR\").",
+          },
         ],
       },
     ],

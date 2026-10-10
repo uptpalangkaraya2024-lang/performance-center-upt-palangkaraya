@@ -15,6 +15,9 @@ import { buildAhiUltgEquipmentMatrix, buildAhiUltgResume } from "@/lib/ahi-compu
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 import { getAllBayTrafoReportsWithHistory } from "@/services/ahi-bay-trafo-report";
+import { getAllBayKopelReportsWithHistory } from "@/services/ahi-bay-kopel-report";
+import { getAllBayReaktorReportsWithHistory } from "@/services/ahi-bay-reaktor-report";
+import { getAllBayKapasitorReportsWithHistory } from "@/services/ahi-bay-kapasitor-report";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why — AHI is the module with the
@@ -41,9 +44,12 @@ export default async function AhiPage() {
   }
 
   const { sections, anomalies, lastUpdate } = result.data;
-  const [bayLineReports, bayTrafoReports] = await Promise.all([
+  const [bayLineReports, bayTrafoReports, bayKopelReports, bayReaktorReports, bayKapasitorReports] = await Promise.all([
     getAllBayLineReportsWithHistory(),
     getAllBayTrafoReportsWithHistory(),
+    getAllBayKopelReportsWithHistory(),
+    getAllBayReaktorReportsWithHistory(),
+    getAllBayKapasitorReportsWithHistory(),
   ]);
   const ultgResume = buildAhiUltgResume(anomalies);
   const ultgEquipmentMatrix = buildAhiUltgEquipmentMatrix(anomalies);
@@ -171,17 +177,25 @@ export default async function AhiPage() {
             <CardHeader className="print:hidden">
               <CardTitle className="text-lg font-extrabold">Report Bay</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Pilih jenis report (Bay Line atau Bay Trafo), lalu satu bay untuk melihat resume, hasil uji, dan
-                hasil evaluasi AHI tiap peralatan.
+                Pilih jenis report (Bay Line, Bay Trafo, Bay Kopel, Bay Reaktor, atau Bay Kapasitor), lalu satu bay
+                untuk melihat resume, hasil uji, dan hasil evaluasi AHI tiap peralatan.
               </p>
             </CardHeader>
             <CardContent>
-              <BayLineReportView lineReports={bayLineReports} trafoReports={bayTrafoReports} />
+              <BayLineReportView
+                reportsByKind={{
+                  "bay-line": bayLineReports,
+                  "bay-trafo": bayTrafoReports,
+                  "bay-kopel": bayKopelReports,
+                  "bay-reaktor": bayReaktorReports,
+                  "bay-kapasitor": bayKapasitorReports,
+                }}
+              />
             </CardContent>
           </Card>
           <p className="text-[11px] text-muted-foreground print:hidden">
             Source: AHI UPT Palangkaraya 2026 fixed · Sheet: Input LA, Input PMS, Input PT, Input PMT, Input CT, Input
-            Trafo, Input Trafo Mbl, Input NGR, Input NGR Mbl · Provider: Apps Script
+            Trafo, Input Trafo Mbl, Input NGR, Input NGR Mbl, Input Reaktor, Input Kapasitor · Provider: Apps Script
           </p>
         </TabsContent>
       </Tabs>

@@ -485,19 +485,24 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
   );
 }
 
-type ReportKind = "bay-line" | "bay-trafo";
+export type ReportKind = "bay-line" | "bay-trafo" | "bay-kopel" | "bay-reaktor" | "bay-kapasitor";
 
-const REPORT_KIND_LABEL: Record<ReportKind, string> = { "bay-line": "Bay Line", "bay-trafo": "Bay Trafo" };
+const REPORT_KIND_LABEL: Record<ReportKind, string> = {
+  "bay-line": "Bay Line",
+  "bay-trafo": "Bay Trafo",
+  "bay-kopel": "Bay Kopel",
+  "bay-reaktor": "Bay Reaktor",
+  "bay-kapasitor": "Bay Kapasitor",
+};
 
-export function BayLineReportView({
-  lineReports,
-  trafoReports,
-}: {
-  lineReports: BayLineReport[];
-  trafoReports: BayLineReport[];
-}) {
+// Order the selector itself lists the 5 kinds in — not object key order,
+// since REPORT_KIND_LABEL's own order isn't guaranteed stable once more
+// kinds get added later.
+const REPORT_KIND_ORDER: ReportKind[] = ["bay-line", "bay-trafo", "bay-kopel", "bay-reaktor", "bay-kapasitor"];
+
+export function BayLineReportView({ reportsByKind }: { reportsByKind: Record<ReportKind, BayLineReport[]> }) {
   const [kind, setKind] = useState<ReportKind>("bay-line");
-  const reports = kind === "bay-line" ? lineReports : trafoReports;
+  const reports = reportsByKind[kind];
 
   const giOptions = useMemo(() => [...new Set(reports.map((r) => r.gi))].sort(), [reports]);
   const [gi, setGi] = useState(ALL_VALUE);
@@ -509,7 +514,7 @@ export function BayLineReportView({
 
   const selected = reports.find((r) => r.bay === bay) ?? null;
 
-  if (lineReports.length === 0 && trafoReports.length === 0) {
+  if (REPORT_KIND_ORDER.every((k) => reportsByKind[k].length === 0)) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
         Data Report Bay belum tersedia — lihat halaman Data & Sync untuk detail.
@@ -520,10 +525,10 @@ export function BayLineReportView({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
-        {/* The source spreadsheet has several more report sheets (Bay GT,
-            Bus, Kapasitor, Reaktor, ...) not built yet — this selector
-            stays explicit about which 2 are available rather than a tab
-            label implying only one report will ever exist. */}
+        {/* The source spreadsheet has a few more report sheets (Bay GT,
+            Bus, ...) not built yet — this selector stays explicit about
+            which kinds are available rather than a tab label implying only
+            one report will ever exist. */}
         <Select
           value={kind}
           onValueChange={(v) => {
@@ -536,8 +541,11 @@ export function BayLineReportView({
             <SelectValue placeholder="Jenis Report">{REPORT_KIND_LABEL[kind]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="bay-line">Bay Line</SelectItem>
-            <SelectItem value="bay-trafo">Bay Trafo</SelectItem>
+            {REPORT_KIND_ORDER.map((k) => (
+              <SelectItem key={k} value={k}>
+                {REPORT_KIND_LABEL[k]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
