@@ -36,7 +36,7 @@ export interface GiCorrelationRow {
 // group between the GI(S) prefix and the bare name. AHI/Disturbances
 // already hand buildGiCorrelation pre-normalized bare names from their own
 // services, so this is only applied to CE/RENUS's own raw fields here.
-function normalizeGiName(raw: string): string {
+export function normalizeGiName(raw: string): string {
   return raw.replace(/^GIS?\s*(\d+\s*KV\s*)?/i, "").trim();
 }
 

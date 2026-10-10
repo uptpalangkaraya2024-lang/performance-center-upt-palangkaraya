@@ -14,6 +14,7 @@ import {
   Sparkles,
   Presentation,
   Settings,
+  HeartPulse,
 } from "lucide-react";
 
 export interface NavItem {
@@ -67,6 +68,7 @@ export const navGroups: NavGroup[] = [
     label: "Data",
     items: [
       { title: "Data & Sync", href: "/dashboard/data-sync", icon: DatabaseZap },
+      { title: "Kesehatan Data", href: "/dashboard/data-health", icon: HeartPulse },
       { title: "AI Assistant", href: "/dashboard/ai", icon: Sparkles },
     ],
   },
