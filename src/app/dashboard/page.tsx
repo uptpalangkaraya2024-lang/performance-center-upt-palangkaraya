@@ -10,7 +10,7 @@ import { PageHero } from "@/components/dashboard/page-hero";
 import { UptPerformanceStatus } from "@/components/dashboard/upt-performance-status";
 import { UptGapToTarget } from "@/components/dashboard/upt-gap-to-target";
 import { OverviewExportToolbar } from "@/components/dashboard/overview-export-toolbar";
-import type { ExcelSheetSpec } from "@/components/dashboard/export-excel-button";
+import { ExportExcelButton, type ExcelSheetSpec } from "@/components/dashboard/export-excel-button";
 import { UltgGapToTarget } from "@/components/kinerja-ultg/ultg-gap-to-target";
 import { buildUltgRanking, RankBadge } from "@/components/kinerja-ultg/ultg-ranking-table";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
@@ -110,9 +110,25 @@ export default function OverviewPage() {
           </Suspense>
         }
         actions={
-          <Suspense fallback={null}>
-            <ExportToolbarSection uptPromise={uptPromise} ultgPromise={ultgPromise} />
-          </Suspense>
+          <div className="flex flex-wrap items-center gap-2">
+            <Suspense fallback={null}>
+              <ExportToolbarSection uptPromise={uptPromise} ultgPromise={ultgPromise} />
+            </Suspense>
+            <Suspense fallback={null}>
+              <ExecutiveReportSection
+                uptPromise={uptPromise}
+                disturbancesPromise={disturbancesPromise}
+                ahiPromise={ahiPromise}
+                renusPromise={renusPromise}
+                bayLineReportsPromise={bayLineReportsPromise}
+                aboProteksiPromise={aboProteksiPromise}
+                aboHargiPromise={aboHargiPromise}
+                fourDxPromise={fourDxPromise}
+                cePromise={cePromise}
+                assetScanningPromise={assetScanningPromise}
+              />
+            </Suspense>
+          </div>
         }
       />
 
@@ -359,6 +375,210 @@ async function ExportToolbarSection({
   }
 
   return <OverviewExportToolbar sheets={sheets} />;
+}
+
+// The "satu-klik laporan eksekutif" — one Excel workbook bundling the same
+// cross-module views already on this page (Management Attention, Perhatian
+// per ULTG, Skor Risiko Aset per GI, Kesiapan Musiman) so a manager gets
+// one file to read/forward instead of screenshotting 4 different cards.
+// Deliberately scoped to a data export, not an AI-narrated slide deck —
+// every number in it traces back to the exact same compute call its own
+// card on this page uses, so it can never say something the page itself
+// doesn't already show. Re-awaits the same promises the rest of the page
+// already kicked off (no extra fetch) and re-runs the same pure compute
+// functions those other sections use — cheap, and keeps this from ever
+// drifting out of sync with what's actually rendered.
+async function ExecutiveReportSection({
+  uptPromise,
+  disturbancesPromise,
+  ahiPromise,
+  renusPromise,
+  bayLineReportsPromise,
+  aboProteksiPromise,
+  aboHargiPromise,
+  fourDxPromise,
+  cePromise,
+  assetScanningPromise,
+}: {
+  uptPromise: Promise<UptPerformanceResult>;
+  disturbancesPromise: Promise<DisturbancesResult>;
+  ahiPromise: Promise<AhiResult>;
+  renusPromise: Promise<RenusData>;
+  bayLineReportsPromise: Promise<BayLineReport[]>;
+  aboProteksiPromise: Promise<AboSnapshot>;
+  aboHargiPromise: Promise<AboSnapshot>;
+  fourDxPromise: Promise<FourDxSnapshot>;
+  cePromise: Promise<CeSnapshot>;
+  assetScanningPromise: Promise<AssetScanningResult>;
+}) {
+  const [upt, disturbances, ahi, renus, bayLineReports, aboProteksi, aboHargi, fourDx, ce, assetScanning] =
+    await Promise.all([
+      uptPromise,
+      disturbancesPromise,
+      ahiPromise,
+      renusPromise,
+      bayLineReportsPromise,
+      aboProteksiPromise,
+      aboHargiPromise,
+      fourDxPromise,
+      cePromise,
+      assetScanningPromise,
+    ]);
+
+  const aboWeekLabel = defaultAboWeekLabel();
+  const fourDxPeriod = resolvePeriodRange(fourDx.currentPeriodLabel, fourDx.periodBoundaries, fourDx.currentYear);
+
+  const managementAttention = buildManagementAttention({
+    upt: upt.data,
+    transmisi: disturbances.error ? null : disturbances.transmisi,
+    trafoHv: disturbances.error ? null : disturbances.trafoHv,
+    trafoLv: disturbances.error ? null : disturbances.trafoLv,
+    ahi: ahi.data,
+    bayLineReports: bayLineReports.length > 0 ? bayLineReports : null,
+    renusReminders: renus.error ? null : renus.reminders,
+    abo:
+      aboProteksi.error || aboHargi.error
+        ? null
+        : {
+            proteksiPrograms: buildAboSnapshotComputed(aboProteksi, aboWeekLabel),
+            hargiPrograms: buildAboSnapshotComputed(aboHargi, aboWeekLabel),
+            weekLabel: aboWeekLabel,
+          },
+    fourDx: fourDx.error ? null : buildFourDxWigs(fourDx.wigs, fourDxPeriod, fourDx.realizations, fourDx.monitoring),
+    ce: ce.error ? null : ce,
+  });
+
+  const aboEntries: UltgCountEntry[] =
+    aboProteksi.error || aboHargi.error
+      ? []
+      : buildAboUltgResume([
+          ...buildAboSnapshotComputed(aboProteksi, aboWeekLabel),
+          ...buildAboSnapshotComputed(aboHargi, aboWeekLabel),
+        ]).map((e) => ({ ultg: e.ultg, count: e.programsEvaluated - e.programsTercapai }));
+
+  const fourDxEntries: UltgCountEntry[] = fourDx.error
+    ? []
+    : buildFourDxUltgResume(
+        buildFourDxWigs(fourDx.wigs, fourDxPeriod, fourDx.realizations, fourDx.monitoring),
+      ).map((e) => ({ ultg: e.ultg, count: e.lmsEvaluated - e.lmsTercapai }));
+
+  const ceEntries: UltgCountEntry[] = ce.error
+    ? []
+    : buildCeSummary(ce.items).byUltg.map((e) => ({ ultg: e.label, count: e.open }));
+
+  const ahiEntries: UltgCountEntry[] = ahi.data
+    ? buildAhiUltgResume(ahi.data.anomalies).map((e) => ({ ultg: e.ultg, count: e.critical }))
+    : [];
+
+  const renusEntries: UltgCountEntry[] = renus.error
+    ? []
+    : buildRenusUltgResume(renus.rows, renus.today).map((e) => ({ ultg: e.ultg, count: e.overdue }));
+
+  const disturbanceOpenByUltg = new Map<string, number>();
+  if (!disturbances.error) {
+    for (const category of [disturbances.transmisi, disturbances.trafoHv, disturbances.trafoLv]) {
+      for (const u of category.ultgBreakdown) {
+        disturbanceOpenByUltg.set(u.ultg, (disturbanceOpenByUltg.get(u.ultg) ?? 0) + u.followUp.open);
+      }
+    }
+  }
+  const disturbanceEntries: UltgCountEntry[] = [...disturbanceOpenByUltg.entries()].map(([ultg, count]) => ({
+    ultg,
+    count,
+  }));
+
+  const assetOpenByUltg = new Map<string, number>();
+  if (assetScanning.data) {
+    for (const a of assetScanning.data.anomali) {
+      if ((a.status ?? "").toUpperCase() === "SELESAI") continue;
+      assetOpenByUltg.set(a.ultg, (assetOpenByUltg.get(a.ultg) ?? 0) + 1);
+    }
+  }
+  const assetEntries: UltgCountEntry[] = [...assetOpenByUltg.entries()].map(([ultg, count]) => ({ ultg, count }));
+
+  const rollup = buildUltgAttentionRollup({
+    abo: aboEntries,
+    fourDx: fourDxEntries,
+    ce: ceEntries,
+    ahi: ahiEntries,
+    renus: renusEntries,
+    disturbances: disturbanceEntries,
+    dataAset: assetEntries,
+  });
+
+  const giCorrelation =
+    !disturbances.error && ahi.data
+      ? buildGiCorrelation({
+          trafoGi: [...disturbances.trafoHv.giBreakdown, ...disturbances.trafoLv.giBreakdown],
+          transmisiGi: disturbances.transmisi.giBreakdown,
+          anomalies: ahi.data.anomalies,
+          ceItems: ce.error ? [] : ce.items,
+          renusRows: renus.error ? [] : renus.rows,
+        })
+      : [];
+
+  const todayMonthIndex =
+    Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(new Date())) - 1;
+  const seasonalReadiness = disturbances.error
+    ? []
+    : buildSeasonalReadiness({
+        disturbances,
+        renusRows: renus.error ? [] : renus.rows,
+        aboSnapshots: [aboProteksi, aboHargi].filter((s) => !s.error),
+        todayMonthIndex,
+      });
+
+  const sheets: ExcelSheetSpec[] = [
+    {
+      name: "Management Attention",
+      rows: managementAttention.map((i) => ({ Modul: i.module ?? "-", Tingkat: i.tone, Insight: i.text })),
+    },
+    {
+      name: "Perhatian per ULTG",
+      rows: rollup.map((r) => ({
+        ULTG: r.ultg,
+        ABO: r.abo,
+        "4DX": r.fourDx,
+        CE: r.ce,
+        AHI: r.ahi,
+        RENUS: r.renus,
+        Gangguan: r.disturbances,
+        "Data Aset": r.dataAset,
+        Total: r.total,
+      })),
+    },
+    {
+      name: "Skor Risiko Aset per GI",
+      rows: giCorrelation.slice(0, 30).map((g) => ({
+        GI: g.gi,
+        "Gangguan Trafo": g.gangguanTrafo,
+        "Gangguan Transmisi": g.gangguanTransmisi,
+        "AHI Poor": g.ahiPoor,
+        "AHI Critical": g.ahiCritical,
+        "CE Open": g.ceOpen,
+        "RENUS Overdue": g.renusOverdue,
+        "Skor Risiko": g.riskScore,
+      })),
+    },
+    {
+      name: "Kesiapan Musiman",
+      rows: seasonalReadiness.map((m) => ({
+        Bulan: m.month,
+        "Peringkat Risiko": m.rank,
+        "Rata-rata Gangguan per Tahun": Math.round(m.avgPerYear * 10) / 10,
+        "RENUS Terjadwal": m.renusScheduled,
+        "ABO Terjadwal": m.aboScheduled,
+      })),
+    },
+  ];
+
+  return (
+    <ExportExcelButton
+      filename={`Laporan-Eksekutif-UPT-Palangkaraya-${new Date().toISOString().slice(0, 10)}.xlsx`}
+      sheets={sheets}
+      label="Laporan Eksekutif"
+    />
+  );
 }
 
 async function UptStatusSection({ uptPromise }: { uptPromise: Promise<UptPerformanceResult> }) {
