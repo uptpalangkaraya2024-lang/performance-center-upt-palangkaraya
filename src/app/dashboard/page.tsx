@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ManagementAttentionSection } from "@/components/dashboard/management-attention-section";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { GiCorrelationTable } from "@/components/dashboard/gi-correlation-table";
+import { SeasonalReadinessCard } from "@/components/dashboard/seasonal-readiness-card";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { UptPerformanceStatus } from "@/components/dashboard/upt-performance-status";
 import { UptGapToTarget } from "@/components/dashboard/upt-gap-to-target";
@@ -27,6 +28,7 @@ import { getCeSnapshot } from "@/services/ce-proteksi";
 import { getAssetScanning } from "@/services/asset-scanning";
 import { buildManagementAttention } from "@/lib/executive-insights";
 import { buildGiCorrelation } from "@/lib/asset-correlation";
+import { buildSeasonalReadiness, upcomingRiskyMonths } from "@/lib/seasonal-readiness";
 import { listSyncStatus } from "@/lib/sync-status";
 import { buildAboSnapshotComputed, buildAboUltgResume, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
 import { buildFourDxUltgResume, buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
@@ -208,6 +210,26 @@ export default function OverviewPage() {
               ahiPromise={ahiPromise}
               cePromise={cePromise}
               renusPromise={renusPromise}
+            />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-extrabold">Kesiapan Musiman</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            3 bulan ke depan dengan risiko gangguan historis tertinggi — apakah pekerjaan preventif RENUS &amp; ABO
+            sudah terjadwal menjelang bulan-bulan tersebut.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+            <SeasonalReadinessSection
+              disturbancesPromise={disturbancesPromise}
+              renusPromise={renusPromise}
+              aboProteksiPromise={aboProteksiPromise}
+              aboHargiPromise={aboHargiPromise}
             />
           </Suspense>
         </CardContent>
@@ -638,4 +660,40 @@ async function GiCorrelationSection({
   ) : (
     <DataUnavailable message="Data Gangguan atau AHI belum tersedia untuk korelasi ini." />
   );
+}
+
+async function SeasonalReadinessSection({
+  disturbancesPromise,
+  renusPromise,
+  aboProteksiPromise,
+  aboHargiPromise,
+}: {
+  disturbancesPromise: Promise<DisturbancesResult>;
+  renusPromise: Promise<RenusData>;
+  aboProteksiPromise: Promise<AboSnapshot>;
+  aboHargiPromise: Promise<AboSnapshot>;
+}) {
+  const [disturbances, renus, aboProteksi, aboHargi] = await Promise.all([
+    disturbancesPromise,
+    renusPromise,
+    aboProteksiPromise,
+    aboHargiPromise,
+  ]);
+
+  if (disturbances.error) {
+    return <DataUnavailable message="Sinkronisasi Gangguan belum berhasil. Lihat halaman Data & Sync." />;
+  }
+
+  const todayMonthIndex = Number(
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(new Date()),
+  ) - 1;
+
+  const readiness = buildSeasonalReadiness({
+    disturbances,
+    renusRows: renus.error ? [] : renus.rows,
+    aboSnapshots: [aboProteksi, aboHargi].filter((s) => !s.error),
+    todayMonthIndex,
+  });
+
+  return <SeasonalReadinessCard months={upcomingRiskyMonths(readiness, 3)} />;
 }
