@@ -497,7 +497,7 @@ const REPORT_KIND_LABEL: Record<ReportKind, string> = {
   "bay-reaktor": "Bay Reaktor",
   "bay-kapasitor": "Bay Kapasitor",
   "bay-gt": "Bay GT",
-  "bay-bus": "Bay Bus",
+  "bay-bus": "CVT Bus",
   "bay-diameter": "Bay Diameter",
 };
 
@@ -573,10 +573,11 @@ export function BayLineReportView({
   return (
     <div id="ahi-bay-report-top" className="flex flex-col gap-4 scroll-mt-16">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
-        {/* The source spreadsheet has a few more report sheets (Bay GT,
-            Bus, ...) not built yet — this selector stays explicit about
-            which kinds are available rather than a tab label implying only
-            one report will ever exist. */}
+        {/* The source spreadsheet's own report sheets also include a few
+            GT/Trafo variants scoped to specific power plants (REPORT BAY
+            GT PLSMP, REPORT BAY TRAFO PLSMP/MBL/FTR) not built yet — this
+            selector stays explicit about which kinds are available rather
+            than a tab label implying only one report will ever exist. */}
         <Select
           value={kind}
           onValueChange={(v) => {

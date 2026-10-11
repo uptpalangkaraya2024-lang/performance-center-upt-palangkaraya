@@ -230,8 +230,9 @@ export default async function AhiPage() {
             <CardHeader className="print:hidden">
               <CardTitle className="text-lg font-extrabold">Report Bay</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Pilih jenis report (Bay Line, Bay Trafo, Bay Kopel, Bay Reaktor, Bay Kapasitor, Bay GT, Bay Bus, atau
-                Bay Diameter), lalu satu bay untuk melihat resume, hasil uji, dan hasil evaluasi AHI tiap peralatan.
+                Pilih jenis report (Bay Line, Bay Trafo, Bay Kopel, Bay Reaktor, Bay Kapasitor, Bay GT, CVT Bus, atau
+                Bay Diameter), lalu satu bay/CVT untuk melihat resume, hasil uji, dan hasil evaluasi AHI tiap
+                peralatan.
               </p>
             </CardHeader>
             <CardContent>

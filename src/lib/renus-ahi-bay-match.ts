@@ -22,15 +22,21 @@ export interface BayMatchCandidate {
   ultg: string;
 }
 
-// Word-level aliases applied before tokenizing — confirmed live: RENUS and
-// AHI use outright different vocabulary for the same physical thing in
-// these 2 cases ("COUPLE"/"KOPEL" for the bus-coupler bay kind, "PAMBUANG"
-// a confirmed misspelling of "PEMBUANG" already flagged on the Kesehatan
-// Data page). Keyed by the word AS WRITTEN in RENUS's own sheet; expand
-// this table as new mismatches are found, never by relaxing the matcher.
+// Word-level aliases applied before tokenizing — confirmed live/with the
+// user: RENUS and AHI use outright different vocabulary for the same
+// physical thing in these cases:
+//  - "COUPLE"/"KOPEL" for the bus-coupler bay kind.
+//  - "PAMBUANG" a confirmed misspelling of "PEMBUANG" (already flagged on
+//    the Kesehatan Data page).
+//  - "SKS"/"SLK" — confirmed with the user these name the SAME GI
+//    (PLTU Sampit), just two different short forms, not a typo. Mapped to
+//    one canonical form ("SLK") so either spelling resolves the same way.
+// Keyed by the word AS WRITTEN in RENUS's own sheet; expand this table as
+// new mismatches are found, never by relaxing the matcher.
 const WORD_ALIASES: Record<string, string> = {
   COUPLE: "KOPEL",
   PAMBUANG: "PEMBUANG",
+  SKS: "SLK",
 };
 
 function applyWordAliases(s: string): string {
@@ -129,8 +135,10 @@ function extractGt(raw: string): ExtractResult | null {
   return { giKey: gi, discriminator: match[1] };
 }
 
-/** Bay Bus: "BUS <A|B> [GI] <GI>" — the bus letter is the discriminator
- *  (never a number), since a GI's own 2 bus sections are never
+/** CVT Bus (the busbar's own voltage transformer — confirmed with the
+ *  user the busbar itself isn't a "bay," this is just its own equipment,
+ *  see ahi-bay-bus-report.ts): "BUS <A|B> [GI] <GI>" — the bus letter is
+ *  the discriminator (never a number), since a GI's own 2 bus sections are never
  *  interchangeable. */
 function extractBus(raw: string): ExtractResult | null {
   const match = /^BUS\s+([AB])\b\s*/i.exec(raw);
@@ -180,7 +188,10 @@ export function matchRenusBay(
 
     const candidates = ahiOptionsByKind[kind]
       .map((option) => {
-        const extracted = KIND_EXTRACTORS.find((k) => k.kind === kind)!.extract(option.bay);
+        // Word aliases must run on the AHI side too — e.g. RENUS's "SKS"
+        // only becomes comparable to AHI's own "PLTU SKS" once both have
+        // been canonicalized to the same form (see WORD_ALIASES).
+        const extracted = KIND_EXTRACTORS.find((k) => k.kind === kind)!.extract(applyWordAliases(option.bay));
         return { option, extracted };
       })
       .filter(({ extracted }) => extracted && extracted.giKey === parsed.giKey)

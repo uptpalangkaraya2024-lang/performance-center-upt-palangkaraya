@@ -17,7 +17,7 @@ const REPORT_KIND_LABEL: Record<ReportKind, string> = {
   "bay-reaktor": "Bay Reaktor",
   "bay-kapasitor": "Bay Kapasitor",
   "bay-gt": "Bay GT",
-  "bay-bus": "Bay Bus",
+  "bay-bus": "CVT Bus",
   "bay-diameter": "Bay Diameter",
 };
 
