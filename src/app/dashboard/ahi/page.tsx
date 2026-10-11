@@ -29,7 +29,20 @@ export const dynamic = "force-dynamic";
 // highest observed latency variance (5-30s for the same request).
 export const maxDuration = 60;
 
-export default async function AhiPage() {
+export default async function AhiPage({
+  searchParams,
+}: {
+  /** Supports deep-linking from the RENUS page's own "Lihat AHI pada
+   *  periode padam ini" buttons — `tab=bay-line` opens the Report tab
+   *  directly (default tab is otherwise Overview), `week=next` opens the
+   *  sync panel on next week instead of this week. Both optional; any
+   *  other/missing value falls back to the normal defaults. */
+  searchParams: Promise<{ tab?: string; week?: string }>;
+}) {
+  const params = await searchParams;
+  const initialTab = params.tab === "bay-line" ? "bay-line" : "overview";
+  const initialWeek = params.week === "next" ? "next" : "this";
+
   const result = await getAhiPerformance();
 
   if (result.error || !result.data) {
@@ -168,7 +181,7 @@ export default async function AhiPage() {
       />
       </div>
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={initialTab}>
         <TabsList className="print:hidden">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="bay-line">Report</TabsTrigger>
@@ -236,7 +249,7 @@ export default async function AhiPage() {
               </p>
             </CardHeader>
             <CardContent>
-              <AhiBayReportPanel reportsByKind={reportsByKind} renusSync={renusSync} />
+              <AhiBayReportPanel reportsByKind={reportsByKind} renusSync={renusSync} initialWeek={initialWeek} />
             </CardContent>
           </Card>
           <p className="text-[11px] text-muted-foreground print:hidden">

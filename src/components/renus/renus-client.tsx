@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -9,10 +10,12 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleDashed,
+  ExternalLink,
   XCircle,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -337,11 +340,22 @@ export function RenusClient({ data }: { data: RenusData }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-1.5 text-lg font-extrabold">
-              <CalendarDays className="size-5 text-primary" />
-              Periode Kerja Minggu Ini
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">Jumat–Kamis · {data.weekPeriod.label}</p>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-1.5 text-lg font-extrabold">
+                  <CalendarDays className="size-5 text-primary" />
+                  Periode Kerja Minggu Ini
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Jumat–Kamis · {data.weekPeriod.label}</p>
+              </div>
+              <Link
+                href="/dashboard/ahi?tab=bay-line&week=this"
+                className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5" })}
+              >
+                <ExternalLink className="size-3.5" />
+                Lihat AHI pada periode padam ini
+              </Link>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <WorkListPreview rows={weekRows} />
@@ -376,11 +390,22 @@ export function RenusClient({ data }: { data: RenusData }) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-1.5 text-lg font-extrabold">
-              <CalendarDays className="size-5 text-muted-foreground" />
-              Periode Kerja Minggu Depan
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">Jumat–Kamis · {data.nextWeekPeriod.label}</p>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-1.5 text-lg font-extrabold">
+                  <CalendarDays className="size-5 text-muted-foreground" />
+                  Periode Kerja Minggu Depan
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Jumat–Kamis · {data.nextWeekPeriod.label}</p>
+              </div>
+              <Link
+                href="/dashboard/ahi?tab=bay-line&week=next"
+                className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5" })}
+              >
+                <ExternalLink className="size-3.5" />
+                Lihat AHI pada periode ini
+              </Link>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <WorkListPreview rows={data.nextWeekRows} />

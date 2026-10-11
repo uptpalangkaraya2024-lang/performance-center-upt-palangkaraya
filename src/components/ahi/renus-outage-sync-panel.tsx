@@ -111,12 +111,14 @@ export function RenusOutageSyncPanel({
   thisWeek,
   nextWeek,
   onSelectBay,
+  initialWeek,
 }: {
   thisWeek: RenusOutageSyncWeek;
   nextWeek: RenusOutageSyncWeek;
   onSelectBay: (kind: ReportKind, bay: string) => void;
+  initialWeek?: "this" | "next";
 }) {
-  const [tab, setTab] = useState<WeekTab>("this");
+  const [tab, setTab] = useState<WeekTab>(initialWeek ?? "this");
   const week = tab === "this" ? thisWeek : nextWeek;
   const unmatchedCount = week.entries.filter((e) => e.candidates.length === 0).length;
 

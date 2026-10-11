@@ -15,9 +15,14 @@ import type { BayLineReport } from "@/types";
 export function AhiBayReportPanel({
   reportsByKind,
   renusSync,
+  initialWeek,
 }: {
   reportsByKind: Record<ReportKind, BayLineReport[]>;
   renusSync: { thisWeek: RenusOutageSyncWeek; nextWeek: RenusOutageSyncWeek } | null;
+  /** Deep-linked from the RENUS page's own "Lihat AHI pada periode padam
+   *  ini"/"...minggu depan" buttons (see src/app/dashboard/ahi/page.tsx's
+   *  own `?week=` parsing) — which week the sync panel below opens on. */
+  initialWeek?: "this" | "next";
 }) {
   const [jumpTo, setJumpTo] = useState<{ kind: ReportKind; bay: string; nonce: number } | null>(null);
 
@@ -27,6 +32,7 @@ export function AhiBayReportPanel({
         <RenusOutageSyncPanel
           thisWeek={renusSync.thisWeek}
           nextWeek={renusSync.nextWeek}
+          initialWeek={initialWeek}
           onSelectBay={(kind, bay) => setJumpTo((prev) => ({ kind, bay, nonce: (prev?.nonce ?? 0) + 1 }))}
         />
       ) : null}
