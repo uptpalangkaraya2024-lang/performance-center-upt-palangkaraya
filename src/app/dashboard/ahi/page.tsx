@@ -10,9 +10,11 @@ import { AhiAnomalyTable } from "@/components/ahi/ahi-anomaly-table";
 import { AhiCategoryDetail } from "@/components/ahi/ahi-category-detail";
 import { AhiUltgResumeCard } from "@/components/ahi/ahi-ultg-resume";
 import { CollapsibleDataDetail } from "@/components/ahi/collapsible-data-detail";
-import { BayLineReportView } from "@/components/ahi/bay-line-report";
+import { AhiBayReportPanel } from "@/components/ahi/ahi-bay-report-panel";
 import { buildAhiUltgEquipmentMatrix, buildAhiUltgResume } from "@/lib/ahi-compute";
+import { buildRenusOutageSync } from "@/lib/renus-outage-sync";
 import { getAhiPerformance } from "@/services/ahi-performance";
+import { getRenusData } from "@/services/renus";
 import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 import { getAllBayTrafoReportsWithHistory } from "@/services/ahi-bay-trafo-report";
 import { getAllBayKopelReportsWithHistory } from "@/services/ahi-bay-kopel-report";
@@ -56,6 +58,7 @@ export default async function AhiPage() {
     bayGtReports,
     bayBusReports,
     bayDiameterReports,
+    renus,
   ] = await Promise.all([
     getAllBayLineReportsWithHistory(),
     getAllBayTrafoReportsWithHistory(),
@@ -65,9 +68,44 @@ export default async function AhiPage() {
     getAllBayGtReportsWithHistory(),
     getAllBayBusReportsWithHistory(),
     getAllBayDiameterReportsWithHistory(),
+    getRenusData(),
   ]);
   const ultgResume = buildAhiUltgResume(anomalies);
   const ultgEquipmentMatrix = buildAhiUltgEquipmentMatrix(anomalies);
+
+  const reportsByKind = {
+    "bay-line": bayLineReports,
+    "bay-trafo": bayTrafoReports,
+    "bay-kopel": bayKopelReports,
+    "bay-reaktor": bayReaktorReports,
+    "bay-kapasitor": bayKapasitorReports,
+    "bay-gt": bayGtReports,
+    "bay-bus": bayBusReports,
+    "bay-diameter": bayDiameterReports,
+  } as const;
+
+  // RENUS's own "minggu padam" sync — see src/lib/renus-outage-sync.ts.
+  // Options derived from the reports already fetched above (just gi/bay/
+  // ultg), never a separate getXOptions() call — a promise/array already
+  // in memory costs nothing more to re-map, unlike a fresh gateway round
+  // trip. Null (not an empty result) when RENUS itself failed to sync, so
+  // the panel can tell "no outages this week" apart from "RENUS is down".
+  const renusSync = renus.error
+    ? null
+    : buildRenusOutageSync({
+        rows: renus.rows,
+        todayISO: renus.today,
+        ahiOptionsByKind: {
+          "bay-line": bayLineReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-trafo": bayTrafoReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-kopel": bayKopelReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-reaktor": bayReaktorReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-kapasitor": bayKapasitorReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-gt": bayGtReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-bus": bayBusReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-diameter": bayDiameterReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+        },
+      });
 
   return (
     <div className="flex flex-col gap-6">
@@ -197,18 +235,7 @@ export default async function AhiPage() {
               </p>
             </CardHeader>
             <CardContent>
-              <BayLineReportView
-                reportsByKind={{
-                  "bay-line": bayLineReports,
-                  "bay-trafo": bayTrafoReports,
-                  "bay-kopel": bayKopelReports,
-                  "bay-gt": bayGtReports,
-                  "bay-bus": bayBusReports,
-                  "bay-diameter": bayDiameterReports,
-                  "bay-reaktor": bayReaktorReports,
-                  "bay-kapasitor": bayKapasitorReports,
-                }}
-              />
+              <AhiBayReportPanel reportsByKind={reportsByKind} renusSync={renusSync} />
             </CardContent>
           </Card>
           <p className="text-[11px] text-muted-foreground print:hidden">

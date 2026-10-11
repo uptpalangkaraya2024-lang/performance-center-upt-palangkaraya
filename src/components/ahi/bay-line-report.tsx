@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ExternalLink, FileText, Printer } from "lucide-react";
 
 import {
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EquipmentTrendChart } from "@/components/ahi/equipment-trend-chart";
 import { cn } from "@/lib/utils";
-import type { AhiKlasifikasi, BayEquipmentUnit, BayLineReport, EquipmentParameterHistoryPoint } from "@/types";
+import type { AhiKlasifikasi, BayEquipmentUnit, BayLineReport, BayReportKind, EquipmentParameterHistoryPoint } from "@/types";
 
 const ALL_VALUE = "__all__";
 
@@ -485,15 +485,10 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
   );
 }
 
-export type ReportKind =
-  | "bay-line"
-  | "bay-trafo"
-  | "bay-kopel"
-  | "bay-reaktor"
-  | "bay-kapasitor"
-  | "bay-gt"
-  | "bay-bus"
-  | "bay-diameter";
+// Re-exported for other components that need it (e.g. the RENUS sync
+// panel's own bay-kind links) — the real definition lives in @/types so a
+// server-only module can share it without importing this "use client" file.
+export type ReportKind = BayReportKind;
 
 const REPORT_KIND_LABEL: Record<ReportKind, string> = {
   "bay-line": "Bay Line",
@@ -520,7 +515,18 @@ const REPORT_KIND_ORDER: ReportKind[] = [
   "bay-diameter",
 ];
 
-export function BayLineReportView({ reportsByKind }: { reportsByKind: Record<ReportKind, BayLineReport[]> }) {
+export function BayLineReportView({
+  reportsByKind,
+  jumpTo,
+}: {
+  reportsByKind: Record<ReportKind, BayLineReport[]>;
+  /** Drives the selector from outside (the RENUS outage sync panel's own
+   *  "lihat report" buttons) — `nonce` must change on every click (even
+   *  one picking the same kind/bay again) so the effect below re-fires and
+   *  re-applies the jump, since React only reacts to the dependency
+   *  actually changing. */
+  jumpTo?: { kind: ReportKind; bay: string; nonce: number } | null;
+}) {
   const [kind, setKind] = useState<ReportKind>("bay-line");
   const reports = reportsByKind[kind];
 
@@ -531,6 +537,28 @@ export function BayLineReportView({ reportsByKind }: { reportsByKind: Record<Rep
     [reports, gi],
   );
   const [bay, setBay] = useState<string | null>(null);
+
+  // "Adjust state during render" (React's own documented pattern for
+  // syncing external props into local state) rather than an effect —
+  // setState-in-effect triggers an extra, avoidable render; this applies
+  // the jump in the SAME render React is already doing, bailing out and
+  // re-rendering once with the new values instead of twice. `nonce` is the
+  // only thing compared, so clicking the same (kind, bay) again still
+  // re-applies (and re-scrolls) rather than being a no-op.
+  const [appliedNonce, setAppliedNonce] = useState(jumpTo?.nonce);
+  if (jumpTo && jumpTo.nonce !== appliedNonce) {
+    setAppliedNonce(jumpTo.nonce);
+    setKind(jumpTo.kind);
+    setGi(ALL_VALUE);
+    setBay(jumpTo.bay);
+  }
+
+  // The actual DOM scroll stays in an effect (a real external-system call,
+  // not a state update) — fires once the jump above has committed.
+  useEffect(() => {
+    if (appliedNonce === undefined) return;
+    document.getElementById("ahi-bay-report-top")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [appliedNonce]);
 
   const selected = reports.find((r) => r.bay === bay) ?? null;
 
@@ -543,7 +571,7 @@ export function BayLineReportView({ reportsByKind }: { reportsByKind: Record<Rep
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div id="ahi-bay-report-top" className="flex flex-col gap-4 scroll-mt-16">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         {/* The source spreadsheet has a few more report sheets (Bay GT,
             Bus, ...) not built yet — this selector stays explicit about

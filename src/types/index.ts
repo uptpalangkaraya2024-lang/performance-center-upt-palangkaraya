@@ -571,6 +571,20 @@ export interface BayEquipmentUnit {
   history: EquipmentHistoryPoint[];
 }
 
+/** The 8 per-bay AHI report kinds (src/services/ahi-bay-*-report.ts) —
+ *  defined here (not in the "use client" view component or a server-only
+ *  lib file) so both the client-side selector and the server-side RENUS
+ *  matching module (src/lib/renus-ahi-bay-match.ts) can share one type. */
+export type BayReportKind =
+  | "bay-line"
+  | "bay-trafo"
+  | "bay-kopel"
+  | "bay-reaktor"
+  | "bay-kapasitor"
+  | "bay-gt"
+  | "bay-bus"
+  | "bay-diameter";
+
 export interface BayLineOption {
   gi: string;
   bay: string;
