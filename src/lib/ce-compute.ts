@@ -432,35 +432,39 @@ export function buildCeUltgStreamMatrix(items: CeItem[]): CeUltgStreamRow[] {
   });
 }
 
-export interface CeOpenItemsUltgGroup {
-  ultg: string;
+export interface CeOpenItemsStreamGroup {
+  /** null = item's Indikator didn't match the "NN_" stream-code prefix at
+   *  all (same "Lainnya" fallback as buildCeStreamBreakdown's own uncoded
+   *  leftovers) — sorted last, after the fixed 01..09 stream order. */
+  streamCode: string | null;
+  streamLabel: string;
   items: CeItem[];
   overdueCount: number;
 }
 
-/** Every still-open item, grouped by ULTG — the literal list behind
- *  buildCeUltgIdeal's own per-ULTG open COUNT, meant as each ULTG's own
- *  reminder/checklist of exactly which findings are still outstanding
- *  (not just how many). Within each ULTG, overdue items (target week
- *  already past the selected week) sort first, then by target week
- *  ascending (soonest-due next), then items with no target week last —
- *  same "most urgent first" ordering the attention list already uses,
- *  just applied per-ULTG instead of as one flat cross-ULTG table. ULTG
- *  order follows first-seen order in `items`, same convention as
+export interface CeOpenItemsUltgGroup {
+  ultg: string;
+  streams: CeOpenItemsStreamGroup[];
+  openCount: number;
+  overdueCount: number;
+}
+
+/** Every still-open item, grouped by ULTG then by stream (same 9 streams
+ *  as buildCeStreamBreakdown/buildCeUltgStreamMatrix) — the literal list
+ *  behind buildCeUltgIdeal's own per-ULTG open COUNT, meant as each
+ *  ULTG's own reminder/checklist of exactly which findings are still
+ *  outstanding, organized the same way the rest of the page already
+ *  breaks equipment down (by stream), not just a flat pile of rows.
+ *  Within each stream, overdue items (target week already past the
+ *  selected week) sort first, then by target week ascending, then items
+ *  with no target week last. A stream with zero open items for a given
+ *  ULTG is simply omitted (unlike buildCeStreamBreakdown's always-9-rows
+ *  table) — this is a checklist of what's actually outstanding, not a
+ *  coverage matrix, so an empty stream would just be clutter. ULTG order
+ *  follows first-seen order in `items`, same convention as
  *  buildCeUltgIdeal/buildCeUltgStreamMatrix above. */
 export function buildCeOpenItemsByUltg(items: CeItem[], selectedWeekLabel: string): CeOpenItemsUltgGroup[] {
   const selectedIndex = ceWeekLabelIndex(selectedWeekLabel);
-  const order: string[] = [];
-  const map = new Map<string, CeItem[]>();
-  for (const item of items) {
-    if (item.done) continue;
-    const key = item.ultg || "Lainnya";
-    if (!map.has(key)) {
-      map.set(key, []);
-      order.push(key);
-    }
-    map.get(key)!.push(item);
-  }
 
   function itemWeekIndex(item: CeItem): number {
     return item.targetWeekLabel ? ceWeekLabelIndex(item.targetWeekLabel) : -1;
@@ -469,20 +473,61 @@ export function buildCeOpenItemsByUltg(items: CeItem[], selectedWeekLabel: strin
     const idx = itemWeekIndex(item);
     return idx !== -1 && idx < selectedIndex;
   }
+  function sortByUrgency(a: CeItem, b: CeItem): number {
+    const aOverdue = isOverdue(a);
+    const bOverdue = isOverdue(b);
+    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+    const aIdx = itemWeekIndex(a);
+    const bIdx = itemWeekIndex(b);
+    if (aIdx === -1 && bIdx === -1) return 0;
+    if (aIdx === -1) return 1;
+    if (bIdx === -1) return -1;
+    return aIdx - bIdx;
+  }
 
-  return order.map((ultg) => {
-    const group = [...map.get(ultg)!].sort((a, b) => {
-      const aOverdue = isOverdue(a);
-      const bOverdue = isOverdue(b);
-      if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
-      const aIdx = itemWeekIndex(a);
-      const bIdx = itemWeekIndex(b);
-      if (aIdx === -1 && bIdx === -1) return 0;
-      if (aIdx === -1) return 1;
-      if (bIdx === -1) return -1;
-      return aIdx - bIdx;
-    });
-    return { ultg, items: group, overdueCount: group.filter(isOverdue).length };
+  const ultgOrder: string[] = [];
+  const byUltg = new Map<string, CeItem[]>();
+  for (const item of items) {
+    if (item.done) continue;
+    const key = item.ultg || "Lainnya";
+    if (!byUltg.has(key)) {
+      byUltg.set(key, []);
+      ultgOrder.push(key);
+    }
+    byUltg.get(key)!.push(item);
+  }
+
+  const streamCodeOrder = Object.keys(CE_STREAM_LABELS);
+
+  return ultgOrder.map((ultg) => {
+    const ultgItems = byUltg.get(ultg)!;
+    const byStream = new Map<string | null, CeItem[]>();
+    for (const item of ultgItems) {
+      const code = extractCeStreamCode(item.indikator);
+      const key = code && CE_STREAM_LABELS[code] ? code : null;
+      if (!byStream.has(key)) byStream.set(key, []);
+      byStream.get(key)!.push(item);
+    }
+
+    const streams: CeOpenItemsStreamGroup[] = [];
+    for (const code of streamCodeOrder) {
+      const group = byStream.get(code);
+      if (!group || group.length === 0) continue;
+      const sorted = [...group].sort(sortByUrgency);
+      streams.push({ streamCode: code, streamLabel: CE_STREAM_LABELS[code], items: sorted, overdueCount: sorted.filter(isOverdue).length });
+    }
+    const uncoded = byStream.get(null);
+    if (uncoded && uncoded.length > 0) {
+      const sorted = [...uncoded].sort(sortByUrgency);
+      streams.push({ streamCode: null, streamLabel: "Lainnya", items: sorted, overdueCount: sorted.filter(isOverdue).length });
+    }
+
+    return {
+      ultg,
+      streams,
+      openCount: ultgItems.length,
+      overdueCount: ultgItems.filter(isOverdue).length,
+    };
   });
 }
 

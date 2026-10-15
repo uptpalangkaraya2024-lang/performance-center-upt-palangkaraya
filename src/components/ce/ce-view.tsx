@@ -386,7 +386,7 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(groups.map((g, i) => [g.ultg, i === 0])),
   );
-  if (groups.length === 0 || groups.every((g) => g.items.length === 0)) return null;
+  if (groups.length === 0 || groups.every((g) => g.openCount === 0)) return null;
 
   return (
     <Card>
@@ -396,8 +396,8 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
           <CardTitle className="text-lg font-extrabold">Daftar Open per ULTG</CardTitle>
         </div>
         <p className="text-sm text-muted-foreground">
-          Seluruh temuan yang masih open, dikelompokkan per ULTG — bahan reminder untuk masing-masing ULTG, bukan hanya yang
-          masuk daftar &quot;Perlu Perhatian&quot; di atas.
+          Seluruh temuan yang masih open, dikelompokkan per ULTG lalu per stream — bahan reminder untuk masing-masing ULTG,
+          bukan hanya yang masuk daftar &quot;Perlu Perhatian&quot; di atas.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
@@ -422,39 +422,52 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
                     </span>
                   ) : null}
                   <span className="rounded-full border border-warning/50 bg-warning/20 px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-warning-foreground">
-                    {group.items.length} open
+                    {group.openCount} open
                   </span>
                 </span>
               </button>
               {isOpen ? (
-                <div className="max-h-80 overflow-y-auto border-t">
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-card">
-                      <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
-                        <th className="px-3 py-2 font-bold">GI / Bay</th>
-                        <th className="px-3 py-2 font-bold">Program</th>
-                        <th className="px-3 py-2 font-bold">Kriteria</th>
-                        <th className="px-3 py-2 font-bold">Target Minggu</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.items.map((item) => (
-                        <tr key={item.id} className="border-b last:border-0 hover:bg-muted/10">
-                          <td className="px-3 py-2 text-foreground">
-                            <div className="font-medium">{item.gardu}</div>
-                            <div className="text-xs text-muted-foreground">{item.bay || item.jenisAsset}</div>
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground">{item.namaProgram}</td>
-                          <td className="px-3 py-2">
-                            <KriteriaPill value={item.kriteriaBefore} />
-                          </td>
-                          <td className="px-3 py-2 text-xs whitespace-nowrap">
-                            {item.targetWeekLabel ?? <span className="text-muted-foreground">—</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="max-h-[32rem] overflow-y-auto border-t">
+                  {group.streams.map((stream) => (
+                    <div key={stream.streamCode ?? "lainnya"}>
+                      <div className="sticky top-0 flex items-center justify-between gap-2 border-b bg-muted/40 px-3 py-1.5">
+                        <span className="text-xs font-bold tracking-wide text-foreground uppercase">{stream.streamLabel}</span>
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          {stream.overdueCount > 0 ? (
+                            <span className="font-semibold text-critical">{stream.overdueCount} terlambat ·</span>
+                          ) : null}
+                          {stream.items.length} open
+                        </span>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/20 text-left text-xs text-muted-foreground uppercase">
+                            <th className="px-3 py-2 font-bold">GI / Bay</th>
+                            <th className="px-3 py-2 font-bold">Program</th>
+                            <th className="px-3 py-2 font-bold">Kriteria</th>
+                            <th className="px-3 py-2 font-bold">Target Minggu</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stream.items.map((item) => (
+                            <tr key={item.id} className="border-b last:border-0 hover:bg-muted/10">
+                              <td className="px-3 py-2 text-foreground">
+                                <div className="font-medium">{item.gardu}</div>
+                                <div className="text-xs text-muted-foreground">{item.bay || item.jenisAsset}</div>
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground">{item.namaProgram}</td>
+                              <td className="px-3 py-2">
+                                <KriteriaPill value={item.kriteriaBefore} />
+                              </td>
+                              <td className="px-3 py-2 text-xs whitespace-nowrap">
+                                {item.targetWeekLabel ?? <span className="text-muted-foreground">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </div>
