@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { Check, CheckCircle2, Circle, Copy, MessageSquareText, Printer, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Circle, Copy, MessageSquareText, Printer, RotateCcw } from "lucide-react";
 import {
   Bar,
   CartesianGrid,
@@ -84,8 +84,25 @@ function StatusPill({ status }: { status: FourDxLm["status"] }) {
       ? "border-success/40 bg-success/20 text-success"
       : "border-warning/50 bg-warning/20 text-warning-foreground";
   return (
-    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap", cls)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap", cls)}>
+      {status !== "tercapai" ? <AlertTriangle className="size-3" /> : null}
       {status === "tercapai" ? "Tercapai" : "Belum"}
+    </span>
+  );
+}
+
+// Used ONLY for the "belum tercapai" case in the ULTG/UPT recap tables
+// below — deliberately asymmetric with the achieved case (plain bold
+// success-colored text, no badge), same reasoning as ABO's own
+// NotAchievedBadge (src/components/abo/abo-snapshot-view.tsx): a uniform
+// color treatment on every cell reads as noise, not signal. Giving only
+// the exception a bordered, icon-bearing pill is what actually catches the
+// eye scanning a dense WIG/ULTG matrix.
+function NotAchievedBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-warning/60 bg-warning/25 px-2 py-0.5 text-xs font-bold whitespace-nowrap text-warning-foreground">
+      <AlertTriangle className="size-3" />
+      {children}
     </span>
   );
 }
@@ -162,17 +179,14 @@ function UltgResumeTable({ entries }: { entries: FourDxUltgResumeEntry[] }) {
               <td className="px-3 py-2 font-medium text-foreground">{entry.ultg}</td>
               <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{entry.lmsEvaluated}</td>
               <td className="px-3 py-2 text-right tabular-nums text-success">{entry.lmsTercapai}</td>
-              <td
-                className={cn(
-                  "px-3 py-2 text-right font-bold tabular-nums",
-                  entry.percentTercapai === null
-                    ? "text-muted-foreground"
-                    : entry.percentTercapai >= 1
-                      ? "text-success"
-                      : "text-warning-foreground",
+              <td className="px-3 py-2 text-right tabular-nums">
+                {entry.percentTercapai === null ? (
+                  <span className="text-muted-foreground">—</span>
+                ) : entry.percentTercapai >= 1 ? (
+                  <span className="font-bold text-success">{formatPercent(entry.percentTercapai)}</span>
+                ) : (
+                  <NotAchievedBadge>{formatPercent(entry.percentTercapai)}</NotAchievedBadge>
                 )}
-              >
-                {formatPercent(entry.percentTercapai)}
               </td>
             </tr>
           ))}
@@ -246,17 +260,26 @@ function UltgDetailTable({ rows }: { rows: FourDxUltgDetailRow[] }) {
                   </td>
                   <td className="border-l px-3 py-2 text-right tabular-nums text-muted-foreground">{row.uptTarget}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{row.uptRealisasi}</td>
-                  <td className="px-3 py-2 text-right font-bold tabular-nums">{formatPercent(row.uptPercent)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {row.uptPercent === null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : row.uptPercent >= 1 ? (
+                      <span className="font-bold text-success">{formatPercent(row.uptPercent)}</span>
+                    ) : (
+                      <NotAchievedBadge>{formatPercent(row.uptPercent)}</NotAchievedBadge>
+                    )}
+                  </td>
                   {row.byUltg.map((cell) => (
                     <Fragment key={cell.ultg}>
                       <td className="border-l px-3 py-2 text-right tabular-nums text-muted-foreground">{cell.target}</td>
-                      <td
-                        className={cn(
-                          "px-3 py-2 text-right tabular-nums",
-                          cell.target === 0 ? "text-muted-foreground" : cell.done ? "text-success" : "text-warning-foreground",
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {cell.target === 0 ? (
+                          <span className="text-muted-foreground">{cell.realisasi}</span>
+                        ) : cell.done ? (
+                          <span className="text-success">{cell.realisasi}</span>
+                        ) : (
+                          <NotAchievedBadge>{cell.realisasi}</NotAchievedBadge>
                         )}
-                      >
-                        {cell.realisasi}
                       </td>
                     </Fragment>
                   ))}

@@ -432,6 +432,60 @@ export function buildCeUltgStreamMatrix(items: CeItem[]): CeUltgStreamRow[] {
   });
 }
 
+export interface CeOpenItemsUltgGroup {
+  ultg: string;
+  items: CeItem[];
+  overdueCount: number;
+}
+
+/** Every still-open item, grouped by ULTG — the literal list behind
+ *  buildCeUltgIdeal's own per-ULTG open COUNT, meant as each ULTG's own
+ *  reminder/checklist of exactly which findings are still outstanding
+ *  (not just how many). Within each ULTG, overdue items (target week
+ *  already past the selected week) sort first, then by target week
+ *  ascending (soonest-due next), then items with no target week last —
+ *  same "most urgent first" ordering the attention list already uses,
+ *  just applied per-ULTG instead of as one flat cross-ULTG table. ULTG
+ *  order follows first-seen order in `items`, same convention as
+ *  buildCeUltgIdeal/buildCeUltgStreamMatrix above. */
+export function buildCeOpenItemsByUltg(items: CeItem[], selectedWeekLabel: string): CeOpenItemsUltgGroup[] {
+  const selectedIndex = ceWeekLabelIndex(selectedWeekLabel);
+  const order: string[] = [];
+  const map = new Map<string, CeItem[]>();
+  for (const item of items) {
+    if (item.done) continue;
+    const key = item.ultg || "Lainnya";
+    if (!map.has(key)) {
+      map.set(key, []);
+      order.push(key);
+    }
+    map.get(key)!.push(item);
+  }
+
+  function itemWeekIndex(item: CeItem): number {
+    return item.targetWeekLabel ? ceWeekLabelIndex(item.targetWeekLabel) : -1;
+  }
+  function isOverdue(item: CeItem): boolean {
+    const idx = itemWeekIndex(item);
+    return idx !== -1 && idx < selectedIndex;
+  }
+
+  return order.map((ultg) => {
+    const group = [...map.get(ultg)!].sort((a, b) => {
+      const aOverdue = isOverdue(a);
+      const bOverdue = isOverdue(b);
+      if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+      const aIdx = itemWeekIndex(a);
+      const bIdx = itemWeekIndex(b);
+      if (aIdx === -1 && bIdx === -1) return 0;
+      if (aIdx === -1) return 1;
+      if (bIdx === -1) return -1;
+      return aIdx - bIdx;
+    });
+    return { ultg, items: group, overdueCount: group.filter(isOverdue).length };
+  });
+}
+
 export interface CeExecutiveSummary {
   criticalOpen: number;
   criticalTotal: number;

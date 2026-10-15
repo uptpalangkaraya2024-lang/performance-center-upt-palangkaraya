@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Circle, RotateCcw, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Circle, ListChecks, RotateCcw, Search } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import {
@@ -22,6 +22,7 @@ import {
   buildCeAttentionItems,
   buildCeExecutiveSummary,
   buildCeMonthlyTrend,
+  buildCeOpenItemsByUltg,
   buildCeProgramRollup,
   buildCeRecentActivity,
   buildCeStreamBreakdown,
@@ -34,6 +35,7 @@ import {
   filterCeItemsForPeriod,
   todayISODate,
   type CeAttentionItem,
+  type CeOpenItemsUltgGroup,
   type CeProgramRollupEntry,
   type CeUltgIdealEntry,
   type CeUltgStreamRow,
@@ -81,6 +83,21 @@ const ISSUE_CLASS: Record<CeAttentionItem["issue"], string> = {
   Alert: "border-warning/50 bg-warning/20 text-warning-foreground",
   Terlambat: "border-warning/50 bg-warning/20 text-warning-foreground",
 };
+
+// Used ONLY for "behind pace vs ideal" in UltgIdealTable below —
+// deliberately asymmetric with the on-pace case (plain bold success text,
+// no badge), same reasoning as ABO's/4DX's own NotAchievedBadge: giving
+// only the exception a bordered, icon-bearing pill is what actually
+// catches the eye scanning a per-ULTG table, instead of every row
+// carrying the same visual weight.
+function NotAchievedBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-warning/60 bg-warning/25 px-2 py-0.5 text-xs font-bold whitespace-nowrap text-warning-foreground">
+      <AlertTriangle className="size-3" />
+      {children}
+    </span>
+  );
+}
 
 function ExecutiveSummaryCards({
   criticalOpen,
@@ -273,15 +290,20 @@ function UltgIdealTable({ entries }: { entries: CeUltgIdealEntry[] }) {
                 <td className="px-3 py-2 text-right tabular-nums">{entry.total}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-success">{entry.close}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{entry.onTarget}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-critical">{entry.lagging}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatPercent(entry.actualPercent !== null ? entry.actualPercent / 100 : null)}</td>
-                <td
-                  className={cn(
-                    "px-3 py-2 text-right tabular-nums",
-                    entry.gapPts !== null && entry.gapPts < 0 ? "text-warning-foreground" : "text-success",
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {entry.lagging > 0 ? (
+                    <NotAchievedBadge>{entry.lagging} lagging</NotAchievedBadge>
+                  ) : (
+                    <span className="text-muted-foreground">0</span>
                   )}
-                >
-                  {formatPercentGap(entry.gapPts)}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatPercent(entry.actualPercent !== null ? entry.actualPercent / 100 : null)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {entry.gapPts !== null && entry.gapPts < 0 ? (
+                    <NotAchievedBadge>{formatPercentGap(entry.gapPts)}</NotAchievedBadge>
+                  ) : (
+                    <span className="text-success">{formatPercentGap(entry.gapPts)}</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -349,6 +371,97 @@ function UltgStreamMatrixTable({ rows }: { rows: CeUltgStreamRow[] }) {
         </table>
       </div>
     </div>
+  );
+}
+
+// One expandable section per ULTG, listing EVERY item that ULTG still has
+// open — not just the cross-ULTG "Perlu Perhatian" subset (Critical/Alert/
+// Terlambat only). Meant as each ULTG's own reminder/checklist: "exactly
+// which findings are still outstanding," not just a count. Collapsed by
+// default (106 open items across 3 ULTGs would otherwise make the page
+// very long to scroll past) — the header alone already shows each ULTG's
+// open and overdue counts so a UPT-level viewer can see at a glance which
+// ULTG needs the most attention without expanding anything.
+function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(groups.map((g, i) => [g.ultg, i === 0])),
+  );
+  if (groups.length === 0 || groups.every((g) => g.items.length === 0)) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <ListChecks className="size-5 text-warning-foreground" />
+          <CardTitle className="text-lg font-extrabold">Daftar Open per ULTG</CardTitle>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Seluruh temuan yang masih open, dikelompokkan per ULTG — bahan reminder untuk masing-masing ULTG, bukan hanya yang
+          masuk daftar &quot;Perlu Perhatian&quot; di atas.
+        </p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {groups.map((group) => {
+          const isOpen = expanded[group.ultg] ?? false;
+          return (
+            <div key={group.ultg} className="overflow-hidden rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setExpanded((prev) => ({ ...prev, [group.ultg]: !prev[group.ultg] }))}
+                className="flex w-full items-center justify-between gap-3 bg-muted/50 px-3 py-2.5 text-left hover:bg-muted"
+              >
+                <span className="flex items-center gap-2">
+                  <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", isOpen ? "rotate-0" : "-rotate-90")} />
+                  <span className="font-bold text-foreground">{group.ultg}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  {group.overdueCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-critical/40 bg-critical/20 px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-critical">
+                      <AlertTriangle className="size-3" />
+                      {group.overdueCount} terlambat
+                    </span>
+                  ) : null}
+                  <span className="rounded-full border border-warning/50 bg-warning/20 px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-warning-foreground">
+                    {group.items.length} open
+                  </span>
+                </span>
+              </button>
+              {isOpen ? (
+                <div className="max-h-80 overflow-y-auto border-t">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-card">
+                      <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+                        <th className="px-3 py-2 font-bold">GI / Bay</th>
+                        <th className="px-3 py-2 font-bold">Program</th>
+                        <th className="px-3 py-2 font-bold">Kriteria</th>
+                        <th className="px-3 py-2 font-bold">Target Minggu</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.items.map((item) => (
+                        <tr key={item.id} className="border-b last:border-0 hover:bg-muted/10">
+                          <td className="px-3 py-2 text-foreground">
+                            <div className="font-medium">{item.gardu}</div>
+                            <div className="text-xs text-muted-foreground">{item.bay || item.jenisAsset}</div>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">{item.namaProgram}</td>
+                          <td className="px-3 py-2">
+                            <KriteriaPill value={item.kriteriaBefore} />
+                          </td>
+                          <td className="px-3 py-2 text-xs whitespace-nowrap">
+                            {item.targetWeekLabel ?? <span className="text-muted-foreground">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -484,6 +597,7 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
   const subBidangBreakdown = useMemo(() => buildCeSubBidangBreakdown(streamBreakdown), [streamBreakdown]);
   const monthlyTrend = useMemo(() => buildCeMonthlyTrend(snapshot.items), [snapshot.items]);
   const ultgIdeal = useMemo(() => buildCeUltgIdeal(snapshot.items, weekLabel), [snapshot.items, weekLabel]);
+  const openItemsByUltg = useMemo(() => buildCeOpenItemsByUltg(snapshot.items, weekLabel), [snapshot.items, weekLabel]);
   const ultgStreamMatrix = useMemo(() => buildCeUltgStreamMatrix(snapshot.items), [snapshot.items]);
   const programRollup = useMemo(() => buildCeProgramRollup(snapshot.items, todayISO), [snapshot.items, todayISO]);
   const recentActivity = useMemo(() => buildCeRecentActivity(snapshot.items, todayISO), [snapshot.items, todayISO]);
@@ -639,6 +753,8 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
       <AttentionTable items={attention} />
 
       <UltgIdealTable entries={ultgIdeal} />
+
+      <OpenItemsByUltgSection groups={openItemsByUltg} />
 
       <UltgStreamMatrixTable rows={ultgStreamMatrix} />
 
