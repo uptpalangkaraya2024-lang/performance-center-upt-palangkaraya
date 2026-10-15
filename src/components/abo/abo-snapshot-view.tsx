@@ -46,6 +46,22 @@ function formatPercent(v: number): string {
   return `${Math.round(v * 100)}%`;
 }
 
+// Realisasi-to-date ÷ target-to-date — NOT percentRealisasi (realisasi-to-
+// date ÷ the full-year master target, see abo-proteksi-compute.ts's own
+// computeStats). Confirmed live: showing percentRealisasi next to "Target
+// s.d. Periode"/"Realisasi s.d. Periode" columns produced exactly the
+// confusing result reported — a row with Target 64 / Realisasi 64 (equal)
+// showing "97%" instead of 100%, because that percentage was silently
+// being computed against the ANNUAL total instead of the two to-date
+// numbers sitting right next to it in the same row. percentRealisasi
+// itself isn't wrong — StatGrid shows it correctly labeled "% Realisasi
+// (thd Total)" — it's just the wrong number for a column placed beside
+// to-date figures. Mirrors computeStats' own IFERROR(...,1) fallback when
+// the denominator is 0.
+function toDatePercent(targetToDate: number, realisasiToDate: number): number {
+  return targetToDate > 0 ? realisasiToDate / targetToDate : 1;
+}
+
 function StatusPill({ status }: { status: AboProgramComputed["status"] }) {
   const cls =
     status === "tercapai"
@@ -152,7 +168,7 @@ function ResumeTable({ programs }: { programs: AboProgramComputed[] }) {
             <th className="px-3 py-2.5 font-bold">Program</th>
             <th className="px-3 py-2.5 font-bold">Target s.d. Periode</th>
             <th className="px-3 py-2.5 font-bold">Realisasi s.d. Periode</th>
-            <th className="px-3 py-2.5 font-bold">% Realisasi</th>
+            <th className="px-3 py-2.5 font-bold">% s.d. Periode</th>
             <th className="px-3 py-2.5 font-bold">Status</th>
           </tr>
         </thead>
@@ -169,7 +185,9 @@ function ResumeTable({ programs }: { programs: AboProgramComputed[] }) {
               </td>
               <td className="px-3 py-2 tabular-nums text-muted-foreground">{p.targetToDate}</td>
               <td className="px-3 py-2 tabular-nums text-muted-foreground">{p.realisasiToDate}</td>
-              <td className="px-3 py-2 tabular-nums text-muted-foreground">{formatPercent(p.percentRealisasi)}</td>
+              <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                {formatPercent(toDatePercent(p.targetToDate, p.realisasiToDate))}
+              </td>
               <td className="px-3 py-2">
                 <StatusPill status={p.status} />
               </td>
@@ -266,11 +284,14 @@ function UltgDetailTable({ rows }: { rows: AboUltgDetailRow[] }) {
               <td className="border-l px-3 py-2 text-right tabular-nums text-muted-foreground">{row.uptTarget}</td>
               <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{row.uptRealisasi}</td>
               <td className="px-3 py-2 text-right tabular-nums">
-                {row.uptPercent >= 1 ? (
-                  <span className="font-bold text-success">{formatPercent(row.uptPercent)}</span>
-                ) : (
-                  <NotAchievedBadge>{formatPercent(row.uptPercent)}</NotAchievedBadge>
-                )}
+                {(() => {
+                  const pct = toDatePercent(row.uptTarget, row.uptRealisasi);
+                  return pct >= 1 ? (
+                    <span className="font-bold text-success">{formatPercent(pct)}</span>
+                  ) : (
+                    <NotAchievedBadge>{formatPercent(pct)}</NotAchievedBadge>
+                  );
+                })()}
               </td>
               {row.byUltg.map((cell) => (
                 <Fragment key={cell.ultg}>
@@ -343,7 +364,7 @@ function UltgBreakdown({ ultgBreakdown }: { ultgBreakdown: AboUltgComputed[] }) 
               <StatusPill status={u.status} />
             </div>
             <p className="text-sm text-muted-foreground">
-              R:{u.realisasiToDate}/T:{u.targetToDate} s.d. periode · {formatPercent(u.percentRealisasi)}
+              R:{u.realisasiToDate}/T:{u.targetToDate} s.d. periode · {formatPercent(toDatePercent(u.targetToDate, u.realisasiToDate))}
             </p>
             <p className="text-xs text-muted-foreground">
               Target ULTG: {u.master} · Target Rencana: {u.targetRencana}
@@ -568,7 +589,8 @@ export function AboSnapshotView({
                 "Target Rencana": p.targetRencana,
                 "Target s.d. Periode": p.targetToDate,
                 "Realisasi s.d. Periode": p.realisasiToDate,
-                "% Realisasi": Math.round(p.percentRealisasi * 100),
+                "% s.d. Periode": Math.round(toDatePercent(p.targetToDate, p.realisasiToDate) * 100),
+                "% Realisasi thd Total Tahun": Math.round(p.percentRealisasi * 100),
                 GAP: p.gap,
                 Status: p.status === "tercapai" ? "Tercapai" : "Belum",
               })),
@@ -583,7 +605,8 @@ export function AboSnapshotView({
                   "Target Rencana": u.targetRencana,
                   "Target s.d. Periode": u.targetToDate,
                   "Realisasi s.d. Periode": u.realisasiToDate,
-                  "% Realisasi": Math.round(u.percentRealisasi * 100),
+                  "% s.d. Periode": Math.round(toDatePercent(u.targetToDate, u.realisasiToDate) * 100),
+                  "% Realisasi thd Total Tahun": Math.round(u.percentRealisasi * 100),
                   Status: u.status === "tercapai" ? "Tercapai" : "Belum",
                 })),
               ),
