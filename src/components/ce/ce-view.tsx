@@ -426,9 +426,24 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
                   </span>
                 </span>
               </button>
-              {isOpen ? (
-                <div className="max-h-[32rem] overflow-y-auto border-t">
-                  {group.streams.map((stream) => (
+              {
+                // Always rendered (never conditionally skipped) so
+                // window.print() — Export PDF's own mechanism, see
+                // export-pdf-button.tsx — can show every ULTG's full list
+                // regardless of which one is currently expanded on
+                // screen. `hidden`/hover state is CSS-only here; `print:
+                // block`/`print:max-h-none` force every group fully open
+                // and unclipped specifically when printing, same
+                // print-override convention already used elsewhere on
+                // this page (print:hidden on the filter toolbar above).
+              }
+              <div
+                className={cn(
+                  "max-h-[32rem] overflow-y-auto border-t print:block print:max-h-none print:overflow-visible",
+                  isOpen ? "block" : "hidden",
+                )}
+              >
+                {group.streams.map((stream) => (
                     <div key={stream.streamCode ?? "lainnya"}>
                       <div className="sticky top-0 flex items-center justify-between gap-2 border-b bg-muted/40 px-3 py-1.5">
                         <span className="text-xs font-bold tracking-wide text-foreground uppercase">{stream.streamLabel}</span>
@@ -469,7 +484,6 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
                     </div>
                   ))}
                 </div>
-              ) : null}
             </div>
           );
         })}
@@ -711,6 +725,27 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
                 "Gap (pts)": u.gapPts ?? "",
               })),
             },
+            {
+              // Flattened ULTG -> stream -> items into one row per item —
+              // the on-page version groups/collapses this for scanning,
+              // but Excel's own sheet is already a flat table by nature,
+              // so there's no reason to hide anything here the way the
+              // collapsed UI groups do on screen.
+              name: "Daftar Open per ULTG",
+              rows: openItemsByUltg.flatMap((group) =>
+                group.streams.flatMap((stream) =>
+                  stream.items.map((item) => ({
+                    ULTG: group.ultg,
+                    Stream: stream.streamLabel,
+                    GI: item.gardu,
+                    Bay: item.bay || item.jenisAsset,
+                    Program: item.namaProgram,
+                    "Kriteria Before": item.kriteriaBefore,
+                    "Target Minggu": item.targetWeekLabel ?? "",
+                  })),
+                ),
+              ),
+            },
           ]}
         />
 
@@ -767,9 +802,9 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
 
       <UltgIdealTable entries={ultgIdeal} />
 
-      <OpenItemsByUltgSection groups={openItemsByUltg} />
-
       <UltgStreamMatrixTable rows={ultgStreamMatrix} />
+
+      <OpenItemsByUltgSection groups={openItemsByUltg} />
 
       <BreakdownGrid title="Breakdown per Sub Bidang" entries={subBidangBreakdown} />
       <StreamBreakdownTable entries={streamBreakdown} />
