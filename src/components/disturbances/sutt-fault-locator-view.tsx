@@ -7,6 +7,7 @@ import {
   Copy,
   ExternalLink,
   MapPin,
+  Navigation,
   RotateCcw,
   Zap,
 } from "lucide-react";
@@ -29,8 +30,9 @@ import { cn } from "@/lib/utils";
 import {
   FAULT_METHODS,
   FAULT_METHOD_LABELS,
+  buildDirectionsLink,
   buildEarthLink,
-  buildMapsLink,
+  buildSuttMyMapsLink,
   buildMethodResults,
   formatWaMessage,
   hasFaultHistory,
@@ -138,16 +140,26 @@ function MethodCard({
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </p>
-            {buildMapsLink(result.match.tower.lat, result.match.tower.lon) ? (
+            {buildSuttMyMapsLink(result.match.tower.lat, result.match.tower.lon) ? (
               <div className="flex flex-wrap gap-2 pt-0.5">
                 <a
-                  href={buildMapsLink(result.match.tower.lat, result.match.tower.lon)!}
+                  href={buildSuttMyMapsLink(result.match.tower.lat, result.match.tower.lon)!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  <MapPin className="size-3" />
+                  Peta SUTT (Tower)
+                  <ExternalLink className="size-2.5" />
+                </a>
+                <a
+                  href={buildDirectionsLink(result.match.tower.lat, result.match.tower.lon)!}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-1 text-primary hover:underline"
                 >
-                  <MapPin className="size-3" />
-                  Google Maps
+                  <Navigation className="size-3" />
+                  Petunjuk Arah
                   <ExternalLink className="size-2.5" />
                 </a>
                 <a

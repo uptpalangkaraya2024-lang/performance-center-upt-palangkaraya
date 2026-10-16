@@ -79,9 +79,26 @@ export function locateFault(ruas: SuttRuas, rawDistanceKm: number, direction: Fa
   return findNearestTower(ruas.towers, effectiveDistanceKm(ruas, rawDistanceKm, direction));
 }
 
-export function buildMapsLink(lat: number | null, lon: number | null): string | null {
+// The UPT's own curated Google My Maps with every SUTT tower already
+// plotted as a point (user-provided — a map they maintain in their own
+// Drive, not something this app builds or edits). My Maps' public viewer
+// has no documented way to select one specific placemark by id, but
+// centering the viewer URL on a tower's own lat/long via `ll=` at a tight
+// zoom opens this authoritative map already looking at the right spot,
+// with every neighboring tower still visible for context.
+const SUTT_MY_MAPS_ID = "1CmUoRNb6iqw8wDsFhivqCqWEj4XELKg";
+
+export function buildSuttMyMapsLink(lat: number | null, lon: number | null): string | null {
   if (lat === null || lon === null) return null;
-  return `https://www.google.com/maps?q=${lat},${lon}`;
+  return `https://www.google.com/maps/d/viewer?mid=${SUTT_MY_MAPS_ID}&ll=${lat},${lon}&z=18`;
+}
+
+/** Turn-by-turn navigation to the tower, as distinct from buildSuttMyMapsLink's
+ *  "look at this map" purpose — a plain `maps?q=` pin drops a marker but
+ *  doesn't offer directions, which is the more practical ask for a field crew. */
+export function buildDirectionsLink(lat: number | null, lon: number | null): string | null {
+  if (lat === null || lon === null) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
 }
 
 export function buildEarthLink(lat: number | null, lon: number | null): string | null {
@@ -201,8 +218,10 @@ export function formatWaMessage(
     if (headline) lines.push(headline);
     if (isTowerKritis(match.tower)) lines.push("⚠️ Tower Kritis — ada catatan penanganan/mitigasi.");
     if (hasFaultHistory(match.tower)) lines.push("⚡ Ada riwayat gangguan tercatat di tower ini.");
-    const maps = buildMapsLink(match.tower.lat, match.tower.lon);
-    if (maps) lines.push(`Maps: ${maps}`);
+    const myMaps = buildSuttMyMapsLink(match.tower.lat, match.tower.lon);
+    if (myMaps) lines.push(`Peta SUTT (Tower): ${myMaps}`);
+    const directions = buildDirectionsLink(match.tower.lat, match.tower.lon);
+    if (directions) lines.push(`Petunjuk arah: ${directions}`);
     lines.push("");
   }
 
