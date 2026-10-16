@@ -374,44 +374,58 @@ function UltgStreamMatrixTable({ rows }: { rows: CeUltgStreamRow[] }) {
   );
 }
 
-// One expandable section per ULTG, listing EVERY item that ULTG still has
-// open — not just the cross-ULTG "Perlu Perhatian" subset (Critical/Alert/
-// Terlambat only). Meant as each ULTG's own reminder/checklist: "exactly
-// which findings are still outstanding," not just a count. Collapsed by
-// default (106 open items across 3 ULTGs would otherwise make the page
-// very long to scroll past) — the header alone already shows each ULTG's
-// open and overdue counts so a UPT-level viewer can see at a glance which
-// ULTG needs the most attention without expanding anything.
+// A collapsible per-ULTG section, each containing one collapsible dropdown
+// per stream — not just the cross-ULTG "Perlu Perhatian" subset (Critical/
+// Alert/Terlambat only), and not just open items either (per user
+// feedback — a stream dropdown now shows BOTH open and closed items, same
+// pair of counts as the page's own Breakdown per Stream table, just
+// scoped to one ULTG). Meant as each ULTG's own reminder/checklist: open
+// items sort first within each stream (most urgent on top), closed ones
+// after, each row's own status visible via an icon.
+//
+// Streams are independently collapsible ("dropdown" per user's own
+// wording) rather than all dumped into one shared scrolling box — the
+// earlier version put every stream's rows into a single max-height
+// scrollable container with sticky per-stream headers, which read as
+// disorganized once a user scrolled past a header boundary (confirmed
+// from the user's own screenshot). Each stream is now its own bordered
+// block the user opens on demand, closed by default so an ULTG with many
+// streams doesn't dump everything on expand.
+function streamToggleKey(ultg: string, streamCode: string | null): string {
+  return `${ultg}::${streamCode ?? "lainnya"}`;
+}
+
 function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+  const [expandedUltg, setExpandedUltg] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(groups.map((g, i) => [g.ultg, i === 0])),
   );
-  if (groups.length === 0 || groups.every((g) => g.openCount === 0)) return null;
+  const [expandedStream, setExpandedStream] = useState<Record<string, boolean>>({});
+  if (groups.length === 0 || groups.every((g) => g.openCount === 0 && g.closeCount === 0)) return null;
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
           <ListChecks className="size-5 text-warning-foreground" />
-          <CardTitle className="text-lg font-extrabold">Daftar Open per ULTG</CardTitle>
+          <CardTitle className="text-lg font-extrabold">Daftar Temuan per ULTG</CardTitle>
         </div>
         <p className="text-sm text-muted-foreground">
-          Seluruh temuan yang masih open, dikelompokkan per ULTG lalu per stream — bahan reminder untuk masing-masing ULTG,
-          bukan hanya yang masuk daftar &quot;Perlu Perhatian&quot; di atas.
+          Dikelompokkan per ULTG, lalu per stream (klik untuk buka/tutup) — tiap stream menampilkan item open (diutamakan,
+          paling terlambat di atas) maupun yang sudah close, bahan reminder untuk masing-masing ULTG.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {groups.map((group) => {
-          const isOpen = expanded[group.ultg] ?? false;
+          const isUltgOpen = expandedUltg[group.ultg] ?? false;
           return (
             <div key={group.ultg} className="overflow-hidden rounded-lg border">
               <button
                 type="button"
-                onClick={() => setExpanded((prev) => ({ ...prev, [group.ultg]: !prev[group.ultg] }))}
+                onClick={() => setExpandedUltg((prev) => ({ ...prev, [group.ultg]: !prev[group.ultg] }))}
                 className="flex w-full items-center justify-between gap-3 bg-muted/50 px-3 py-2.5 text-left hover:bg-muted"
               >
                 <span className="flex items-center gap-2">
-                  <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", isOpen ? "rotate-0" : "-rotate-90")} />
+                  <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", isUltgOpen ? "rotate-0" : "-rotate-90")} />
                   <span className="font-bold text-foreground">{group.ultg}</span>
                 </span>
                 <span className="flex items-center gap-2">
@@ -424,66 +438,91 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
                   <span className="rounded-full border border-warning/50 bg-warning/20 px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-warning-foreground">
                     {group.openCount} open
                   </span>
+                  <span className="rounded-full border border-success/40 bg-success/20 px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-success">
+                    {group.closeCount} close
+                  </span>
                 </span>
               </button>
               {
                 // Always rendered (never conditionally skipped) so
                 // window.print() — Export PDF's own mechanism, see
-                // export-pdf-button.tsx — can show every ULTG's full list
-                // regardless of which one is currently expanded on
-                // screen. `hidden`/hover state is CSS-only here; `print:
-                // block`/`print:max-h-none` force every group fully open
-                // and unclipped specifically when printing, same
+                // export-pdf-button.tsx — can show every ULTG's and every
+                // stream's full list regardless of what's currently
+                // expanded on screen. `hidden`/`block` is CSS-only here;
+                // `print:block`/`print:max-h-none` force everything fully
+                // open and unclipped specifically when printing, same
                 // print-override convention already used elsewhere on
                 // this page (print:hidden on the filter toolbar above).
               }
-              <div
-                className={cn(
-                  "max-h-[32rem] overflow-y-auto border-t print:block print:max-h-none print:overflow-visible",
-                  isOpen ? "block" : "hidden",
-                )}
-              >
-                {group.streams.map((stream) => (
-                    <div key={stream.streamCode ?? "lainnya"}>
-                      <div className="sticky top-0 flex items-center justify-between gap-2 border-b bg-muted/40 px-3 py-1.5">
-                        <span className="text-xs font-bold tracking-wide text-foreground uppercase">{stream.streamLabel}</span>
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          {stream.overdueCount > 0 ? (
-                            <span className="font-semibold text-critical">{stream.overdueCount} terlambat ·</span>
-                          ) : null}
-                          {stream.items.length} open
+              <div className={cn("flex flex-col gap-1.5 border-t p-1.5 print:block", isUltgOpen ? "flex" : "hidden")}>
+                {group.streams.map((stream) => {
+                  const key = streamToggleKey(group.ultg, stream.streamCode);
+                  const isStreamOpen = expandedStream[key] ?? false;
+                  return (
+                    <div key={key} className="overflow-hidden rounded-md border">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedStream((prev) => ({ ...prev, [key]: !prev[key] }))}
+                        className="flex w-full items-center justify-between gap-2 bg-muted/30 px-3 py-1.5 text-left hover:bg-muted/60"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", isStreamOpen ? "rotate-0" : "-rotate-90")} />
+                          <span className="text-xs font-bold tracking-wide text-foreground uppercase">{stream.streamLabel}</span>
                         </span>
-                      </div>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/20 text-left text-xs text-muted-foreground uppercase">
-                            <th className="px-3 py-2 font-bold">GI / Bay</th>
-                            <th className="px-3 py-2 font-bold">Program</th>
-                            <th className="px-3 py-2 font-bold">Kriteria</th>
-                            <th className="px-3 py-2 font-bold">Target Minggu</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {stream.items.map((item) => (
-                            <tr key={item.id} className="border-b last:border-0 hover:bg-muted/10">
-                              <td className="px-3 py-2 text-foreground">
-                                <div className="font-medium">{item.gardu}</div>
-                                <div className="text-xs text-muted-foreground">{item.bay || item.jenisAsset}</div>
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground">{item.namaProgram}</td>
-                              <td className="px-3 py-2">
-                                <KriteriaPill value={item.kriteriaBefore} />
-                              </td>
-                              <td className="px-3 py-2 text-xs whitespace-nowrap">
-                                {item.targetWeekLabel ?? <span className="text-muted-foreground">—</span>}
-                              </td>
+                        <span className="flex items-center gap-1.5 text-xs">
+                          {stream.overdueCount > 0 ? (
+                            <span className="font-semibold text-critical">{stream.overdueCount} terlambat</span>
+                          ) : null}
+                          <span className="font-semibold text-warning-foreground">{stream.openCount} open</span>
+                          <span className="font-semibold text-success">{stream.closeCount} close</span>
+                        </span>
+                      </button>
+                      <div
+                        className={cn(
+                          "max-h-96 overflow-y-auto border-t print:block print:max-h-none print:overflow-visible",
+                          isStreamOpen ? "block" : "hidden",
+                        )}
+                      >
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-card">
+                            <tr className="border-b bg-muted/20 text-left text-xs text-muted-foreground uppercase">
+                              <th className="px-3 py-2 font-bold">Status</th>
+                              <th className="px-3 py-2 font-bold">GI / Bay</th>
+                              <th className="px-3 py-2 font-bold">Program</th>
+                              <th className="px-3 py-2 font-bold">Kriteria</th>
+                              <th className="px-3 py-2 font-bold">Target Minggu</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {stream.items.map((item) => (
+                              <tr key={item.id} className="border-b last:border-0 hover:bg-muted/10">
+                                <td className="px-3 py-2">
+                                  {item.done ? (
+                                    <CheckCircle2 className="size-4 text-success" />
+                                  ) : (
+                                    <Circle className="size-4 text-warning-foreground" />
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-foreground">
+                                  <div className="font-medium">{item.gardu}</div>
+                                  <div className="text-xs text-muted-foreground">{item.bay || item.jenisAsset}</div>
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground">{item.namaProgram}</td>
+                                <td className="px-3 py-2">
+                                  <KriteriaPill value={item.kriteriaBefore} />
+                                </td>
+                                <td className="px-3 py-2 text-xs whitespace-nowrap">
+                                  {item.targetWeekLabel ?? <span className="text-muted-foreground">—</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -726,15 +765,17 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
               })),
             },
             {
-              // Flattened ULTG -> stream -> items into one row per item —
-              // the on-page version groups/collapses this for scanning,
-              // but Excel's own sheet is already a flat table by nature,
-              // so there's no reason to hide anything here the way the
-              // collapsed UI groups do on screen.
-              name: "Daftar Open per ULTG",
+              // Flattened ULTG -> stream -> items (open AND closed) into
+              // one row per item — the on-page version groups/collapses
+              // this for scanning, but Excel's own sheet is already a
+              // flat table by nature, so there's no reason to hide
+              // anything here the way the collapsed UI groups do on
+              // screen.
+              name: "Daftar Temuan per ULTG",
               rows: openItemsByUltg.flatMap((group) =>
                 group.streams.flatMap((stream) =>
                   stream.items.map((item) => ({
+                    Status: item.done ? "CLOSE" : "OPEN",
                     ULTG: group.ultg,
                     Stream: stream.streamLabel,
                     GI: item.gardu,
@@ -742,6 +783,7 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
                     Program: item.namaProgram,
                     "Kriteria Before": item.kriteriaBefore,
                     "Target Minggu": item.targetWeekLabel ?? "",
+                    "Realisasi Minggu": item.realisasiWeekLabel ?? "",
                   })),
                 ),
               ),
