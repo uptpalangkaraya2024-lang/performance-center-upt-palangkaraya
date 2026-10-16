@@ -5,7 +5,7 @@ import { PageHero } from "@/components/dashboard/page-hero";
 import { buttonVariants } from "@/components/ui/button";
 import { SuttFaultLocatorView } from "@/components/disturbances/sutt-fault-locator-view";
 import { getSuttSnapshot } from "@/services/sutt-asset";
-import { getSigapBayLineByFuncLoc } from "@/services/sigap";
+import { getSigapTowerInsights } from "@/services/sigap";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why.
@@ -19,15 +19,19 @@ export const maxDuration = 60;
 const LIGHTNING_WATCH_URL = "https://lightning-watch.uptpky.workers.dev/";
 
 // SIGAP (UIP3B Kalimantan's own tower alert tool) — public read-only API
-// confirmed reachable, see src/services/sigap.ts. This link is to its own
-// web app, separate from the API this page quietly cross-references towers
-// against (the "Kode SIGAP" shown per ruas below).
+// confirmed reachable, see src/services/sigap.ts: GET /api/chart-analysis
+// needs no token and already returns per-tower lightning-strike/gangguan
+// history. SIGAP also has a token-gated POST endpoint that actually sends
+// a WhatsApp alert — deliberately never called from this app (the user's
+// own instruction: pull tower data only, stay out of everything else).
+// This link is to SIGAP's own web app, separate from the API this page
+// quietly cross-references towers against.
 const SIGAP_URL = "https://sigap.uip3bkal.com/";
 
 export default async function CariTitikGangguanPage() {
-  const [{ ruasList, error }, sigapBayLineByFuncLoc] = await Promise.all([
+  const [{ ruasList, error }, sigapInsightsByFuncLoc] = await Promise.all([
     getSuttSnapshot(),
-    getSigapBayLineByFuncLoc(),
+    getSigapTowerInsights(),
   ]);
 
   return (
@@ -64,7 +68,7 @@ export default async function CariTitikGangguanPage() {
           </>
         }
       />
-      <SuttFaultLocatorView ruasList={ruasList} error={error} sigapBayLineByFuncLoc={sigapBayLineByFuncLoc} />
+      <SuttFaultLocatorView ruasList={ruasList} error={error} sigapInsightsByFuncLoc={sigapInsightsByFuncLoc} />
     </div>
   );
 }

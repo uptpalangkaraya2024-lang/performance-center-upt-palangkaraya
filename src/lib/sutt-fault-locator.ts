@@ -7,6 +7,7 @@
 // derive many" shape used by every other module's own compute lib
 // (ce-compute.ts, four-dx-compute.ts, ...).
 import type { SuttRuas, SuttTower } from "@/types";
+import type { SigapTowerInsight } from "@/services/sigap";
 
 // User-specified order (not alphabetical): VAISALA, TWFL, SMDE, then Fault
 // Locator Relay last.
@@ -88,12 +89,20 @@ export function locateFault(ruas: SuttRuas, rawDistanceKm: number, direction: Fa
  *  reliable join key. Returns the first match found (a ruas maps to one
  *  bayLine in practice); null when SIGAP's map is empty/unreachable or no
  *  tower here has a funcLoc match, so callers can simply hide the field. */
-export function findSigapBayLine(ruas: SuttRuas, funcLocToBayLine: Record<string, string>): string | null {
+export function findSigapBayLine(ruas: SuttRuas, insightsByFuncLoc: Record<string, SigapTowerInsight>): string | null {
   for (const t of ruas.towers) {
-    const bayLine = funcLocToBayLine[t.funcLoc];
-    if (bayLine) return bayLine;
+    const insight = insightsByFuncLoc[t.funcLoc];
+    if (insight?.bayLine) return insight.bayLine;
   }
   return null;
+}
+
+/** The matched TOWER's own SIGAP data (lightning strikes/gangguan history
+ *  per year, height, peak current) — unlike findSigapBayLine (one code per
+ *  whole ruas), this is genuinely per-tower: two towers on the same ruas
+ *  can have very different strike histories. null when unmatched. */
+export function findSigapInsight(tower: SuttTower, insightsByFuncLoc: Record<string, SigapTowerInsight>): SigapTowerInsight | null {
+  return insightsByFuncLoc[tower.funcLoc] ?? null;
 }
 
 // The UPT's own curated Google My Maps with every SUTT tower already
@@ -184,6 +193,29 @@ function towerHeadline(tower: SuttTower): string {
   return bits.join(" · ");
 }
 
+/** Compact lines for one tower's SIGAP history — last 3 years of recorded
+ *  lightning strikes (not the full history, to keep the WA text short) and
+ *  every year SIGAP's own "Gangguan" series recorded something > 0 for
+ *  this tower, since that's the strongest corroborating signal this tool
+ *  can surface for a reported fault. Returns [] when SIGAP has nothing for
+ *  this tower (not matched, or genuinely zero on record) — callers just
+ *  skip the section rather than showing an empty one. */
+export function formatSigapInsightLines(insight: SigapTowerInsight): string[] {
+  const lines: string[] = [];
+  const recentSambaran = insight.sambaranPerTahun.slice(-3);
+  if (recentSambaran.length > 0) {
+    lines.push(`⚡ Sambaran petir (SIGAP): ${recentSambaran.map((y) => `${y.year}: ${y.value}`).join(" · ")}`);
+  }
+  const gangguanYears = insight.gangguanPerTahun.filter((y) => y.value > 0).map((y) => y.year);
+  if (gangguanYears.length > 0) {
+    lines.push(`⚠️ Indikasi gangguan SIGAP tercatat: ${gangguanYears.join(", ")}`);
+  }
+  if (insight.arusTertinggiKa !== null) {
+    lines.push(`Arus sambaran tertinggi tercatat: ${insight.arusTertinggiKa} kA`);
+  }
+  return lines;
+}
+
 /** Plain text, WhatsApp-ready (single asterisks for *bold*, no tables/HTML)
  *  — the same thing the result cards show, just flattened into one
  *  copy-paste block. direction/originLabel/farEndLabel come straight off
@@ -193,9 +225,10 @@ export function formatWaMessage(
   ruas: SuttRuas,
   direction: FaultDirection,
   entries: MethodEntry[],
-  sigapBayLine?: string | null,
+  insightsByFuncLoc?: Record<string, SigapTowerInsight>,
 ): string {
   const refLabel = direction === "origin" ? ruas.originLabel : ruas.farEndLabel;
+  const sigapBayLine = insightsByFuncLoc ? findSigapBayLine(ruas, insightsByFuncLoc) : null;
   const lines: string[] = [];
   lines.push("*LOKALISIR TITIK GANGGUAN*");
   lines.push(`Ruas: *${ruas.section}* (${ruas.unit})`);
@@ -237,6 +270,8 @@ export function formatWaMessage(
     if (headline) lines.push(headline);
     if (isTowerKritis(match.tower)) lines.push("⚠️ Tower Kritis — ada catatan penanganan/mitigasi.");
     if (hasFaultHistory(match.tower)) lines.push("⚡ Ada riwayat gangguan tercatat di tower ini.");
+    const sigapInsight = insightsByFuncLoc ? findSigapInsight(match.tower, insightsByFuncLoc) : null;
+    if (sigapInsight) lines.push(...formatSigapInsightLines(sigapInsight));
     const myMaps = buildSuttMyMapsLink(match.tower.lat, match.tower.lon);
     if (myMaps) lines.push(`Peta SUTT (Tower): ${myMaps}`);
     const directions = buildDirectionsLink(match.tower.lat, match.tower.lon);

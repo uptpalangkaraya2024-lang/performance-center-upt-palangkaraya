@@ -35,6 +35,8 @@ import {
   buildSuttMyMapsLink,
   buildMethodResults,
   findSigapBayLine,
+  findSigapInsight,
+  formatSigapInsightLines,
   formatWaMessage,
   hasFaultHistory,
   isTowerKritis,
@@ -42,6 +44,7 @@ import {
   type FaultMethod,
   type MethodEntry,
 } from "@/lib/sutt-fault-locator";
+import type { SigapTowerInsight } from "@/services/sigap";
 import type { SuttRuas } from "@/types";
 
 function formatKm(km: number): string {
@@ -61,16 +64,19 @@ function MethodCard({
   onChange,
   ruas,
   direction,
+  sigapInsightsByFuncLoc,
 }: {
   method: FaultMethod;
   value: string;
   onChange: (v: string) => void;
   ruas: SuttRuas | null;
   direction: FaultDirection;
+  sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
 }) {
   const distanceKm = value.trim() === "" ? null : Number(value);
   const entry: MethodEntry = { method, distanceKm: Number.isFinite(distanceKm) ? distanceKm : null };
   const result = ruas && entry.distanceKm !== null ? buildMethodResults(ruas, direction, [entry])[0] : null;
+  const sigapInsight = result ? findSigapInsight(result.match.tower, sigapInsightsByFuncLoc) : null;
 
   return (
     <Card className="print:break-inside-avoid">
@@ -141,6 +147,13 @@ function MethodCard({
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </p>
+            {sigapInsight
+              ? formatSigapInsightLines(sigapInsight).map((line, i) => (
+                  <p key={i} className="text-muted-foreground">
+                    {line}
+                  </p>
+                ))
+              : null}
             {buildSuttMyMapsLink(result.match.tower.lat, result.match.tower.lon) ? (
               <div className="flex flex-wrap gap-2 pt-0.5">
                 <a
@@ -184,14 +197,15 @@ function MethodCard({
 export function SuttFaultLocatorView({
   ruasList,
   error,
-  sigapBayLineByFuncLoc,
+  sigapInsightsByFuncLoc,
 }: {
   ruasList: SuttRuas[];
   error: string | null;
-  /** funcLoc -> SIGAP bayLine, best-effort (see src/services/sigap.ts) —
-   *  an empty object when SIGAP was unreachable just means no "Kode SIGAP"
-   *  line shows anywhere, nothing else about the tool depends on it. */
-  sigapBayLineByFuncLoc: Record<string, string>;
+  /** funcLoc -> SIGAP tower insight (bayLine code + lightning-strike/
+   *  gangguan history), best-effort (see src/services/sigap.ts) — an empty
+   *  object when SIGAP was unreachable just means those extra lines don't
+   *  show anywhere, nothing else about the tool depends on it. */
+  sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
 }) {
   const [sectionKey, setSectionKey] = useState<string | null>(null);
   const [direction, setDirection] = useState<FaultDirection>("origin");
@@ -214,7 +228,7 @@ export function SuttFaultLocatorView({
   }, [ruasList]);
 
   const ruas = ruasList.find((r) => r.section === sectionKey) ?? null;
-  const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapBayLineByFuncLoc) : null;
+  const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapInsightsByFuncLoc) : null;
 
   const entries: MethodEntry[] = FAULT_METHODS.map((method) => {
     const raw = inputs[method].trim();
@@ -222,7 +236,7 @@ export function SuttFaultLocatorView({
     return { method, distanceKm: n !== null && Number.isFinite(n) ? n : null };
   });
   const filledCount = entries.filter((e) => e.distanceKm !== null).length;
-  const waText = ruas ? formatWaMessage(ruas, direction, entries, sigapBayLine) : "";
+  const waText = ruas ? formatWaMessage(ruas, direction, entries, sigapInsightsByFuncLoc) : "";
 
   function reset() {
     setInputs({ VAISALA: "", TWFL: "", SMDE: "", FAULT_LOCATOR_RELAY: "" });
@@ -316,6 +330,7 @@ export function SuttFaultLocatorView({
               onChange={(v) => setInputs((prev) => ({ ...prev, [method]: v }))}
               ruas={ruas}
               direction={direction}
+              sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             />
           ))}
         </div>
