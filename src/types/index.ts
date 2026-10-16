@@ -1287,6 +1287,12 @@ export interface SuttTower {
   towerNo: string; // NO TOWER as text — can be "001A", "185.7", etc., never assumed purely numeric
   penghantar: string; // NAMA_PENGHANTAR, e.g. "BAGENDANG - KUALA PAMBUANG #001"
   gi: string; // this row's own GARDU_INDUK — the nearest/owning GI, not always the ruas's origin end
+  /** ID_FUNCTLOC — same functional-location code format UIP3B Kalimantan's
+   *  own SIGAP tool uses for its "funcLoc" field (confirmed live, both
+   *  sides format it "TRS-####-###.###-T####"), so this is a reliable join
+   *  key to look up SIGAP's own "bayLine" shorthand for this tower — see
+   *  src/services/sigap.ts. Blank when the sheet's own row didn't have one. */
+  funcLoc: string;
   distanceKm: number; // self-computed cumulative distance from the ruas's origin (lowest-sequence tower)
   lat: number | null;
   lon: number | null;

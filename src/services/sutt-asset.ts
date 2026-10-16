@@ -107,6 +107,7 @@ function buildRuasList(records: Record<string, string>[]): SuttRuas[] {
         towerNo,
         penghantar: record["NAMA_PENGHANTAR"]?.trim() ?? "",
         gi,
+        funcLoc: record["ID_FUNCTLOC"]?.trim() ?? "",
         distanceKm: cumKm,
         lat,
         lon,

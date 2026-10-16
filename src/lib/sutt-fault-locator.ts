@@ -83,6 +83,19 @@ export function locateFault(ruas: SuttRuas, rawDistanceKm: number, direction: Fa
   return findNearestTower(ruas.towers, effectiveDistanceKm(ruas, rawDistanceKm, direction));
 }
 
+/** Looks up this ruas's own SIGAP "bayLine" shorthand (e.g. "PKY-KSG") via
+ *  each tower's funcLoc — see src/services/sigap.ts for why that's a
+ *  reliable join key. Returns the first match found (a ruas maps to one
+ *  bayLine in practice); null when SIGAP's map is empty/unreachable or no
+ *  tower here has a funcLoc match, so callers can simply hide the field. */
+export function findSigapBayLine(ruas: SuttRuas, funcLocToBayLine: Record<string, string>): string | null {
+  for (const t of ruas.towers) {
+    const bayLine = funcLocToBayLine[t.funcLoc];
+    if (bayLine) return bayLine;
+  }
+  return null;
+}
+
 // The UPT's own curated Google My Maps with every SUTT tower already
 // plotted as a point (user-provided — a map they maintain in their own
 // Drive, not something this app builds or edits). My Maps' public viewer
@@ -180,6 +193,7 @@ export function formatWaMessage(
   ruas: SuttRuas,
   direction: FaultDirection,
   entries: MethodEntry[],
+  sigapBayLine?: string | null,
 ): string {
   const refLabel = direction === "origin" ? ruas.originLabel : ruas.farEndLabel;
   const lines: string[] = [];
@@ -188,6 +202,7 @@ export function formatWaMessage(
   lines.push(
     `Panjang ruas ${formatKm(ruas.lengthKm)} — jarak diukur dari *${refLabel}*`,
   );
+  if (sigapBayLine) lines.push(`Kode SIGAP: *${sigapBayLine}*`);
   lines.push("");
 
   const results = buildMethodResults(ruas, direction, entries);

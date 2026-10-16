@@ -34,6 +34,7 @@ import {
   buildEarthLink,
   buildSuttMyMapsLink,
   buildMethodResults,
+  findSigapBayLine,
   formatWaMessage,
   hasFaultHistory,
   isTowerKritis,
@@ -180,7 +181,18 @@ function MethodCard({
   );
 }
 
-export function SuttFaultLocatorView({ ruasList, error }: { ruasList: SuttRuas[]; error: string | null }) {
+export function SuttFaultLocatorView({
+  ruasList,
+  error,
+  sigapBayLineByFuncLoc,
+}: {
+  ruasList: SuttRuas[];
+  error: string | null;
+  /** funcLoc -> SIGAP bayLine, best-effort (see src/services/sigap.ts) —
+   *  an empty object when SIGAP was unreachable just means no "Kode SIGAP"
+   *  line shows anywhere, nothing else about the tool depends on it. */
+  sigapBayLineByFuncLoc: Record<string, string>;
+}) {
   const [sectionKey, setSectionKey] = useState<string | null>(null);
   const [direction, setDirection] = useState<FaultDirection>("origin");
   const [inputs, setInputs] = useState<Record<FaultMethod, string>>({
@@ -202,6 +214,7 @@ export function SuttFaultLocatorView({ ruasList, error }: { ruasList: SuttRuas[]
   }, [ruasList]);
 
   const ruas = ruasList.find((r) => r.section === sectionKey) ?? null;
+  const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapBayLineByFuncLoc) : null;
 
   const entries: MethodEntry[] = FAULT_METHODS.map((method) => {
     const raw = inputs[method].trim();
@@ -209,7 +222,7 @@ export function SuttFaultLocatorView({ ruasList, error }: { ruasList: SuttRuas[]
     return { method, distanceKm: n !== null && Number.isFinite(n) ? n : null };
   });
   const filledCount = entries.filter((e) => e.distanceKm !== null).length;
-  const waText = ruas ? formatWaMessage(ruas, direction, entries) : "";
+  const waText = ruas ? formatWaMessage(ruas, direction, entries, sigapBayLine) : "";
 
   function reset() {
     setInputs({ VAISALA: "", TWFL: "", SMDE: "", FAULT_LOCATOR_RELAY: "" });
@@ -261,6 +274,12 @@ export function SuttFaultLocatorView({ ruasList, error }: { ruasList: SuttRuas[]
             <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-xs sm:flex-row sm:items-center sm:justify-between">
               <p className="text-muted-foreground">
                 {ruas.unit} · {ruas.towers.length} tower · panjang {formatKm(ruas.lengthKm)}
+                {sigapBayLine ? (
+                  <>
+                    {" "}
+                    · Kode SIGAP <span className="font-semibold text-foreground">{sigapBayLine}</span>
+                  </>
+                ) : null}
               </p>
               <Tabs value={direction} onValueChange={(v) => setDirection((v as FaultDirection) ?? "origin")}>
                 <TabsList>
