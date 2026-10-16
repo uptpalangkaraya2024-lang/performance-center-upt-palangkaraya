@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import {
@@ -29,6 +30,7 @@ import {
   buildCeSubBidangBreakdown,
   buildCeSummary,
   buildCeUltgIdeal,
+  buildCeUltgStreamIdeal,
   buildCeUltgStreamMatrix,
   ceMonthAbbrIndex,
   defaultCeWeekLabel,
@@ -38,6 +40,7 @@ import {
   type CeOpenItemsUltgGroup,
   type CeProgramRollupEntry,
   type CeUltgIdealEntry,
+  type CeUltgStreamIdealRow,
   type CeUltgStreamRow,
 } from "@/lib/ce-compute";
 import { cn } from "@/lib/utils";
@@ -374,6 +377,77 @@ function UltgStreamMatrixTable({ rows }: { rows: CeUltgStreamRow[] }) {
   );
 }
 
+// "Is THIS ULTG behind on THIS stream" — buildCeUltgIdeal (above) answers
+// "which ULTG is behind" across all its items regardless of stream;
+// UltgStreamMatrixTable (above) answers "behind on which kind of
+// equipment" across all ULTGs combined; this crosses the two, per user
+// feedback asking for "target per ULTG per stream" directly on the
+// dashboard. Same pace-ideal % used throughout this page (elapsed weeks
+// ÷ 48), compared against each (stream, ULTG) cell's own actual close
+// rate, with the same NotAchievedBadge treatment as every other
+// target-vs-actual table on this page for a gap behind pace.
+function UltgStreamIdealTable({ rows }: { rows: CeUltgStreamIdealRow[] }) {
+  if (rows.length === 0 || rows[0].byUltg.length === 0) {
+    return <p className="text-sm text-muted-foreground">Belum ada data ULTG untuk breakdown ini.</p>;
+  }
+  const ultgLabels = rows[0].byUltg.map((c) => c.ultg);
+  const idealPercent = rows[0].idealPercent;
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-bold tracking-wide text-foreground uppercase">
+        Target per ULTG per Stream — Aktual vs Pace Ideal ({formatPercent(idealPercent / 100)} minggu berjalan)
+      </p>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+              <th className="px-3 py-2 font-bold" rowSpan={2}>
+                Stream
+              </th>
+              {ultgLabels.map((ultg) => (
+                <th key={ultg} className="border-l px-3 py-2 text-right font-bold" colSpan={2}>
+                  {ultg}
+                </th>
+              ))}
+            </tr>
+            <tr className="border-b bg-muted/70 text-right text-xs text-muted-foreground uppercase">
+              {ultgLabels.map((ultg) => (
+                <Fragment key={ultg}>
+                  <th className="border-l px-3 py-1.5 font-bold">Aktual</th>
+                  <th className="px-3 py-1.5 font-bold">Gap</th>
+                </Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.streamCode} className="border-b last:border-0">
+                <td className="px-3 py-2 text-foreground">{row.streamLabel}</td>
+                {row.byUltg.map((cell) => (
+                  <Fragment key={cell.ultg}>
+                    <td className="border-l px-3 py-2 text-right tabular-nums text-muted-foreground">
+                      {cell.actualPercent === null ? "—" : formatPercent(cell.actualPercent / 100)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {cell.gapPts === null ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : cell.gapPts < 0 ? (
+                        <NotAchievedBadge>{formatPercentGap(cell.gapPts)}</NotAchievedBadge>
+                      ) : (
+                        <span className="text-success">{formatPercentGap(cell.gapPts)}</span>
+                      )}
+                    </td>
+                  </Fragment>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // A collapsible per-ULTG section, each containing one collapsible dropdown
 // per stream — not just the cross-ULTG "Perlu Perhatian" subset (Critical/
 // Alert/Terlambat only), and not just open items either (per user
@@ -395,23 +469,50 @@ function streamToggleKey(ultg: string, streamCode: string | null): string {
   return `${ultg}::${streamCode ?? "lainnya"}`;
 }
 
+type CeStatusFilter = "all" | "open" | "close";
+
 function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) {
   const [expandedUltg, setExpandedUltg] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(groups.map((g, i) => [g.ultg, i === 0])),
   );
   const [expandedStream, setExpandedStream] = useState<Record<string, boolean>>({});
+  // "all" | "open" | "close" — filters which ROWS are visible on screen
+  // only (via a CSS `hidden` class per row, never by removing items from
+  // the array/DOM), so Export PDF's `print:!table-row` override can still
+  // force every row — matching every status, not just the one currently
+  // selected — back into the printed output. Per user feedback: export
+  // must always show full detail regardless of what's filtered/collapsed
+  // on screen.
+  const [statusFilter, setStatusFilter] = useState<CeStatusFilter>("all");
   if (groups.length === 0 || groups.every((g) => g.openCount === 0 && g.closeCount === 0)) return null;
+
+  function rowMatchesFilter(done: boolean): boolean {
+    if (statusFilter === "open") return !done;
+    if (statusFilter === "close") return done;
+    return true;
+  }
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <ListChecks className="size-5 text-warning-foreground" />
-          <CardTitle className="text-lg font-extrabold">Daftar Temuan per ULTG</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ListChecks className="size-5 text-warning-foreground" />
+            <CardTitle className="text-lg font-extrabold">Daftar Temuan per ULTG</CardTitle>
+          </div>
+          <Tabs value={statusFilter} onValueChange={(v) => v && setStatusFilter(v as CeStatusFilter)} className="print:hidden">
+            <TabsList>
+              <TabsTrigger value="all">Semua</TabsTrigger>
+              <TabsTrigger value="open">Open</TabsTrigger>
+              <TabsTrigger value="close">Close</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <p className="text-sm text-muted-foreground">
           Dikelompokkan per ULTG, lalu per stream (klik untuk buka/tutup) — tiap stream menampilkan item open (diutamakan,
-          paling terlambat di atas) maupun yang sudah close, bahan reminder untuk masing-masing ULTG.
+          paling terlambat di atas) maupun yang sudah close, bahan reminder untuk masing-masing ULTG. Filter di atas hanya
+          mempengaruhi tampilan layar — hasil export (PDF/Excel) selalu menyertakan semua item apa pun filter/dropdown yang
+          sedang aktif.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
@@ -448,18 +549,28 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
                 // window.print() — Export PDF's own mechanism, see
                 // export-pdf-button.tsx — can show every ULTG's and every
                 // stream's full list regardless of what's currently
-                // expanded on screen. `hidden`/`block` is CSS-only here;
-                // `print:block`/`print:max-h-none` force everything fully
-                // open and unclipped specifically when printing, same
-                // print-override convention already used elsewhere on
-                // this page (print:hidden on the filter toolbar above).
+                // expanded/filtered on screen. `hidden`/`block` is
+                // CSS-only here; the `print:!...` overrides (important
+                // modifier, NOT just `print:block`) force everything
+                // fully open, unclipped, and unfiltered specifically when
+                // printing — using `!` here is deliberate: a plain
+                // `print:block` sits at the same specificity as `hidden`
+                // and whichever one a future Tailwind/PostCSS rebuild
+                // happens to emit later in the stylesheet silently wins
+                // (confirmed as a real bug in this exact codebase family
+                // before), so this pins the print override to always win
+                // regardless of generation order.
               }
-              <div className={cn("flex flex-col gap-1.5 border-t p-1.5 print:block", isUltgOpen ? "flex" : "hidden")}>
+              <div className={cn("flex flex-col gap-1.5 border-t p-1.5 print:!block", isUltgOpen ? "flex" : "hidden")}>
                 {group.streams.map((stream) => {
                   const key = streamToggleKey(group.ultg, stream.streamCode);
                   const isStreamOpen = expandedStream[key] ?? false;
+                  const streamVisibleUnderFilter = stream.items.some((i) => rowMatchesFilter(i.done));
                   return (
-                    <div key={key} className="overflow-hidden rounded-md border">
+                    <div
+                      key={key}
+                      className={cn("overflow-hidden rounded-md border print:!block", streamVisibleUnderFilter ? "block" : "hidden")}
+                    >
                       <button
                         type="button"
                         onClick={() => setExpandedStream((prev) => ({ ...prev, [key]: !prev[key] }))}
@@ -479,7 +590,7 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
                       </button>
                       <div
                         className={cn(
-                          "max-h-96 overflow-y-auto border-t print:block print:max-h-none print:overflow-visible",
+                          "max-h-96 overflow-y-auto border-t print:!block print:!max-h-none print:!overflow-visible",
                           isStreamOpen ? "block" : "hidden",
                         )}
                       >
@@ -495,7 +606,13 @@ function OpenItemsByUltgSection({ groups }: { groups: CeOpenItemsUltgGroup[] }) 
                           </thead>
                           <tbody>
                             {stream.items.map((item) => (
-                              <tr key={item.id} className="border-b last:border-0 hover:bg-muted/10">
+                              <tr
+                                key={item.id}
+                                className={cn(
+                                  "border-b last:border-0 hover:bg-muted/10 print:!table-row",
+                                  rowMatchesFilter(item.done) ? "table-row" : "hidden",
+                                )}
+                              >
                                 <td className="px-3 py-2">
                                   {item.done ? (
                                     <CheckCircle2 className="size-4 text-success" />
@@ -665,6 +782,7 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
   const ultgIdeal = useMemo(() => buildCeUltgIdeal(snapshot.items, weekLabel), [snapshot.items, weekLabel]);
   const openItemsByUltg = useMemo(() => buildCeOpenItemsByUltg(snapshot.items, weekLabel), [snapshot.items, weekLabel]);
   const ultgStreamMatrix = useMemo(() => buildCeUltgStreamMatrix(snapshot.items), [snapshot.items]);
+  const ultgStreamIdeal = useMemo(() => buildCeUltgStreamIdeal(snapshot.items, weekLabel), [snapshot.items, weekLabel]);
   const programRollup = useMemo(() => buildCeProgramRollup(snapshot.items, todayISO), [snapshot.items, todayISO]);
   const recentActivity = useMemo(() => buildCeRecentActivity(snapshot.items, todayISO), [snapshot.items, todayISO]);
   const executiveSummary = useMemo(
@@ -765,6 +883,24 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
               })),
             },
             {
+              // Flattened stream x ULTG -> one row per cell, same data as
+              // the on-page "Target per ULTG per Stream" table.
+              name: "Target per ULTG per Stream",
+              rows: ultgStreamIdeal.flatMap((row) =>
+                row.byUltg.map((cell) => ({
+                  Stream: row.streamLabel,
+                  ULTG: cell.ultg,
+                  Total: cell.total,
+                  Close: cell.close,
+                  Open: cell.open,
+                  "Aktual (%)": cell.actualPercent ?? "",
+                  "Ideal (%)": row.idealPercent,
+                  "Gap (pts)": cell.gapPts ?? "",
+                  Status: cell.gapPts === null ? "" : cell.gapPts >= 0 ? "Tercapai" : "Belum",
+                })),
+              ),
+            },
+            {
               // Flattened ULTG -> stream -> items (open AND closed) into
               // one row per item — the on-page version groups/collapses
               // this for scanning, but Excel's own sheet is already a
@@ -845,6 +981,8 @@ export function CeView({ snapshot, emptyMessage }: { snapshot: CeSnapshot; empty
       <UltgIdealTable entries={ultgIdeal} />
 
       <UltgStreamMatrixTable rows={ultgStreamMatrix} />
+
+      <UltgStreamIdealTable rows={ultgStreamIdeal} />
 
       <OpenItemsByUltgSection groups={openItemsByUltg} />
 

@@ -565,6 +565,65 @@ export function buildCeOpenItemsByUltg(items: CeItem[], selectedWeekLabel: strin
   });
 }
 
+export interface CeUltgStreamIdealCell {
+  ultg: string;
+  total: number;
+  close: number;
+  open: number;
+  actualPercent: number | null;
+  gapPts: number | null;
+}
+
+export interface CeUltgStreamIdealRow {
+  streamCode: string;
+  streamLabel: string;
+  idealPercent: number;
+  byUltg: CeUltgStreamIdealCell[];
+}
+
+/** Target (= pace-ideal, same straight-line-by-elapsed-week trajectory as
+ *  buildCeUltgIdeal above) crossed with stream, instead of just ULTG alone
+ *  — buildCeUltgIdeal answers "which ULTG is behind," buildCeUltgStreamMatrix
+ *  answers "behind on which kind of equipment," neither answers "is THIS
+ *  ULTG behind on THIS stream specifically," which per user feedback is
+ *  the actual target-tracking view wanted on the dashboard. idealPercent
+ *  is the SAME value for every stream/ULTG cell in a given call (it's
+ *  purely time-based, not group-specific — see buildCeUltgIdeal's own
+ *  comment), kept on each row for the UI to label with, not because it
+ *  varies per stream. Always emits all 9 streams × every ULTG seen in
+ *  `items` (same "always show every row" convention as
+ *  buildCeUltgStreamMatrix), even a stream/ULTG combo with 0 items
+ *  (actualPercent/gapPts then null, rendered as "—") — this is a
+ *  coverage matrix, not a checklist, so omitting empty cells would make
+ *  the grid uneven. */
+export function buildCeUltgStreamIdeal(items: CeItem[], selectedWeekLabel: string): CeUltgStreamIdealRow[] {
+  const idealPercent = ((ceWeekLabelIndex(selectedWeekLabel) + 1) / CE_WEEK_LABELS.length) * 100;
+  const ultgOrder: string[] = [];
+  for (const item of items) {
+    const key = item.ultg || "Lainnya";
+    if (!ultgOrder.includes(key)) ultgOrder.push(key);
+  }
+
+  return Object.entries(CE_STREAM_LABELS).map(([code, label]) => {
+    const group = items.filter((i) => extractCeStreamCode(i.indikator) === code);
+    const byUltg: CeUltgStreamIdealCell[] = ultgOrder.map((ultg) => {
+      const ultgGroup = group.filter((i) => (i.ultg || "Lainnya") === ultg);
+      const close = ultgGroup.filter((i) => i.done).length;
+      const total = ultgGroup.length;
+      const actualPercent = total > 0 ? (close / total) * 100 : null;
+      return {
+        ultg,
+        total,
+        close,
+        open: total - close,
+        actualPercent,
+        gapPts: actualPercent !== null ? actualPercent - idealPercent : null,
+      };
+    });
+    return { streamCode: code, streamLabel: label, idealPercent, byUltg };
+  });
+}
+
 export interface CeExecutiveSummary {
   criticalOpen: number;
   criticalTotal: number;
