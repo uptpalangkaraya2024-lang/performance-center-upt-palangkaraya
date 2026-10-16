@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, CircleDashed, MonitorPlay, TrendingUp, XCircle, Zap } from "lucide-react";
+import { CheckCircle2, CircleDashed, MapPinned, MonitorPlay, TrendingUp, XCircle, Zap } from "lucide-react";
 
 import {
   Table,
@@ -453,8 +453,19 @@ export default async function DisturbancesPage() {
           ) : null
         }
         actions={
-          !result.error ? (
-            <>
+          <>
+            {/* Independent of the rekap's own result.error — the fault
+                locator reads a separate data source (DATA SUTT UPT PKY),
+                so a Gangguan-rekap sync failure must never hide it. */}
+            <Link
+              href="/dashboard/disturbances/cari-titik-gangguan"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <MapPinned className="size-3.5" />
+              Cari Titik Gangguan
+            </Link>
+            {!result.error ? (
+              <>
             <Link
               href="/dashboard/disturbances/presentasi"
               className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -597,8 +608,9 @@ export default async function DisturbancesPage() {
                 },
               ]}
             />
-            </>
-          ) : undefined
+              </>
+            ) : null}
+          </>
         }
       />
 

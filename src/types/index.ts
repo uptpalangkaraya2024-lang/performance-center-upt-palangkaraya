@@ -1274,3 +1274,48 @@ export interface SavedPresentationSummary {
   createdAt: string;
   updatedAt: string;
 }
+
+// SUTT tower register (DATA SUTT UPT PKY) — feeds the Gangguan "Cari Titik
+// Gangguan" fault locator (src/services/sutt-asset.ts,
+// src/lib/sutt-fault-locator.ts). One SuttTower per physical tower; towers
+// are grouped into a SuttRuas per the sheet's own NAMA_SECTION column, with
+// `distanceKm` self-computed (cumulative SPAN (M) in natural tower order)
+// rather than trusting the sheet's own TOTAL SPAN (KM) column, which is
+// confirmed broken for at least one ruas — see data-sources.ts's own
+// comment on `suttAsset` for the full live-audit trail.
+export interface SuttTower {
+  towerNo: string; // NO TOWER as text — can be "001A", "185.7", etc., never assumed purely numeric
+  penghantar: string; // NAMA_PENGHANTAR, e.g. "BAGENDANG - KUALA PAMBUANG #001"
+  gi: string; // this row's own GARDU_INDUK — the nearest/owning GI, not always the ruas's origin end
+  distanceKm: number; // self-computed cumulative distance from the ruas's origin (lowest-sequence tower)
+  lat: number | null;
+  lon: number | null;
+  tegangan: string;
+  jenisTower: string; // JENIS TOWER — Suspension/Tension/...
+  tipeTower: string; // TIPETOWER
+  tahunOperasi: string;
+  vegetasiLokasi: string;
+  historyGangguan: string;
+  historyGangguanPetir: string;
+  /** Non-blank in any of these 3 means the sheet's own team has flagged this
+   *  tower as "tower kritis" — surfaced as a standout warning in results,
+   *  not just extra trivia, since it directly corroborates a fault there. */
+  towerKritisPenanganan: string;
+  towerKritisMitigasi: string;
+  towerKritisTglEksekusi: string;
+}
+
+export interface SuttRuas {
+  section: string; // NAMA_SECTION — the ruas identity, as the sheet (and the user) names it
+  unit: string; // ULTG
+  originGi: string; // GARDU_INDUK of the first tower in natural sequence — km 0
+  originLabel: string; // short display label for the origin end (GI name, prefix stripped)
+  farEndLabel: string; // best-effort label for the opposite end — a later distinct GARDU_INDUK when the data has one, else parsed from the NAMA_SECTION string itself
+  lengthKm: number; // last tower's distanceKm
+  towers: SuttTower[]; // sorted ascending by distanceKm
+}
+
+export interface SuttSnapshot {
+  ruasList: SuttRuas[];
+  error: string | null;
+}

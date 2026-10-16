@@ -366,6 +366,47 @@ export const dataSources = {
       },
     ],
   },
+  // SUTT tower register — feeds the Gangguan "Cari Titik Gangguan" fault
+  // locator (src/services/sutt-asset.ts): matches a reported fault distance
+  // (TWFL/SMDE/VAISALA) against the nearest physical tower along a ruas.
+  // Real header is row 2 (row 1 is a numbered column-reference helper row,
+  // confirmed live — "1","2",...,"74" with one blank cell). Confirmed live:
+  // 4456 data rows, grouped by the sheet's own NAMA_SECTION column (23
+  // distinct ruas) — NOT by NO TOWER (numbering isn't unique across ruas,
+  // e.g. "KASONGAN - SKS" and "KASONGAN - SUDAN" both reuse tower numbers
+  // 186-236 for two different physical lines) and NOT by GARDU_INDUK (it
+  // can change partway through one physical ruas at a GI handover, e.g.
+  // "BUNTOK - MUARA TEWEH" switches from BUNTOK to MUARA TEWEH at tower
+  // 125 with no reset in cumulative distance). TOTAL SPAN (KM) — the
+  // sheet's own pre-computed cumulative distance — is confirmed broken for
+  // at least one ruas ("MINTIN - PALANGKARAYA": values in the thousands,
+  // ending in a literal "#REF!" formula-error string), so the service
+  // self-computes cumulative distance from SPAN (M) instead of trusting
+  // that column — verified this reproduces the sheet's own good values
+  // exactly on every other ruas and produces a sane ~96km total where the
+  // sheet's column showed ~95858km. NO TOWER itself isn't purely numeric
+  // either (confirmed live: "001A"/"001B" sub-towers, and one ruas —
+  // "PALANGKARAYA - KASONGAN" — lists its last few towers as descending
+  // decimals 185.5→185.1 — so sorting uses a natural numeric+suffix key,
+  // never raw row order or a plain numeric NO TOWER sort).
+  suttAsset: {
+    id: "sutt-asset",
+    label: "Data Aset — SUTT",
+    sources: [
+      {
+        file: "[01] Data Aset UPT Palangkaraya 2024",
+        sheets: [
+          {
+            name: "DATA SUTT UPT PKY",
+            required: false,
+            headerRow: 2,
+            purpose:
+              "Satu baris per tower SUTT — LAT/LONG, GARDU_INDUK, NAMA_SECTION (ruas), NO TOWER, SPAN (M)/TOTAL SPAN (KM), jenis/tipe tower, dan riwayat gangguan/tower kritis per tower. LINK GOOGLE MAPS/EARTH are HYPERLINK() formulas — a values-only read returns just their display text, not the real URL, so the service synthesizes its own Maps/Earth links from LAT/LONG instead.",
+          },
+        ],
+      },
+    ],
+  },
   // A protection-relay asset register (MPU/BPU/BUSPRO), confirmed live to
   // have dozens of sheets beyond the 4 requested so far (MPU FASOP, BATTERY
   // & RECTIFIER, TWS, MPU BAY TRAFO, BPU BAY TRAFO, ...) — more will likely
