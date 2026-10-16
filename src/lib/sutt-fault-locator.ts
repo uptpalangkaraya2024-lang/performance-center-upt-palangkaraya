@@ -1,19 +1,23 @@
 // Pure matching + WhatsApp-text formatting for the Gangguan "Cari Titik
 // Gangguan" fault locator. No "server-only" here on purpose — the ruas list
 // is fetched once server-side (src/services/sutt-asset.ts) and handed to
-// the client component as plain data; every search after that (TWFL/SMDE/
-// VAISALA distance -> nearest tower) runs instantly in the browser against
-// that already-loaded list, the same "load once, derive many" shape used
-// by every other module's own compute lib (ce-compute.ts, four-dx-compute.ts, ...).
+// the client component as plain data; every search after that (VAISALA/
+// TWFL/SMDE/Fault Locator Relay distance -> nearest tower) runs instantly
+// in the browser against that already-loaded list, the same "load once,
+// derive many" shape used by every other module's own compute lib
+// (ce-compute.ts, four-dx-compute.ts, ...).
 import type { SuttRuas, SuttTower } from "@/types";
 
-export const FAULT_METHODS = ["TWFL", "SMDE", "VAISALA"] as const;
+// User-specified order (not alphabetical): VAISALA, TWFL, SMDE, then Fault
+// Locator Relay last.
+export const FAULT_METHODS = ["VAISALA", "TWFL", "SMDE", "FAULT_LOCATOR_RELAY"] as const;
 export type FaultMethod = (typeof FAULT_METHODS)[number];
 
 export const FAULT_METHOD_LABELS: Record<FaultMethod, string> = {
+  VAISALA: "VAISALA",
   TWFL: "TWFL",
   SMDE: "SMDE",
-  VAISALA: "VAISALA",
+  FAULT_LOCATOR_RELAY: "Fault Locator Relay",
 };
 
 /** Which end of the ruas the entered distance is measured from — a ruas's
@@ -222,6 +226,8 @@ export function formatWaMessage(
     if (myMaps) lines.push(`Peta SUTT (Tower): ${myMaps}`);
     const directions = buildDirectionsLink(match.tower.lat, match.tower.lon);
     if (directions) lines.push(`Petunjuk arah: ${directions}`);
+    const earth = buildEarthLink(match.tower.lat, match.tower.lon);
+    if (earth) lines.push(`Google Earth: ${earth}`);
     lines.push("");
   }
 

@@ -183,7 +183,12 @@ function MethodCard({
 export function SuttFaultLocatorView({ ruasList, error }: { ruasList: SuttRuas[]; error: string | null }) {
   const [sectionKey, setSectionKey] = useState<string | null>(null);
   const [direction, setDirection] = useState<FaultDirection>("origin");
-  const [inputs, setInputs] = useState<Record<FaultMethod, string>>({ TWFL: "", SMDE: "", VAISALA: "" });
+  const [inputs, setInputs] = useState<Record<FaultMethod, string>>({
+    VAISALA: "",
+    TWFL: "",
+    SMDE: "",
+    FAULT_LOCATOR_RELAY: "",
+  });
   const [copied, setCopied] = useState(false);
 
   const ruasByUnit = useMemo(() => {
@@ -207,7 +212,7 @@ export function SuttFaultLocatorView({ ruasList, error }: { ruasList: SuttRuas[]
   const waText = ruas ? formatWaMessage(ruas, direction, entries) : "";
 
   function reset() {
-    setInputs({ TWFL: "", SMDE: "", VAISALA: "" });
+    setInputs({ VAISALA: "", TWFL: "", SMDE: "", FAULT_LOCATOR_RELAY: "" });
   }
 
   if (error) {
@@ -283,7 +288,7 @@ export function SuttFaultLocatorView({ ruasList, error }: { ruasList: SuttRuas[]
             Reset
           </Button>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {FAULT_METHODS.map((method) => (
             <MethodCard
               key={method}

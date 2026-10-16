@@ -23,7 +23,7 @@ export default async function CariTitikGangguanPage() {
     <div className="flex flex-col gap-6">
       <PageHero
         title="Cari Titik Gangguan"
-        description="Cocokkan jarak gangguan (TWFL/SMDE/VAISALA) dengan data tower SUTT untuk memperkirakan lokasi — pilih ruas, masukkan jarak dari tiap metode yang ada, lalu salin hasilnya dalam format siap kirim WhatsApp."
+        description="Cocokkan jarak gangguan (VAISALA/TWFL/SMDE/Fault Locator Relay) dengan data tower SUTT untuk memperkirakan lokasi — pilih ruas, masukkan jarak dari tiap metode yang ada, lalu salin hasilnya dalam format siap kirim WhatsApp."
         actions={
           <>
             <a
