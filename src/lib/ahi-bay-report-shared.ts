@@ -112,11 +112,21 @@ function yearsSince(dateISO: string | null, todayISO: string): number | null {
 // Exact formulas confirmed against the live sheet (user-provided):
 //   Mandatory Pengujian = AND(klasifikasi == "NO DATA", ageYears < 2)
 //   Pengujian Ulang     = OR(klasifikasi in {POOR, CRITICAL}, ageYears >= 2)
-// ageYears is null when TANGGAL PEMELIHARAAN TERAKHIR is missing — the
-// age-based branch is then simply skipped rather than guessed in either
-// direction (never fabricate).
+// ageYears is null when TANGGAL PEMELIHARAAN TERAKHIR is missing. A missing
+// date used to fall through BOTH flags silently (e.g. BAY GT 2 MINTIN's
+// Current Transformer: Tahanan Isolasi Primer/Tan Delta/Ratio/V knee point
+// all "KOSONG"/NO DATA, no maintenance date on record — confirmed live via
+// a one-off audit route after the user flagged this exact unit) which is
+// backwards: equipment with no test AND no record of when it was last
+// touched is the case MOST in need of flagging, not the one to stay silent
+// on. So a null ageYears is treated the same as "young" (<2) for the
+// mandatory branch — the only age-based claim being made is "we can't rule
+// out that this is overdue," never a fabricated number. Once ageYears is
+// positively known to be >= 2, retest takes over instead (age-known-old
+// always wins over "never tested" for which bucket applies), so a NO DATA
+// item is flagged exactly once, never both.
 function computeFlags(klasifikasi: AhiKlasifikasi, ageYears: number | null): { mandatory: boolean; retest: boolean } {
-  const mandatory = klasifikasi === "NO DATA" && ageYears !== null && ageYears < 2;
+  const mandatory = klasifikasi === "NO DATA" && (ageYears === null || ageYears < 2);
   const retest = klasifikasi === "POOR" || klasifikasi === "CRITICAL" || (ageYears !== null && ageYears >= 2);
   return { mandatory, retest };
 }
