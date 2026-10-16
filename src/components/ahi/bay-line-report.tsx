@@ -125,7 +125,17 @@ function QualityScoreCard({ units }: { units: BayEquipmentUnit[] }) {
  *  equipment, same show/hide pattern as the raw Hasil Uji rows below.
  *  Item rows stay in the DOM even while collapsed (hidden via a class, not
  *  unmounted) so print output can force them back on regardless of the
- *  on-screen toggle state — see the print:table-row override. */
+ *  on-screen toggle state — see the print:table-row override.
+ *
+ *  Equipment (parent) vs item pengujian (child) used to be told apart only
+ *  by a little bold+indent, which read as near-identical at a glance (user
+ *  feedback: "pusing" telling them apart). Now the two levels are
+ *  deliberately far apart: the equipment row gets a solid band + a
+ *  klasifikasi-colored left bar (same accent language as UnitCard's own
+ *  card border below) and sits a size up in weight/scale; item rows sit on
+ *  plain background, smaller, muted, indented behind a "↳" connector — the
+ *  same parent/child contrast now applied consistently everywhere this
+ *  pattern repeats on this page (see the matching table inside UnitCard). */
 function ResumeUnitGroup({ unit, idx }: { unit: BayEquipmentUnit; idx: number }) {
   const [expanded, setExpanded] = useState(false);
   const mandatoryCount = unit.parameters.filter((p) => p.mandatoryPengujian).length;
@@ -133,10 +143,15 @@ function ResumeUnitGroup({ unit, idx }: { unit: BayEquipmentUnit; idx: number })
   return (
     <>
       <tr
-        className="cursor-pointer border-b bg-muted/20 hover:bg-muted/30 print:cursor-auto"
+        className="cursor-pointer border-b-2 border-border bg-muted hover:bg-muted/80 print:cursor-auto"
         onClick={() => jumpToUnit(idx)}
       >
-        <td className="px-3 py-2 text-xs font-bold tracking-tight text-foreground">
+        <td
+          className={cn(
+            "border-l-4 px-3 py-2.5 text-sm font-extrabold tracking-tight text-foreground",
+            klasifikasiBarClass(unit.klasifikasi),
+          )}
+        >
           <div className="flex items-center gap-2">
             {unit.role}
             <button
@@ -145,24 +160,24 @@ function ResumeUnitGroup({ unit, idx }: { unit: BayEquipmentUnit; idx: number })
                 e.stopPropagation();
                 setExpanded((v) => !v);
               }}
-              className="flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-muted/50 print:hidden"
+              className="flex items-center gap-1 rounded border bg-card px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-muted/50 print:hidden"
             >
               <ChevronDown className={cn("size-3 transition-transform", expanded && "rotate-180")} />
               {expanded ? "Sembunyikan item" : "Tampilkan item"}
             </button>
           </div>
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5">
           <KlasifikasiPill value={unit.klasifikasi} />
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5">
           {mandatoryCount > 0 ? (
             <FlagPill active label={`${mandatoryCount} parameter`} tone="warning" />
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
           )}
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5">
           {retestCount > 0 ? (
             <FlagPill active label={`${retestCount} parameter`} tone="critical" />
           ) : (
@@ -175,18 +190,21 @@ function ResumeUnitGroup({ unit, idx }: { unit: BayEquipmentUnit; idx: number })
           key={p.label}
           onClick={() => jumpToUnit(idx)}
           className={cn(
-            "cursor-pointer border-b last:border-0 hover:bg-muted/10 print:cursor-auto",
+            "cursor-pointer border-b bg-card last:border-0 hover:bg-muted/20 print:cursor-auto",
             !expanded && "hidden print:table-row",
           )}
         >
-          <td className="px-3 py-2 pl-6 text-muted-foreground">{p.label}</td>
-          <td className="px-3 py-2">
+          <td className="px-3 py-1.5 pl-8 text-sm text-muted-foreground">
+            <span className="text-muted-foreground/60">↳ </span>
+            {p.label}
+          </td>
+          <td className="px-3 py-1.5">
             <KlasifikasiPill value={p.klasifikasi} />
           </td>
-          <td className="px-3 py-2">
+          <td className="px-3 py-1.5">
             <FlagPill active={p.mandatoryPengujian} label="Mandatory" tone="warning" />
           </td>
-          <td className="px-3 py-2">
+          <td className="px-3 py-1.5">
             <FlagPill active={p.pengujianUlang} label="Ulang" tone="critical" />
           </td>
         </tr>
@@ -419,8 +437,8 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
             <tbody>
               {unit.parameters.map((p) => (
                 <Fragment key={p.label}>
-                  <tr className="border-b bg-muted/10 last:border-0">
-                    <td className="px-3 py-2 font-medium text-foreground">{p.label}</td>
+                  <tr className="border-b-2 border-border bg-muted last:border-0">
+                    <td className="px-3 py-2 font-extrabold text-foreground">{p.label}</td>
                     <td className="px-3 py-2 text-muted-foreground">{formatValue(p.r)}</td>
                     <td className="px-3 py-2 text-muted-foreground">{formatValue(p.s)}</td>
                     <td className="px-3 py-2 text-muted-foreground">{formatValue(p.t)}</td>
@@ -431,10 +449,10 @@ function UnitCard({ unit }: { unit: BayEquipmentUnit }) {
                   {p.rawReadings.map((reading, idx) => (
                     <tr
                       key={`${p.label}-raw-${idx}`}
-                      className={cn("border-b text-xs last:border-0", !showRaw && "hidden print:table-row")}
+                      className={cn("border-b bg-card text-xs last:border-0", !showRaw && "hidden print:table-row")}
                     >
-                      <td className="py-1.5 pr-3 pl-6 text-muted-foreground">
-                        <span className="text-muted-foreground/70">↳ </span>
+                      <td className="py-1.5 pr-3 pl-8 text-muted-foreground">
+                        <span className="text-muted-foreground/60">↳ </span>
                         {reading.label}
                       </td>
                       <td className="py-1.5 pr-3">{formatValue(reading.r)}</td>
