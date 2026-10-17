@@ -40,6 +40,38 @@ interface SigapChartAnalysisResponse {
         labels?: string[];
         datasets?: SigapDatasetRaw[];
         towerMetadata?: SigapTowerMetadataRaw[];
+        // Beyond the Chart.js-specific `datasets` array, SIGAP's own
+        // chartJs object carries several more top-level, index-aligned
+        // arrays (confirmed live by dumping its full key list — there are
+        // ~25, most for grounding/soil/DGS/TLA engineering data this app
+        // doesn't use yet). Two matter here:
+        //   - `fasa`: the real phase-sequence value (e.g. "RST", "TSR /
+        //     RST") — confirmed live it's constant across every tower on
+        //     the same bayLine (sampled first/middle/last tower of 6
+        //     different bayLines, all identical within each), consistent
+        //     with phase order being a property of the whole physical
+        //     circuit, not a per-tower attribute — so it's surfaced at the
+        //     RUAS level here, same as the bayLine code itself.
+        //   - A field literally named `urutanFasa` ALSO exists, but
+        //     confirmed live to hold the same constant "265" for every
+        //     single one of the 3486 towers — not real data, some kind of
+        //     internal reference/legend id despite its name. Never read.
+        //   - `unbalance` similarly exists but is constant "270" for every
+        //     tower — also not real data. DATA SUTT UPT PKY's own
+        //     UNBALANCE column (see sutt-asset.ts) remains the only real
+        //     source for that field; SIGAP's own is a dead end.
+        //   - `jumlah` ("10 / 12" style, also constant per bayLine) turned
+        //     out to be isolator counts (cross-checked against the
+        //     sheet's own SUSUNAN ISOLATOR LINE 1/2), not a disturbance
+        //     count — unrelated to "jumlah gangguan", not used here.
+        //   - `ganisByYear`/`ganis2025`/`ganis2026` looked like they might
+        //     be a cleaner per-year disturbance count, but are sparse
+        //     arrays of a single repeated constant ("260") at scattered
+        //     positions — same placeholder pattern as urutanFasa/
+        //     unbalance, not real counts. "Gangguan <year>" inside
+        //     `datasets` (used below) remains the best available signal
+        //     for that, despite its own undocumented unit.
+        fasa?: (string | null)[];
       };
     }[];
   };
@@ -60,6 +92,12 @@ export interface SigapYearValue {
  *  fabricated 0. */
 export interface SigapTowerInsight {
   bayLine: string;
+  /** Phase sequence for this tower's whole circuit (e.g. "RST", "TSR /
+   *  RST") — see the long comment on SigapChartAnalysisResponse.fasa for
+   *  why this is sourced from `fasa`, not the similarly-named but
+   *  non-functional `urutanFasa`. null when SIGAP has nothing for this
+   *  tower's funcLoc. */
+  fasa: string | null;
   tinggiTowerM: number | null;
   elevasiM: number | null;
   arusTertinggiKa: number | null;
@@ -88,6 +126,7 @@ function buildInsights(data: SigapChartAnalysisResponse): Record<string, SigapTo
   const chart = (data.analysis?.charts ?? [])[0];
   const towerMetadata = chart?.chartJs?.towerMetadata ?? [];
   const datasets = chart?.chartJs?.datasets ?? [];
+  const fasaArr = chart?.chartJs?.fasa ?? [];
   if (towerMetadata.length === 0 || datasets.length === 0) return {};
 
   const tinggi = singleValueDataset(datasets, "Tinggi Tower", "Tinggi");
@@ -115,6 +154,7 @@ function buildInsights(data: SigapChartAnalysisResponse): Record<string, SigapTo
     }
     result[t.funcLoc] = {
       bayLine: t.bayLine ?? "",
+      fasa: fasaArr[i] || null,
       tinggiTowerM: typeof tinggi?.[i] === "number" ? tinggi[i] : null,
       elevasiM: typeof elevasi?.[i] === "number" ? elevasi[i] : null,
       arusTertinggiKa: typeof arusTertinggi?.[i] === "number" ? arusTertinggi[i] : null,

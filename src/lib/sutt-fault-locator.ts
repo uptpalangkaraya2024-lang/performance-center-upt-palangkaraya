@@ -97,6 +97,18 @@ export function findSigapBayLine(ruas: SuttRuas, insightsByFuncLoc: Record<strin
   return null;
 }
 
+/** Looks up this ruas's own SIGAP phase sequence (e.g. "RST") — same
+ *  pattern as findSigapBayLine, since SIGAP's `fasa` is confirmed live to
+ *  be constant across every tower on one circuit (phase order is a
+ *  whole-circuit property), not something that varies tower by tower. */
+export function findSigapFasa(ruas: SuttRuas, insightsByFuncLoc: Record<string, SigapTowerInsight>): string | null {
+  for (const t of ruas.towers) {
+    const insight = insightsByFuncLoc[t.funcLoc];
+    if (insight?.fasa) return insight.fasa;
+  }
+  return null;
+}
+
 /** The matched TOWER's own SIGAP data (lightning strikes/gangguan history
  *  per year, height, peak current) — unlike findSigapBayLine (one code per
  *  whole ruas), this is genuinely per-tower: two towers on the same ruas
@@ -254,6 +266,7 @@ export function formatWaMessage(
 ): string {
   const refLabel = direction === "origin" ? ruas.originLabel : ruas.farEndLabel;
   const sigapBayLine = insightsByFuncLoc ? findSigapBayLine(ruas, insightsByFuncLoc) : null;
+  const sigapFasa = insightsByFuncLoc ? findSigapFasa(ruas, insightsByFuncLoc) : null;
   const lines: string[] = [];
   lines.push("*LOKALISIR TITIK GANGGUAN*");
   lines.push(`Ruas: *${ruas.section}* (${ruas.unit})`);
@@ -261,6 +274,7 @@ export function formatWaMessage(
     `Panjang ruas ${formatKm(ruas.lengthKm)} — jarak diukur dari *${refLabel}*`,
   );
   if (sigapBayLine) lines.push(`Kode SIGAP: *${sigapBayLine}*`);
+  if (sigapFasa) lines.push(`Urutan fasa (SIGAP): *${sigapFasa}*`);
   lines.push("");
 
   const results = buildMethodResults(ruas, direction, entries);

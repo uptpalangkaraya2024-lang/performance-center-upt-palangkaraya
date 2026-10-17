@@ -35,6 +35,7 @@ import {
   buildSuttMyMapsLink,
   buildMethodResults,
   findSigapBayLine,
+  findSigapFasa,
   findSigapInsight,
   formatSigapInsightLines,
   formatUnbalanceLine,
@@ -236,6 +237,7 @@ export function SuttFaultLocatorView({
 
   const ruas = ruasList.find((r) => r.section === sectionKey) ?? null;
   const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapInsightsByFuncLoc) : null;
+  const sigapFasa = ruas ? findSigapFasa(ruas, sigapInsightsByFuncLoc) : null;
 
   const entries: MethodEntry[] = FAULT_METHODS.map((method) => {
     const raw = inputs[method].trim();
@@ -299,6 +301,12 @@ export function SuttFaultLocatorView({
                   <>
                     {" "}
                     · Kode SIGAP <span className="font-semibold text-foreground">{sigapBayLine}</span>
+                  </>
+                ) : null}
+                {sigapFasa ? (
+                  <>
+                    {" "}
+                    · Urutan fasa (SIGAP) <span className="font-semibold text-foreground">{sigapFasa}</span>
                   </>
                 ) : null}
               </p>
