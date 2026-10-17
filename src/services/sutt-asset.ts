@@ -14,6 +14,15 @@ function normalizeGiName(raw: string): string {
   return raw.replace(/^GIS?\s*\d+\s*KV\s*/i, "").trim();
 }
 
+// Date cells come back as "YYYY-MM-DD 00:00:00" (same shape every other
+// service in this app strips down with its own extractDateOnly) — the
+// trailing midnight timestamp is noise, never a real time-of-day value.
+function dateOnly(raw: string | undefined): string {
+  const text = (raw ?? "").trim();
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+  return m ? m[1] : text;
+}
+
 function num(raw: string | undefined): number | null {
   if (raw === undefined) return null;
   const text = raw.trim();
@@ -118,6 +127,8 @@ function buildRuasList(records: Record<string, string>[]): SuttRuas[] {
         vegetasiLokasi: record["VEGETASI/LOKASI TOWER"]?.trim() ?? "",
         historyGangguan: record["HISTORY GANGGUAN"]?.trim() ?? "",
         historyGangguanPetir: record["HISTORI GANGGUAN PETIR"]?.trim() ?? "",
+        unbalance: record["UNBALANCE"]?.trim() ?? "",
+        unbalanceRealisasi: dateOnly(pick(record, "REALISASI UNBALANCE (DD/MM/YYYY)")),
         towerKritisPenanganan: pick(record, "PENANGANAN TOWER KRITIS"),
         towerKritisMitigasi: record["MITIGASI_TOWER KRITIS"]?.trim() ?? "",
         towerKritisTglEksekusi: record["TGL EKSEKUSI TOWER KRITIS"]?.trim() ?? "",

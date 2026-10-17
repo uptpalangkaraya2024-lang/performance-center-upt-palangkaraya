@@ -1303,6 +1303,13 @@ export interface SuttTower {
   vegetasiLokasi: string;
   historyGangguan: string;
   historyGangguanPetir: string;
+  /** UNBALANCE — descriptive text, not a flag (confirmed live values like
+   *  "EKSTERNAL (LINE 2)"), populated on ~11% of rows. No "urutan fasa"
+   *  (phase sequence) column exists anywhere in DATA SUTT UPT PKY —
+   *  confirmed live by scanning every header for "fasa"/"phase"/"urutan",
+   *  none found, so that field simply isn't tracked in this sheet. */
+  unbalance: string;
+  unbalanceRealisasi: string; // REALISASI UNBALANCE — date text, blank if unbalance itself is blank
   /** Non-blank in any of these 3 means the sheet's own team has flagged this
    *  tower as "tower kritis" — surfaced as a standout warning in results,
    *  not just extra trivia, since it directly corroborates a fault there. */

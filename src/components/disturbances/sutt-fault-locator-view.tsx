@@ -37,6 +37,7 @@ import {
   findSigapBayLine,
   findSigapInsight,
   formatSigapInsightLines,
+  formatUnbalanceLine,
   formatWaMessage,
   hasFaultHistory,
   isTowerKritis,
@@ -140,6 +141,12 @@ function MethodCard({
               <p className="flex items-center gap-1 font-semibold text-warning-foreground">
                 <Zap className="size-3 shrink-0" />
                 Ada riwayat gangguan tercatat di tower ini.
+              </p>
+            ) : null}
+            {formatUnbalanceLine(result.match.tower) ? (
+              <p className="flex items-center gap-1 font-semibold text-warning-foreground">
+                <AlertTriangle className="size-3 shrink-0" />
+                {formatUnbalanceLine(result.match.tower)}
               </p>
             ) : null}
             <p className="text-muted-foreground">

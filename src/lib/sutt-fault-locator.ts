@@ -194,26 +194,51 @@ function towerHeadline(tower: SuttTower): string {
 }
 
 /** Compact lines for one tower's SIGAP history — last 3 years of recorded
- *  lightning strikes (not the full history, to keep the WA text short) and
- *  every year SIGAP's own "Gangguan" series recorded something > 0 for
- *  this tower, since that's the strongest corroborating signal this tool
- *  can surface for a reported fault. Returns [] when SIGAP has nothing for
- *  this tower (not matched, or genuinely zero on record) — callers just
- *  skip the section rather than showing an empty one. */
+ *  lightning strikes (not the full history, to keep the WA text short), and
+ *  the FULL per-year breakdown of SIGAP's own "Gangguan <year>" series
+ *  (every year it recorded a value > 0 for this tower, with that value),
+ *  plus how many distinct years that covers. NOTE on the Gangguan number
+ *  itself: SIGAP's API never documents its unit, and the live values are
+ *  fractional and grow in scale year over year (e.g. low single digits in
+ *  2021 vs up to ~200 by 2025) — not what a plain incident COUNT should
+ *  look like, so this is shown as SIGAP's own recorded value, not
+ *  asserted to be "N kejadian". The one thing confirmed live: it's sparse
+ *  (only ~1-2% of towers have any value a given year), consistent with it
+ *  tracking real tower-specific events rather than a universal computed
+ *  figure — so a nonzero entry is still a meaningful corroborating signal,
+ *  just not a number to quote as a literal incident tally. Returns [] when
+ *  SIGAP has nothing for this tower (not matched, or genuinely zero on
+ *  record) — callers just skip the section rather than showing an empty one. */
 export function formatSigapInsightLines(insight: SigapTowerInsight): string[] {
   const lines: string[] = [];
   const recentSambaran = insight.sambaranPerTahun.slice(-3);
   if (recentSambaran.length > 0) {
     lines.push(`⚡ Sambaran petir (SIGAP): ${recentSambaran.map((y) => `${y.year}: ${y.value}`).join(" · ")}`);
   }
-  const gangguanYears = insight.gangguanPerTahun.filter((y) => y.value > 0).map((y) => y.year);
-  if (gangguanYears.length > 0) {
-    lines.push(`⚠️ Indikasi gangguan SIGAP tercatat: ${gangguanYears.join(", ")}`);
+  const gangguanTercatat = insight.gangguanPerTahun.filter((y) => y.value > 0);
+  if (gangguanTercatat.length > 0) {
+    lines.push(
+      `⚠️ Indikasi gangguan per tahun (SIGAP): ${gangguanTercatat.map((y) => `${y.year}: ${y.value}`).join(" · ")}`,
+    );
+    lines.push(`Jumlah tahun tercatat pernah gangguan: ${gangguanTercatat.length} tahun`);
   }
   if (insight.arusTertinggiKa !== null) {
     lines.push(`Arus sambaran tertinggi tercatat: ${insight.arusTertinggiKa} kA`);
   }
   return lines;
+}
+
+/** UNBALANCE from DATA SUTT UPT PKY — descriptive text (e.g. "EKSTERNAL
+ *  (LINE 2)"), not a flag, with its own realisasi date when present.
+ *  NOTE: there is no "urutan fasa" (phase sequence) column anywhere in
+ *  that sheet — confirmed live by scanning every header for "fasa"/
+ *  "phase"/"urutan" — so that specific field genuinely isn't tracked
+ *  there and isn't fabricated here. */
+export function formatUnbalanceLine(tower: SuttTower): string | null {
+  if (!tower.unbalance) return null;
+  return tower.unbalanceRealisasi
+    ? `Unbalance isolator: ${tower.unbalance} (realisasi ${tower.unbalanceRealisasi})`
+    : `Unbalance isolator: ${tower.unbalance}`;
 }
 
 /** Plain text, WhatsApp-ready (single asterisks for *bold*, no tables/HTML)
@@ -270,6 +295,8 @@ export function formatWaMessage(
     if (headline) lines.push(headline);
     if (isTowerKritis(match.tower)) lines.push("⚠️ Tower Kritis — ada catatan penanganan/mitigasi.");
     if (hasFaultHistory(match.tower)) lines.push("⚡ Ada riwayat gangguan tercatat di tower ini.");
+    const unbalanceLine = formatUnbalanceLine(match.tower);
+    if (unbalanceLine) lines.push(unbalanceLine);
     const sigapInsight = insightsByFuncLoc ? findSigapInsight(match.tower, insightsByFuncLoc) : null;
     if (sigapInsight) lines.push(...formatSigapInsightLines(sigapInsight));
     const myMaps = buildSuttMyMapsLink(match.tower.lat, match.tower.lon);
