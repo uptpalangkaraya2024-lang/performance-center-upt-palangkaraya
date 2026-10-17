@@ -102,7 +102,12 @@ export interface SigapTowerInsight {
   elevasiM: number | null;
   arusTertinggiKa: number | null;
   sambaranPerTahun: SigapYearValue[]; // "Sambaran <year>" (bar) — lightning strike count
-  gangguanPerTahun: SigapYearValue[]; // "Gangguan <year>" (line) — recorded disturbance count/flag
+  // SIGAP's own "Gangguan <year>" series used to be parsed here too, but
+  // was dropped: never a documented unit, and the live values are
+  // fractional and grow in scale year over year (low single digits in
+  // 2021 vs up to ~200 by 2025) — not a plain incident count. Real
+  // gangguan history now comes from the UPT's own REKAP GANGGUAN instead
+  // — see src/services/gangguan-history.ts.
 }
 
 const cache = new SharedCache<Record<string, SigapTowerInsight>>("sigap-tower-insights");
@@ -135,9 +140,6 @@ function buildInsights(data: SigapChartAnalysisResponse): Record<string, SigapTo
   const sambaranDatasets = datasets
     .map((d) => ({ year: yearFromLabel("Sambaran", d.label), data: d.data }))
     .filter((d): d is { year: string; data: (number | null)[] } => d.year !== null && !!d.data);
-  const gangguanDatasets = datasets
-    .map((d) => ({ year: yearFromLabel("Gangguan", d.label), data: d.data }))
-    .filter((d): d is { year: string; data: (number | null)[] } => d.year !== null && !!d.data);
 
   const result: Record<string, SigapTowerInsight> = {};
   towerMetadata.forEach((t, i) => {
@@ -147,11 +149,6 @@ function buildInsights(data: SigapChartAnalysisResponse): Record<string, SigapTo
       const v = data[i];
       if (typeof v === "number") sambaranPerTahun.push({ year, value: v });
     }
-    const gangguanPerTahun: SigapYearValue[] = [];
-    for (const { year, data } of gangguanDatasets) {
-      const v = data[i];
-      if (typeof v === "number") gangguanPerTahun.push({ year, value: v });
-    }
     result[t.funcLoc] = {
       bayLine: t.bayLine ?? "",
       fasa: fasaArr[i] || null,
@@ -159,7 +156,6 @@ function buildInsights(data: SigapChartAnalysisResponse): Record<string, SigapTo
       elevasiM: typeof elevasi?.[i] === "number" ? elevasi[i] : null,
       arusTertinggiKa: typeof arusTertinggi?.[i] === "number" ? arusTertinggi[i] : null,
       sambaranPerTahun: sambaranPerTahun.sort((a, b) => a.year.localeCompare(b.year)),
-      gangguanPerTahun: gangguanPerTahun.sort((a, b) => a.year.localeCompare(b.year)),
     };
   });
   return result;

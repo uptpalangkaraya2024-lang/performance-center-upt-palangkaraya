@@ -1328,6 +1328,20 @@ export interface SuttRuas {
   towers: SuttTower[]; // sorted ascending by distanceKm
 }
 
+/** One past gangguan event attributed to a specific tower, sourced from
+ *  "REKAP GANGGUAN UPT PALANGKARAYA" (the same sheet the main Gangguan
+ *  dashboard reads — src/services/disturbances.ts) rather than SIGAP, per
+ *  the user's own request: this is the UPT's own verified field-finding
+ *  record, not a derived/ambiguous external metric. See
+ *  src/services/gangguan-history.ts for how a tower gets matched to an
+ *  event (TEMUAN LAPANGAN text parsed for tower number mentions, cross-
+ *  checked against GARDU INDUK). */
+export interface GangguanHistoryEntry {
+  year: string;
+  tgl: string;
+  penyebab: string; // PENYEBAB, e.g. "PETIR", "HEWAN", "TEGAKAN" — "" if blank
+}
+
 export interface SuttSnapshot {
   ruasList: SuttRuas[];
   error: string | null;

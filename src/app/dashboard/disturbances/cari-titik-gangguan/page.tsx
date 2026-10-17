@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SuttFaultLocatorView } from "@/components/disturbances/sutt-fault-locator-view";
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getSigapTowerInsights } from "@/services/sigap";
+import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why.
@@ -20,18 +21,21 @@ const LIGHTNING_WATCH_URL = "https://lightning-watch.uptpky.workers.dev/";
 
 // SIGAP (UIP3B Kalimantan's own tower alert tool) — public read-only API
 // confirmed reachable, see src/services/sigap.ts: GET /api/chart-analysis
-// needs no token and already returns per-tower lightning-strike/gangguan
-// history. SIGAP also has a token-gated POST endpoint that actually sends
+// needs no token and returns per-tower lightning-strike history + phase
+// sequence. SIGAP also has a token-gated POST endpoint that actually sends
 // a WhatsApp alert — deliberately never called from this app (the user's
 // own instruction: pull tower data only, stay out of everything else).
 // This link is to SIGAP's own web app, separate from the API this page
-// quietly cross-references towers against.
+// quietly cross-references towers against. Gangguan history itself comes
+// from the UPT's own REKAP GANGGUAN instead (src/services/gangguan-
+// history.ts), not SIGAP — see that file's own comment for why.
 const SIGAP_URL = "https://sigap.uip3bkal.com/";
 
 export default async function CariTitikGangguanPage() {
-  const [{ ruasList, error }, sigapInsightsByFuncLoc] = await Promise.all([
+  const [{ ruasList, error }, sigapInsightsByFuncLoc, gangguanHistoryByGiTower] = await Promise.all([
     getSuttSnapshot(),
     getSigapTowerInsights(),
+    getGangguanHistoryByTowerGi(),
   ]);
 
   return (
@@ -68,7 +72,12 @@ export default async function CariTitikGangguanPage() {
           </>
         }
       />
-      <SuttFaultLocatorView ruasList={ruasList} error={error} sigapInsightsByFuncLoc={sigapInsightsByFuncLoc} />
+      <SuttFaultLocatorView
+        ruasList={ruasList}
+        error={error}
+        sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+        gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+      />
     </div>
   );
 }

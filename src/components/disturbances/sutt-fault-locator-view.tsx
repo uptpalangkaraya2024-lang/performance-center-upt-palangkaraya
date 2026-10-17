@@ -34,9 +34,11 @@ import {
   buildEarthLink,
   buildSuttMyMapsLink,
   buildMethodResults,
+  findGangguanHistory,
   findSigapBayLine,
   findSigapFasa,
   findSigapInsight,
+  formatGangguanHistoryLines,
   formatSigapInsightLines,
   formatUnbalanceLine,
   formatWaMessage,
@@ -47,7 +49,7 @@ import {
   type MethodEntry,
 } from "@/lib/sutt-fault-locator";
 import type { SigapTowerInsight } from "@/services/sigap";
-import type { SuttRuas } from "@/types";
+import type { GangguanHistoryEntry, SuttRuas } from "@/types";
 
 function formatKm(km: number): string {
   return `${km.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 3 })} km`;
@@ -67,6 +69,7 @@ function MethodCard({
   ruas,
   direction,
   sigapInsightsByFuncLoc,
+  gangguanHistoryByGiTower,
 }: {
   method: FaultMethod;
   value: string;
@@ -74,11 +77,13 @@ function MethodCard({
   ruas: SuttRuas | null;
   direction: FaultDirection;
   sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
+  gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
 }) {
   const distanceKm = value.trim() === "" ? null : Number(value);
   const entry: MethodEntry = { method, distanceKm: Number.isFinite(distanceKm) ? distanceKm : null };
   const result = ruas && entry.distanceKm !== null ? buildMethodResults(ruas, direction, [entry])[0] : null;
   const sigapInsight = result ? findSigapInsight(result.match.tower, sigapInsightsByFuncLoc) : null;
+  const gangguanHistory = result ? findGangguanHistory(result.match.tower, gangguanHistoryByGiTower) : [];
 
   return (
     <Card className="print:break-inside-avoid">
@@ -155,6 +160,16 @@ function MethodCard({
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </p>
+            {gangguanHistory.length > 0
+              ? formatGangguanHistoryLines(gangguanHistory).map((line, i) => (
+                  <p
+                    key={i}
+                    className={cn(i === 0 ? "font-semibold text-warning-foreground" : "text-muted-foreground")}
+                  >
+                    {line}
+                  </p>
+                ))
+              : null}
             {sigapInsight
               ? formatSigapInsightLines(sigapInsight).map((line, i) => (
                   <p key={i} className="text-muted-foreground">
@@ -206,14 +221,18 @@ export function SuttFaultLocatorView({
   ruasList,
   error,
   sigapInsightsByFuncLoc,
+  gangguanHistoryByGiTower,
 }: {
   ruasList: SuttRuas[];
   error: string | null;
-  /** funcLoc -> SIGAP tower insight (bayLine code + lightning-strike/
-   *  gangguan history), best-effort (see src/services/sigap.ts) — an empty
-   *  object when SIGAP was unreachable just means those extra lines don't
-   *  show anywhere, nothing else about the tool depends on it. */
+  /** funcLoc -> SIGAP tower insight (bayLine code, phase sequence,
+   *  lightning-strike history), best-effort (see src/services/sigap.ts) —
+   *  an empty object when SIGAP was unreachable just means those extra
+   *  lines don't show anywhere, nothing else about the tool depends on it. */
   sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
+  /** (normalized GARDU INDUK)::(tower number) -> past gangguan events from
+   *  the UPT's own REKAP GANGGUAN — see src/services/gangguan-history.ts. */
+  gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
 }) {
   const [sectionKey, setSectionKey] = useState<string | null>(null);
   const [direction, setDirection] = useState<FaultDirection>("origin");
@@ -245,7 +264,9 @@ export function SuttFaultLocatorView({
     return { method, distanceKm: n !== null && Number.isFinite(n) ? n : null };
   });
   const filledCount = entries.filter((e) => e.distanceKm !== null).length;
-  const waText = ruas ? formatWaMessage(ruas, direction, entries, sigapInsightsByFuncLoc) : "";
+  const waText = ruas
+    ? formatWaMessage(ruas, direction, entries, sigapInsightsByFuncLoc, gangguanHistoryByGiTower)
+    : "";
 
   function reset() {
     setInputs({ VAISALA: "", TWFL: "", SMDE: "", FAULT_LOCATOR_RELAY: "" });
@@ -346,6 +367,7 @@ export function SuttFaultLocatorView({
               ruas={ruas}
               direction={direction}
               sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+              gangguanHistoryByGiTower={gangguanHistoryByGiTower}
             />
           ))}
         </div>

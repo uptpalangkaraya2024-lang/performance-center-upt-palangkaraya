@@ -6,7 +6,7 @@
 // in the browser against that already-loaded list, the same "load once,
 // derive many" shape used by every other module's own compute lib
 // (ce-compute.ts, four-dx-compute.ts, ...).
-import type { SuttRuas, SuttTower } from "@/types";
+import type { GangguanHistoryEntry, SuttRuas, SuttTower } from "@/types";
 import type { SigapTowerInsight } from "@/services/sigap";
 
 // User-specified order (not alphabetical): VAISALA, TWFL, SMDE, then Fault
@@ -206,33 +206,22 @@ function towerHeadline(tower: SuttTower): string {
 }
 
 /** Compact lines for one tower's SIGAP history — last 3 years of recorded
- *  lightning strikes (not the full history, to keep the WA text short), and
- *  the FULL per-year breakdown of SIGAP's own "Gangguan <year>" series
- *  (every year it recorded a value > 0 for this tower, with that value),
- *  plus how many distinct years that covers. NOTE on the Gangguan number
- *  itself: SIGAP's API never documents its unit, and the live values are
- *  fractional and grow in scale year over year (e.g. low single digits in
- *  2021 vs up to ~200 by 2025) — not what a plain incident COUNT should
- *  look like, so this is shown as SIGAP's own recorded value, not
- *  asserted to be "N kejadian". The one thing confirmed live: it's sparse
- *  (only ~1-2% of towers have any value a given year), consistent with it
- *  tracking real tower-specific events rather than a universal computed
- *  figure — so a nonzero entry is still a meaningful corroborating signal,
- *  just not a number to quote as a literal incident tally. Returns [] when
- *  SIGAP has nothing for this tower (not matched, or genuinely zero on
- *  record) — callers just skip the section rather than showing an empty one. */
+ *  lightning strikes (not the full history, to keep the WA text short).
+ *  SIGAP's own "Gangguan <year>" series used to be shown here too, but was
+ *  dropped per the user's own direction: its unit was never documented by
+ *  SIGAP's API and the live values are fractional and grow in scale year
+ *  over year (low single digits in 2021 vs up to ~200 by 2025) — not what
+ *  a plain incident count should look like. Real gangguan history now
+ *  comes from the UPT's own REKAP GANGGUAN instead — see
+ *  formatGangguanHistoryLines() below and src/services/gangguan-
+ *  history.ts. Returns [] when SIGAP has nothing for this tower (not
+ *  matched, or genuinely zero on record) — callers just skip the section
+ *  rather than showing an empty one. */
 export function formatSigapInsightLines(insight: SigapTowerInsight): string[] {
   const lines: string[] = [];
   const recentSambaran = insight.sambaranPerTahun.slice(-3);
   if (recentSambaran.length > 0) {
     lines.push(`⚡ Sambaran petir (SIGAP): ${recentSambaran.map((y) => `${y.year}: ${y.value}`).join(" · ")}`);
-  }
-  const gangguanTercatat = insight.gangguanPerTahun.filter((y) => y.value > 0);
-  if (gangguanTercatat.length > 0) {
-    lines.push(
-      `⚠️ Indikasi gangguan per tahun (SIGAP): ${gangguanTercatat.map((y) => `${y.year}: ${y.value}`).join(" · ")}`,
-    );
-    lines.push(`Jumlah tahun tercatat pernah gangguan: ${gangguanTercatat.length} tahun`);
   }
   if (insight.arusTertinggiKa !== null) {
     lines.push(`Arus sambaran tertinggi tercatat: ${insight.arusTertinggiKa} kA`);
@@ -253,6 +242,48 @@ export function formatUnbalanceLine(tower: SuttTower): string | null {
     : `Unbalance isolator: ${tower.unbalance}`;
 }
 
+// Same GI-name prefix stripping as src/services/gangguan-history.ts's own
+// copy (which is what actually built the lookup keys) — must match
+// exactly for the lookup below to hit.
+function normalizeGiNameForLookup(raw: string): string {
+  return raw.replace(/^GIS?\s*\d+\s*KV\s*/i, "").trim().toUpperCase();
+}
+
+/** This tower's own past gangguan events from the UPT's REKAP GANGGUAN —
+ *  see src/services/gangguan-history.ts for how TEMUAN LAPANGAN gets
+ *  parsed into (GI, tower number) matches. Sorted oldest first. */
+export function findGangguanHistory(
+  tower: SuttTower,
+  historyByGiTower: Record<string, GangguanHistoryEntry[]>,
+): GangguanHistoryEntry[] {
+  const key = `${normalizeGiNameForLookup(tower.gi)}::${tower.towerNo}`;
+  return historyByGiTower[key] ?? [];
+}
+
+/** Per-year cause breakdown (e.g. "2024: Petir ×2, Hewan ×1 · 2025: Petir
+ *  ×1") plus a total count — unlike SIGAP's own ambiguous "Gangguan
+ *  <year>" figure, every number here is a literal count of rows in the
+ *  UPT's own gangguan rekap that named this tower, so "Total gangguan
+ *  tercatat sebelumnya" can be stated as an exact count, not hedged. */
+export function formatGangguanHistoryLines(entries: GangguanHistoryEntry[]): string[] {
+  if (entries.length === 0) return [];
+  const byYear = new Map<string, Map<string, number>>();
+  for (const e of entries) {
+    const causeMap = byYear.get(e.year) ?? new Map<string, number>();
+    const causeLabel = e.penyebab || "Tidak diketahui";
+    causeMap.set(causeLabel, (causeMap.get(causeLabel) ?? 0) + 1);
+    byYear.set(e.year, causeMap);
+  }
+  const perYear = [...byYear.keys()].sort().map((year) => {
+    const causes = [...byYear.get(year)!.entries()].map(([c, n]) => (n > 1 ? `${c} ×${n}` : c)).join(", ");
+    return `${year}: ${causes}`;
+  });
+  return [
+    `⚠️ Riwayat gangguan tercatat (REKAP GANGGUAN): ${perYear.join(" · ")}`,
+    `Total gangguan tercatat sebelumnya: ${entries.length} kali`,
+  ];
+}
+
 /** Plain text, WhatsApp-ready (single asterisks for *bold*, no tables/HTML)
  *  — the same thing the result cards show, just flattened into one
  *  copy-paste block. direction/originLabel/farEndLabel come straight off
@@ -263,6 +294,7 @@ export function formatWaMessage(
   direction: FaultDirection,
   entries: MethodEntry[],
   insightsByFuncLoc?: Record<string, SigapTowerInsight>,
+  gangguanHistoryByGiTower?: Record<string, GangguanHistoryEntry[]>,
 ): string {
   const refLabel = direction === "origin" ? ruas.originLabel : ruas.farEndLabel;
   const sigapBayLine = insightsByFuncLoc ? findSigapBayLine(ruas, insightsByFuncLoc) : null;
@@ -313,6 +345,8 @@ export function formatWaMessage(
     if (unbalanceLine) lines.push(unbalanceLine);
     const sigapInsight = insightsByFuncLoc ? findSigapInsight(match.tower, insightsByFuncLoc) : null;
     if (sigapInsight) lines.push(...formatSigapInsightLines(sigapInsight));
+    const gangguanHistory = gangguanHistoryByGiTower ? findGangguanHistory(match.tower, gangguanHistoryByGiTower) : [];
+    if (gangguanHistory.length > 0) lines.push(...formatGangguanHistoryLines(gangguanHistory));
     const myMaps = buildSuttMyMapsLink(match.tower.lat, match.tower.lon);
     if (myMaps) lines.push(`Peta SUTT (Tower): ${myMaps}`);
     const directions = buildDirectionsLink(match.tower.lat, match.tower.lon);
