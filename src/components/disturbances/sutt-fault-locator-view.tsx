@@ -30,10 +30,12 @@ import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { cn } from "@/lib/utils";
 import {
   FAULT_METHOD_LABELS,
+  buildCombinedIncomerRuasList,
   buildDirectionsLink,
   buildEarthLink,
   buildSuttMyMapsLink,
   buildMethodResults,
+  combinedIncomerKey,
   findGangguanHistory,
   findIncomerTapAtTower,
   findIncomerTapInfo,
@@ -49,6 +51,7 @@ import {
   hasFaultHistory,
   isIncomerRuas,
   isTowerKritis,
+  type CombinedIncomerRuas,
   type FaultDirection,
   type MethodEntry,
   type MethodResult,
@@ -559,7 +562,29 @@ export function SuttFaultLocatorView({
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [ruasList]);
 
-  const ruas = ruasList.find((r) => r.section === sectionKey) ?? null;
+  // Through-routes: host ruas (from its own origin) continued straight
+  // onto an incomer's own towers out to its new GI, selectable as one
+  // single ruas instead of requiring the search to land exactly on the
+  // splice tower before the user thinks to switch ruas — see
+  // buildCombinedIncomerRuasList's own comment in the lib for why this
+  // also fixes SMDE's "tower ke-" ordinal cleanly (it just counts through
+  // one combined tower array).
+  const combinedList = useMemo(() => buildCombinedIncomerRuasList(ruasList), [ruasList]);
+  const combinedByUnit = useMemo(() => {
+    const map = new Map<string, CombinedIncomerRuas[]>();
+    for (const c of combinedList) {
+      const list = map.get(c.ruas.unit) ?? [];
+      list.push(c);
+      map.set(c.ruas.unit, list);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [combinedList]);
+
+  const selectedCombined =
+    sectionKey && sectionKey.startsWith("combined::")
+      ? (combinedList.find((c) => combinedIncomerKey(c.hostSection, c.incomerSection) === sectionKey) ?? null)
+      : null;
+  const ruas = selectedCombined ? selectedCombined.ruas : (ruasList.find((r) => r.section === sectionKey) ?? null);
   const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapInsightsByFuncLoc) : null;
   const sigapFasa = ruas ? findSigapFasa(ruas, sigapInsightsByFuncLoc) : null;
 
@@ -599,9 +624,24 @@ export function SuttFaultLocatorView({
             }}
           >
             <SelectTrigger className="w-full sm:w-[420px]">
-              <SelectValue placeholder="Pilih ruas SUTT...">{sectionKey ?? "Pilih ruas SUTT..."}</SelectValue>
+              <SelectValue placeholder="Pilih ruas SUTT...">
+                {selectedCombined ? `⇒ ${selectedCombined.ruas.section}` : (sectionKey ?? "Pilih ruas SUTT...")}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
+              {combinedByUnit.length > 0 ? (
+                <SelectGroup>
+                  <SelectLabel>Ruas + Incomer (gabungan, langsung ke GI baru)</SelectLabel>
+                  {combinedByUnit.flatMap(([, list]) =>
+                    list.map((c) => (
+                      <SelectItem key={combinedIncomerKey(c.hostSection, c.incomerSection)} value={combinedIncomerKey(c.hostSection, c.incomerSection)}>
+                        ⇒ {c.ruas.section} ({formatKm(c.ruas.lengthKm)}, {c.ruas.towers.length} tower) — terpotong dari{" "}
+                        {c.hostSection} Tower {c.tapTowerNo}
+                      </SelectItem>
+                    )),
+                  )}
+                </SelectGroup>
+              ) : null}
               {ruasByUnit.map(([unit, list]) => (
                 <SelectGroup key={unit}>
                   <SelectLabel>{unit}</SelectLabel>
@@ -652,7 +692,15 @@ export function SuttFaultLocatorView({
                   </TabsList>
                 </Tabs>
               </div>
-              {isIncomerRuas(ruas.section) ? (
+              {selectedCombined ? (
+                <p className="flex items-center gap-1 font-semibold text-primary">
+                  <GitBranch className="size-3 shrink-0" />
+                  Ruas gabungan: {selectedCombined.hostSection} (Tower 1 – {selectedCombined.tapTowerNo},{" "}
+                  {selectedCombined.hostTowerCount} tower) terpotong di Tower {selectedCombined.tapTowerNo}, lalu +
+                  {selectedCombined.incomerTowerCount} tower dari INCOMER {selectedCombined.gi} (
+                  {selectedCombined.incomerSection}).
+                </p>
+              ) : isIncomerRuas(ruas.section) ? (
                 (() => {
                   const tap = findIncomerTapInfo(ruas.section);
                   return (
@@ -680,7 +728,8 @@ export function SuttFaultLocatorView({
                           })`;
                         })
                         .join(", ")}{" "}
-                      — jarak yang melebihi ruas ini di titik sambung otomatis dilanjutkan ke ruas incomer-nya.
+                      — pilih opsi &quot;⇒ {ruas.originLabel} - {incomersHere[0].gi}&quot; di atas untuk mencari
+                      langsung sampai ke GI incomer-nya dalam satu ruas.
                     </p>
                   ) : null;
                 })()

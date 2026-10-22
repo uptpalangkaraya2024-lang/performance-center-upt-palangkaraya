@@ -31,14 +31,6 @@ const LIGHTNING_WATCH_URL = "https://lightning-watch.uptpky.workers.dev/";
 // history.ts), not SIGAP — see that file's own comment for why.
 const SIGAP_URL = "https://sigap.uip3bkal.com/";
 
-// Peta/SLD seluruh ruas SUTT UPT Palangkaraya (semua ULTG) — dipublikasikan
-// sebagai halaman terpisah (bukan dibangun di app ini) sebagai langkah
-// sementara: lihat seluruh jaringan sekaligus untuk kroscek, dengan
-// penanda awal tower tiap GI dan titik potong ruas incomer. Link ini
-// privat (milik akun yang mempublikasikannya) — anggota tim lain perlu
-// diberi akses lewat menu Share halaman tersebut sebelum bisa membukanya.
-const SUTT_SLD_URL = "https://claude.ai/artifact/EeKU9352Nceuhw22vdLAwN";
-
 export default async function CariTitikGangguanPage() {
   const [{ ruasList, error }, sigapInsightsByFuncLoc, gangguanHistoryByGiTower] = await Promise.all([
     getSuttSnapshot(),
@@ -73,16 +65,10 @@ export default async function CariTitikGangguanPage() {
               Lightning Watch
               <ExternalLink className="size-3" />
             </a>
-            <a
-              href={SUTT_SLD_URL}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
+            <Link href="/dashboard/disturbances/peta-sutt" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <Map className="size-3.5" />
               Peta/SLD SUTT
-              <ExternalLink className="size-3" />
-            </a>
+            </Link>
             <Link href="/dashboard/disturbances" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <ArrowLeft className="size-3.5" />
               Kembali ke Gangguan

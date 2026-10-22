@@ -1,0 +1,68 @@
+/* SUTT network map (src/components/disturbances/sutt-network-map.tsx) —
+ * marker/line visuals chosen for contrast against OSM's own fixed (always
+ * light, not theme-aware) tile background, independent of this app's own
+ * light/dark CSS variables — see that component's own comment for why. */
+
+.sutt-map-root {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+.sutt-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.sutt-gi-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.sutt-gi-dot.main {
+  background: #1d3461;
+}
+.sutt-gi-dot.incomer {
+  background: #c2690a;
+}
+.sutt-gi-label {
+  position: absolute;
+  left: 17px;
+  top: -4px;
+  font-weight: 600;
+  font-size: 10.5px;
+  white-space: nowrap;
+  color: #16202e;
+  background: #ffffff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid #d6dce4;
+  line-height: 1.4;
+}
+.sutt-splice-diamond {
+  width: 12px;
+  height: 12px;
+  background: #c2690a;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+  transform: rotate(45deg);
+}
+.sutt-splice-label {
+  position: absolute;
+  left: 16px;
+  top: -6px;
+  font-weight: 600;
+  font-size: 10px;
+  white-space: nowrap;
+  color: #c2690a;
+  background: #ffffff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid #c2690a;
+  line-height: 1.4;
+}
+
+.sutt-map-canvas .leaflet-popup-content { font-size: 12.5px; }
+.sutt-map-canvas .leaflet-popup-content b { font-weight: 700; }
+.sutt-map-canvas .popup-touch { font-size: 11px; color: #334; display: block; margin-top: 2px; }

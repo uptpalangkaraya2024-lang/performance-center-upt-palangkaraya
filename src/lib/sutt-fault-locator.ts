@@ -279,6 +279,128 @@ export function formatIncomerTapsLabel(taps: IncomerTap[]): string {
   return taps.map((tap) => `${tap.ruasSection} (Tower ${tap.towerNo})`).join(" dan ");
 }
 
+/** One "through-route" built by walking a host ruas from whichever of its
+ *  own two ends is FARTHER from a splice tower, all the way up to that
+ *  splice, then continuing straight onto that incomer's own towers out to
+ *  its new GI — a single ordinary SuttRuas (`ruas`), so every existing
+ *  matcher (locateFault, findTowerByOrdinal, findTowerByNumber,
+ *  buildMethodResults, formatWaMessage) runs on it completely unchanged,
+ *  no "crossed into an incomer" special-casing needed anywhere downstream.
+ *  One entry per (incomer, tap) pair — SKS has two taps, so it gets two
+ *  through-routes, one from each side.
+ *
+ *  Picking the FARTHER end (not always the host's own origin) matters:
+ *  INCOMER SKS's second tap sits at "SKS - KUALA KURUN"'s own origin
+ *  tower (238) — building origin-to-tap there would give a 1-tower,
+ *  useless lead-in ("SKS - SKS"); walking from KUALA KURUN instead gives
+ *  the real ~44km approach, which is the one anyone would actually search
+ *  by. */
+export interface CombinedIncomerRuas {
+  ruas: SuttRuas;
+  hostSection: string;
+  incomerSection: string;
+  tapTowerNo: string;
+  gi: string; // incomer's own GI name
+  hostTowerCount: number;
+  incomerTowerCount: number;
+}
+
+/** Stable Select-friendly id for one through-route — distinct from both
+ *  the host's own section name and the incomer's own section name, since
+ *  (e.g. for SKS) the through-route's *display* name can be textually
+ *  identical to the host ruas's own name while meaning something
+ *  different (the host alone vs. the host continued into the incomer). */
+export function combinedIncomerKey(hostSection: string, incomerSection: string): string {
+  return `combined::${hostSection}::${incomerSection}`;
+}
+
+/** Builds every available through-route from the currently loaded ruas
+ *  list. A tap whose host ruas or incomer ruas isn't in `allRuas` (data
+ *  still loading, or a future tap added to INCOMER_TAPS before its own
+ *  ruas exists in the sheet) is silently skipped rather than crashing.
+ *
+ *  NOTE a through-route's combined tower list can contain the same
+ *  towerNo twice (the host segment and the incomer segment very often
+ *  both start their own numbering at "1") — ordinal ("tower ke-") and
+ *  distance matching are unaffected (they use array position / distanceKm,
+ *  never the label), but VAISALA's direct tower-NUMBER lookup
+ *  (findTowerByNumber) will resolve a colliding label to the host
+ *  segment's occurrence (the first one in array order). This mirrors a
+ *  real ambiguity in the field — two different physical structures on two
+ *  different circuits can legitimately share a label — that no amount of
+ *  matching logic can resolve without more context than a bare number. */
+export function buildCombinedIncomerRuasList(allRuas: SuttRuas[]): CombinedIncomerRuas[] {
+  const out: CombinedIncomerRuas[] = [];
+  for (const incInfo of INCOMER_TAPS) {
+    const incomerRuas = findRuasBySection(allRuas, incInfo.incomerSection);
+    if (!incomerRuas || incomerRuas.towers.length === 0) continue;
+
+    for (const tap of incInfo.taps) {
+      const hostRuas = findRuasBySection(allRuas, tap.ruasSection);
+      if (!hostRuas || hostRuas.towers.length === 0) continue;
+
+      const needle = normalizeTowerNoForMatch(tap.towerNo);
+      const tapIndex = hostRuas.towers.findIndex((t) => normalizeTowerNoForMatch(t.towerNo) === needle);
+      if (tapIndex === -1) continue;
+
+      // Walk from whichever host end is farther from the tap — the longer,
+      // more useful approach (see the function's own comment above).
+      const distFromOriginEnd = tapIndex;
+      const distFromFarEnd = hostRuas.towers.length - 1 - tapIndex;
+      const approachFromOrigin = distFromOriginEnd >= distFromFarEnd;
+
+      const hostFarEndKm = hostRuas.towers[hostRuas.towers.length - 1].distanceKm;
+      const hostSegment = approachFromOrigin
+        ? hostRuas.towers.slice(0, tapIndex + 1)
+        : hostRuas.towers
+            .slice(tapIndex)
+            .reverse()
+            .map((t) => ({ ...t, distanceKm: hostFarEndKm - t.distanceKm }));
+      const approachLabel = approachFromOrigin ? hostRuas.originLabel : hostRuas.farEndLabel;
+      const tapTower = hostSegment[hostSegment.length - 1];
+
+      // Which of the incomer's own two ends sits physically at THIS tap —
+      // same geometric comparison as locateFaultWithIncomerCrossing.
+      const first = incomerRuas.towers[0];
+      const last = incomerRuas.towers[incomerRuas.towers.length - 1];
+      const nearEndIsFirst = roughDegDistance(tapTower, first) <= roughDegDistance(tapTower, last);
+      const ordered = nearEndIsFirst ? incomerRuas.towers : [...incomerRuas.towers].reverse();
+      const nearDistanceKm = nearEndIsFirst ? first.distanceKm : last.distanceKm;
+
+      // Re-expressed on the combined ruas's own km-0-at-approach-end scale:
+      // each incomer tower's distance becomes "how far it already was from
+      // the near-tap end" (always >= 0 by construction) plus the tap's own
+      // (possibly re-based) distance on the host.
+      const incomerSegment = ordered.map((t) => ({
+        ...t,
+        distanceKm: tapTower.distanceKm + Math.abs(t.distanceKm - nearDistanceKm),
+      }));
+
+      const towers = [...hostSegment, ...incomerSegment];
+      const virtual: SuttRuas = {
+        section: `${approachLabel} - ${incInfo.gi}`,
+        unit: hostRuas.unit,
+        originGi: hostRuas.originGi,
+        originLabel: approachLabel,
+        farEndLabel: incInfo.gi,
+        lengthKm: towers[towers.length - 1].distanceKm,
+        towers,
+      };
+
+      out.push({
+        ruas: virtual,
+        hostSection: hostRuas.section,
+        incomerSection: incInfo.incomerSection,
+        tapTowerNo: tapTower.towerNo,
+        gi: incInfo.gi,
+        hostTowerCount: hostSegment.length,
+        incomerTowerCount: incomerSegment.length,
+      });
+    }
+  }
+  return out;
+}
+
 /** Looks up this ruas's own SIGAP "bayLine" shorthand (e.g. "PKY-KSG") via
  *  each tower's funcLoc — see src/services/sigap.ts for why that's a
  *  reliable join key. Returns the first match found (a ruas maps to one
