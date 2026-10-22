@@ -38,6 +38,7 @@ import {
   findIncomerTapAtTower,
   findIncomerTapInfo,
   findIncomersTappingFrom,
+  formatIncomerTapsLabel,
   findSigapBayLine,
   findSigapFasa,
   findSigapInsight,
@@ -595,7 +596,7 @@ export function SuttFaultLocatorView({
                         {isIncomerRuas(r.section) ? (
                           <>
                             ↳ {r.section} ({formatKm(r.lengthKm)}) — Incomer
-                            {tap ? ` dari ${tap.tapRuasSection} @ Tower ${tap.tapTowerNo}` : " (titik sambung belum ada data)"}
+                            {tap ? ` dari ${formatIncomerTapsLabel(tap.taps)}` : " (titik sambung belum ada data)"}
                           </>
                         ) : (
                           `${r.section} (${formatKm(r.lengthKm)})`
@@ -642,7 +643,7 @@ export function SuttFaultLocatorView({
                     <p className="flex items-center gap-1 font-semibold text-primary">
                       <GitBranch className="size-3 shrink-0" />
                       {tap
-                        ? `Ruas Incomer — tersambung dari ${tap.tapRuasSection} di Tower ${tap.tapTowerNo}`
+                        ? `Ruas Incomer — tersambung dari ${formatIncomerTapsLabel(tap.taps)}`
                         : "Ruas Incomer — titik sambung ke ruas utama belum ada data"}
                     </p>
                   );
@@ -654,7 +655,12 @@ export function SuttFaultLocatorView({
                     <p className="flex items-center gap-1 font-semibold text-primary">
                       <GitBranch className="size-3 shrink-0" />
                       {incomersHere.length} percabangan Incomer dari ruas ini:{" "}
-                      {incomersHere.map((t) => `${t.gi} (Tower ${t.tapTowerNo})`).join(", ")}
+                      {incomersHere
+                        .map((t) => {
+                          const tap = t.taps.find((x) => x.ruasSection === ruas.section);
+                          return `${t.gi} (Tower ${tap?.towerNo ?? "?"})`;
+                        })
+                        .join(", ")}
                     </p>
                   ) : null;
                 })()
