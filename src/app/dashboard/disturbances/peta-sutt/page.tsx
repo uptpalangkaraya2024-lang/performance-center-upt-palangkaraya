@@ -36,7 +36,11 @@ export default async function PetaSuttPage() {
   }
 
   const mapData = buildSuttNetworkMapData(ruasList);
-  const totalGi = mapData.gis.length;
+  // Boundary GIs (Tanjung, Mintin, Kendawangan — confirmed by the user to
+  // belong to other UPTs) are shown on the map for context, since the
+  // ruas approaching them is still UPT Palangkaraya's own asset, but
+  // aren't counted as UPT Palangkaraya's own GI.
+  const totalGi = mapData.gis.filter((g) => g.kind !== "boundary").length;
   const totalRuas = mapData.ruas.length;
   const totalIncomer = mapData.ruas.filter((r) => r.incomer).length;
   const totalTower = mapData.ruas.reduce((a, r) => a + r.towerCount, 0);

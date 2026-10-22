@@ -583,7 +583,7 @@ export function SuttFaultLocatorView({
 
   const selectedCombined =
     sectionKey && sectionKey.startsWith("combined::")
-      ? (combinedList.find((c) => combinedIncomerKey(c.hostSection, c.incomerSection) === sectionKey) ?? null)
+      ? (combinedList.find((c) => combinedIncomerKey(c.ruas.section) === sectionKey) ?? null)
       : null;
   const ruas = selectedCombined ? selectedCombined.ruas : (ruasList.find((r) => r.section === sectionKey) ?? null);
   const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapInsightsByFuncLoc) : null;
@@ -632,12 +632,14 @@ export function SuttFaultLocatorView({
             <SelectContent>
               {combinedByUnit.length > 0 ? (
                 <SelectGroup>
-                  <SelectLabel>Ruas + Incomer (gabungan, langsung ke GI baru)</SelectLabel>
+                  <SelectLabel>Ruas gabungan (titik sambung incomer)</SelectLabel>
                   {combinedByUnit.flatMap(([, list]) =>
                     list.map((c) => (
-                      <SelectItem key={combinedIncomerKey(c.hostSection, c.incomerSection)} value={combinedIncomerKey(c.hostSection, c.incomerSection)}>
-                        ⇒ {c.ruas.section} ({formatKm(c.ruas.lengthKm)}, {c.ruas.towers.length} tower) — terpotong dari{" "}
-                        {c.hostSection} Tower {c.tapTowerNo}
+                      <SelectItem key={combinedIncomerKey(c.ruas.section)} value={combinedIncomerKey(c.ruas.section)}>
+                        ⇒ {c.ruas.section} ({formatKm(c.ruas.lengthKm)}, {c.ruas.towers.length} tower) —{" "}
+                        {c.includesIncomer
+                          ? `terpotong dari ${c.hostSection} Tower ${c.tapTowerNo}, lanjut ke INCOMER ${c.gi}`
+                          : `sisi lain dari titik sambung INCOMER ${c.gi} (Tower ${c.tapTowerNo} di ${c.hostSection})`}
                       </SelectItem>
                     )),
                   )}
@@ -696,10 +698,9 @@ export function SuttFaultLocatorView({
               {selectedCombined ? (
                 <p className="flex items-center gap-1 font-semibold text-primary">
                   <GitBranch className="size-3 shrink-0" />
-                  Ruas gabungan: {selectedCombined.hostSection} (Tower 1 – {selectedCombined.tapTowerNo},{" "}
-                  {selectedCombined.hostTowerCount} tower) terpotong di Tower {selectedCombined.tapTowerNo}, lalu +
-                  {selectedCombined.incomerTowerCount} tower dari INCOMER {selectedCombined.gi} (
-                  {selectedCombined.incomerSection}).
+                  {selectedCombined.includesIncomer
+                    ? `Ruas gabungan: ${selectedCombined.hostTowerCount} tower hingga titik sambung Tower ${selectedCombined.tapTowerNo} di ${selectedCombined.hostSection}, lalu +${selectedCombined.incomerTowerCount} tower dari INCOMER ${selectedCombined.gi} (${selectedCombined.incomerSection}).`
+                    : `Sisi lain dari titik sambung INCOMER ${selectedCombined.gi} (Tower ${selectedCombined.tapTowerNo} di ${selectedCombined.hostSection}) — ${selectedCombined.hostTowerCount} tower, tidak melalui ruas incomer-nya.`}
                 </p>
               ) : isIncomerRuas(ruas.section) ? (
                 (() => {

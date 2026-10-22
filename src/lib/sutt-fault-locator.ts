@@ -279,22 +279,105 @@ export function formatIncomerTapsLabel(taps: IncomerTap[]): string {
   return taps.map((tap) => `${tap.ruasSection} (Tower ${tap.towerNo})`).join(" dan ");
 }
 
-/** One "through-route" built by walking a host ruas from whichever of its
- *  own two ends is FARTHER from a splice tower, all the way up to that
- *  splice, then continuing straight onto that incomer's own towers out to
- *  its new GI — a single ordinary SuttRuas (`ruas`), so every existing
- *  matcher (locateFault, findTowerByOrdinal, findTowerByNumber,
- *  buildMethodResults, formatWaMessage) runs on it completely unchanged,
- *  no "crossed into an incomer" special-casing needed anywhere downstream.
- *  One entry per (incomer, tap) pair — SKS has two taps, so it gets two
- *  through-routes, one from each side.
- *
- *  Picking the FARTHER end (not always the host's own origin) matters:
- *  INCOMER SKS's second tap sits at "SKS - KUALA KURUN"'s own origin
- *  tower (238) — building origin-to-tap there would give a 1-tower,
- *  useless lead-in ("SKS - SKS"); walking from KUALA KURUN instead gives
- *  the real ~44km approach, which is the one anyone would actually search
- *  by. */
+/** GIs that sit right at UPT Palangkaraya's own asset boundary — the
+ *  substation itself belongs to a different UPT (confirmed by the user),
+ *  even though the ruas approaching it is still recorded in DATA SUTT UPT
+ *  PKY and still fully walkable/searchable here. Two things key off this
+ *  set: the network map excludes these three from "Total GI" (they aren't
+ *  UPT Palangkaraya's own) and marks them visually distinct, and chain-
+ *  walking (buildCombinedIncomerRuasList below) treats them as a hard stop
+ *  rather than a pass-through, even where one happens to have exactly 2
+ *  connections — UPT Palangkaraya's own network conceptually ends there,
+ *  so a through-route has no business reasoning about what's beyond it. */
+export const BOUNDARY_GI_NAMES = new Set(["TANJUNG", "MINTIN", "KENDAWANGAN"]);
+
+interface MainRuasTouch {
+  section: string;
+  end: "origin" | "farEnd";
+}
+
+/** name -> every main-ruas (origin/farEnd) touch at that GI — the graph
+ *  degree of each GI in the main-ruas network. A name with exactly one
+ *  touch is a true dead end; exactly two (and not a boundary GI) is a
+ *  simple pass-through a chain can walk straight through (e.g. SUDAN,
+ *  sitting between "KASONGAN - SUDAN" and "SUDAN - SAMPIT" with nothing
+ *  else there); three or more is a real junction (e.g. SAMPIT, KASONGAN,
+ *  PALANGKARAYA) where a chain has no single correct way to continue, so
+ *  it stops rather than guess. */
+function buildMainRuasTouchGraph(allRuas: SuttRuas[]): Map<string, MainRuasTouch[]> {
+  const graph = new Map<string, MainRuasTouch[]>();
+  function add(name: string, section: string, end: "origin" | "farEnd") {
+    const list = graph.get(name) ?? [];
+    list.push({ section, end });
+    graph.set(name, list);
+  }
+  for (const r of allRuas) {
+    if (isIncomerRuas(r.section)) continue;
+    add(r.originLabel, r.section, "origin");
+    add(r.farEndLabel, r.section, "farEnd");
+  }
+  return graph;
+}
+
+/** Walks the main-ruas network starting partway through `hostSection` (at
+ *  `tapIndex`), heading toward that ruas's own far end (`towardFar: true`)
+ *  or its own origin, then keeps walking straight through any further
+ *  pass-through GI it reaches (never a boundary GI, never a junction) —
+ *  e.g. starting at INCOMER PARENGGEAN's own tap (tower 335 on "KASONGAN -
+ *  SUDAN") and walking away from Kasongan doesn't stop at tower 370 just
+ *  because that's where this one sheet record ends: SUDAN only connects
+ *  two ways, so the walk continues straight into "SUDAN - SAMPIT" and
+ *  only really stops at SAMPIT, a genuine 3-way junction. Distances are
+ *  re-based so the starting tap itself reads as 0. */
+function walkChainFromTap(
+  allRuas: SuttRuas[],
+  graph: Map<string, MainRuasTouch[]>,
+  hostSection: string,
+  tapIndex: number,
+  towardFar: boolean,
+): { towers: SuttTower[]; endLabel: string } {
+  const hostRuas = allRuas.find((r) => r.section === hostSection)!;
+  const tapTower = hostRuas.towers[tapIndex];
+  const firstSegment = towardFar ? hostRuas.towers.slice(tapIndex) : [...hostRuas.towers.slice(0, tapIndex + 1)].reverse();
+  const towers: SuttTower[] = firstSegment.map((t) => ({ ...t, distanceKm: Math.abs(t.distanceKm - tapTower.distanceKm) }));
+  let cumBase = towers[towers.length - 1].distanceKm;
+  let endLabel = towardFar ? hostRuas.farEndLabel : hostRuas.originLabel;
+  const visited = new Set([hostSection]);
+
+  for (;;) {
+    if (BOUNDARY_GI_NAMES.has(endLabel)) break; // UPT Palangkaraya's own network ends here
+    const neighbors = (graph.get(endLabel) ?? []).filter((t) => !visited.has(t.section));
+    if (neighbors.length !== 1) break; // true dead end (0) or junction (2+) — never guess
+    const next = neighbors[0];
+    visited.add(next.section);
+    const nextRuas = allRuas.find((r) => r.section === next.section)!;
+    const enterFromOrigin = next.end === "origin";
+    const towersInOrder = enterFromOrigin ? nextRuas.towers : [...nextRuas.towers].reverse();
+    const baseAtEntry = enterFromOrigin ? 0 : nextRuas.lengthKm;
+    for (const t of towersInOrder) {
+      towers.push({ ...t, distanceKm: cumBase + Math.abs(t.distanceKm - baseAtEntry) });
+    }
+    cumBase += nextRuas.lengthKm;
+    endLabel = enterFromOrigin ? nextRuas.farEndLabel : nextRuas.originLabel;
+  }
+
+  return { towers, endLabel };
+}
+
+/** One "through-route": a chain-walk from an incomer's splice tower in one
+ *  direction along the main-ruas network (see walkChainFromTap), with that
+ *  incomer's own towers appended ONLY on the side that reaches a genuine
+ *  dead end right where this one host ruas itself ends — i.e. only when
+ *  the splice is physically the last thing on that approach, so the
+ *  incomer really is "what comes next" (INCOMER SKS past KASONGAN - SKS's
+ *  own tower 236). A splice sitting mid-ruas (e.g. INCOMER PARENGGEAN at
+ *  tower 335, nowhere near either end of "KASONGAN - SUDAN") branches off
+ *  to the side instead of continuing either direction, so neither of its
+ *  two through-routes gets the incomer appended — the incomer's own spur
+ *  stays separately searchable as its own plain "↳ INCOMER ..." entry.
+ *  A single ordinary SuttRuas (`ruas`), so every existing matcher
+ *  (locateFault, findTowerByOrdinal, findTowerByNumber, buildMethodResults,
+ *  formatWaMessage) runs on it completely unchanged. */
 export interface CombinedIncomerRuas {
   ruas: SuttRuas;
   hostSection: string;
@@ -303,34 +386,91 @@ export interface CombinedIncomerRuas {
   gi: string; // incomer's own GI name
   hostTowerCount: number;
   incomerTowerCount: number;
+  includesIncomer: boolean;
 }
 
-/** Stable Select-friendly id for one through-route — distinct from both
- *  the host's own section name and the incomer's own section name, since
- *  (e.g. for SKS) the through-route's *display* name can be textually
- *  identical to the host ruas's own name while meaning something
- *  different (the host alone vs. the host continued into the incomer). */
-export function combinedIncomerKey(hostSection: string, incomerSection: string): string {
-  return `combined::${hostSection}::${incomerSection}`;
+/** Stable Select-friendly id for one through-route. */
+export function combinedIncomerKey(ruasSection: string): string {
+  return `combined::${ruasSection}`;
+}
+
+function appendIncomerSegment(hostTowers: SuttTower[], incomerRuas: SuttRuas): SuttTower[] {
+  const tapTower = hostTowers[hostTowers.length - 1];
+  const first = incomerRuas.towers[0];
+  const last = incomerRuas.towers[incomerRuas.towers.length - 1];
+  const nearEndIsFirst = roughDegDistance(tapTower, first) <= roughDegDistance(tapTower, last);
+  const ordered = nearEndIsFirst ? incomerRuas.towers : [...incomerRuas.towers].reverse();
+  const nearDistanceKm = nearEndIsFirst ? first.distanceKm : last.distanceKm;
+  return ordered.map((t) => ({ ...t, distanceKm: tapTower.distanceKm + Math.abs(t.distanceKm - nearDistanceKm) }));
 }
 
 /** Builds every available through-route from the currently loaded ruas
- *  list. A tap whose host ruas or incomer ruas isn't in `allRuas` (data
- *  still loading, or a future tap added to INCOMER_TAPS before its own
- *  ruas exists in the sheet) is silently skipped rather than crashing.
+ *  list: both directions from every known incomer tap, chain-walked across
+ *  any pass-through GI along the way (see walkChainFromTap). A tap whose
+ *  host or incomer ruas isn't in `allRuas` (data still loading) is
+ *  silently skipped rather than crashing.
  *
- *  NOTE a through-route's combined tower list can contain the same
- *  towerNo twice (the host segment and the incomer segment very often
- *  both start their own numbering at "1") — ordinal ("tower ke-") and
- *  distance matching are unaffected (they use array position / distanceKm,
+ *  NOTE the incomer-appended entries' combined tower list can contain the
+ *  same towerNo twice (the host segment and the incomer segment very
+ *  often both start their own numbering at "1") — ordinal ("tower ke-")
+ *  and distance matching are unaffected (array position / distanceKm,
  *  never the label), but VAISALA's direct tower-NUMBER lookup
  *  (findTowerByNumber) will resolve a colliding label to the host
- *  segment's occurrence (the first one in array order). This mirrors a
- *  real ambiguity in the field — two different physical structures on two
- *  different circuits can legitimately share a label — that no amount of
- *  matching logic can resolve without more context than a bare number. */
+ *  segment's occurrence first. This mirrors a real ambiguity in the field
+ *  — two different physical structures on two different circuits can
+ *  legitimately share a label — that no amount of matching logic can
+ *  resolve without more context than a bare number. */
 export function buildCombinedIncomerRuasList(allRuas: SuttRuas[]): CombinedIncomerRuas[] {
+  const graph = buildMainRuasTouchGraph(allRuas);
   const out: CombinedIncomerRuas[] = [];
+  const seenSections = new Set<string>();
+
+  function push(
+    section: string,
+    unit: string,
+    originGi: string,
+    originLabel: string,
+    farEndLabel: string,
+    towers: SuttTower[],
+    hostSection: string,
+    incomerSection: string,
+    tapTowerNo: string,
+    gi: string,
+    hostTowerCount: number,
+    incomerTowerCount: number,
+    includesIncomer: boolean,
+  ) {
+    if (seenSections.has(section) || towers.length === 0) return; // de-dupe (two taps landing on the same chain extent)
+    seenSections.add(section);
+    out.push({
+      ruas: { section, unit, originGi, originLabel, farEndLabel, lengthKm: towers[towers.length - 1].distanceKm, towers },
+      hostSection,
+      incomerSection,
+      tapTowerNo,
+      gi,
+      hostTowerCount,
+      incomerTowerCount,
+      includesIncomer,
+    });
+  }
+
+  // chainTowers starts at the tap (distance 0) walking AWAY from it — this
+  // flips it so the chain's own far end reads low and the tap sits at its
+  // true raw distanceKm, ready for the incomer (or nothing) to continue
+  // beyond it. Rebasing against `tapRawDistanceKm` (the tap's own actual
+  // stored distanceKm on its host ruas) rather than against
+  // chainTowers[last] matters whenever the host ruas's own first tower
+  // isn't labeled "1" (e.g. "KASONGAN - SUDAN" starts at tower 186, not
+  // 1): chainTowers[last] is already a tap-relative DIFFERENCE, and
+  // rebasing against that a second time would silently drop that first
+  // tower's own real initial span, making this route's own length read
+  // shorter than the identically-named plain ruas sitting right next to
+  // it in the picker (caught exactly that way — this fix keeps them
+  // matching). */
+  function reverseFromTap(chainTowers: SuttTower[], tapRawDistanceKm: number): SuttTower[] {
+    return [...chainTowers].reverse().map((t) => ({ ...t, distanceKm: tapRawDistanceKm - t.distanceKm }));
+  }
+
   for (const incInfo of INCOMER_TAPS) {
     const incomerRuas = findRuasBySection(allRuas, incInfo.incomerSection);
     if (!incomerRuas || incomerRuas.towers.length === 0) continue;
@@ -343,59 +483,100 @@ export function buildCombinedIncomerRuasList(allRuas: SuttRuas[]): CombinedIncom
       const tapIndex = hostRuas.towers.findIndex((t) => normalizeTowerNoForMatch(t.towerNo) === needle);
       if (tapIndex === -1) continue;
 
-      // Walk from whichever host end is farther from the tap — the longer,
-      // more useful approach (see the function's own comment above).
-      const distFromOriginEnd = tapIndex;
-      const distFromFarEnd = hostRuas.towers.length - 1 - tapIndex;
-      const approachFromOrigin = distFromOriginEnd >= distFromFarEnd;
+      const isHostOrigin = tapIndex === 0;
+      const isHostFarEnd = tapIndex === hostRuas.towers.length - 1;
 
-      const hostFarEndKm = hostRuas.towers[hostRuas.towers.length - 1].distanceKm;
-      const hostSegment = approachFromOrigin
-        ? hostRuas.towers.slice(0, tapIndex + 1)
-        : hostRuas.towers
-            .slice(tapIndex)
-            .reverse()
-            .map((t) => ({ ...t, distanceKm: hostFarEndKm - t.distanceKm }));
-      const approachLabel = approachFromOrigin ? hostRuas.originLabel : hostRuas.farEndLabel;
-      const tapTower = hostSegment[hostSegment.length - 1];
+      if (!isHostOrigin && !isHostFarEnd) {
+        // Mid-ruas tap (e.g. INCOMER PARENGGEAN at tower 335, nowhere near
+        // either end of "KASONGAN - SUDAN"): the incomer isn't a literal
+        // continuation of either direction here (it branches off to the
+        // side), so it's appended to whichever of this ONE host ruas's own
+        // two directions is longer — unchanged from this function's
+        // original, already-verified behavior, not chain-walked, so an
+        // already-shipped route like "KASONGAN - PARENGGEAN" keeps
+        // resolving exactly as before. The shorter (opposite) direction
+        // instead becomes its own new plain, chain-walked route with no
+        // incomer appended (e.g. "PARENGGEAN - SAMPIT") — the piece that
+        // was missing.
+        const distFromOriginEnd = tapIndex;
+        const distFromFarEnd = hostRuas.towers.length - 1 - tapIndex;
+        const approachFromOrigin = distFromOriginEnd >= distFromFarEnd;
 
-      // Which of the incomer's own two ends sits physically at THIS tap —
-      // same geometric comparison as locateFaultWithIncomerCrossing.
-      const first = incomerRuas.towers[0];
-      const last = incomerRuas.towers[incomerRuas.towers.length - 1];
-      const nearEndIsFirst = roughDegDistance(tapTower, first) <= roughDegDistance(tapTower, last);
-      const ordered = nearEndIsFirst ? incomerRuas.towers : [...incomerRuas.towers].reverse();
-      const nearDistanceKm = nearEndIsFirst ? first.distanceKm : last.distanceKm;
+        const hostFarEndKm = hostRuas.towers[hostRuas.towers.length - 1].distanceKm;
+        const hostSegment = approachFromOrigin
+          ? hostRuas.towers.slice(0, tapIndex + 1)
+          : hostRuas.towers
+              .slice(tapIndex)
+              .reverse()
+              .map((t) => ({ ...t, distanceKm: hostFarEndKm - t.distanceKm }));
+        const approachLabel = approachFromOrigin ? hostRuas.originLabel : hostRuas.farEndLabel;
+        const incomerSegment = appendIncomerSegment(hostSegment, incomerRuas);
+        push(
+          `${approachLabel} - ${incInfo.gi}`,
+          hostRuas.unit,
+          hostRuas.originGi,
+          approachLabel,
+          incInfo.gi,
+          [...hostSegment, ...incomerSegment],
+          hostRuas.section,
+          incInfo.incomerSection,
+          hostSegment[hostSegment.length - 1].towerNo,
+          incInfo.gi,
+          hostSegment.length,
+          incomerSegment.length,
+          true,
+        );
 
-      // Re-expressed on the combined ruas's own km-0-at-approach-end scale:
-      // each incomer tower's distance becomes "how far it already was from
-      // the near-tap end" (always >= 0 by construction) plus the tap's own
-      // (possibly re-based) distance on the host.
-      const incomerSegment = ordered.map((t) => ({
-        ...t,
-        distanceKm: tapTower.distanceKm + Math.abs(t.distanceKm - nearDistanceKm),
-      }));
-
-      const towers = [...hostSegment, ...incomerSegment];
-      const virtual: SuttRuas = {
-        section: `${approachLabel} - ${incInfo.gi}`,
-        unit: hostRuas.unit,
-        originGi: hostRuas.originGi,
-        originLabel: approachLabel,
-        farEndLabel: incInfo.gi,
-        lengthKm: towers[towers.length - 1].distanceKm,
-        towers,
-      };
-
-      out.push({
-        ruas: virtual,
-        hostSection: hostRuas.section,
-        incomerSection: incInfo.incomerSection,
-        tapTowerNo: tapTower.towerNo,
-        gi: incInfo.gi,
-        hostTowerCount: hostSegment.length,
-        incomerTowerCount: incomerSegment.length,
-      });
+        const oppositeTowardFar = approachFromOrigin; // the direction NOT chosen above
+        const opposite = walkChainFromTap(allRuas, graph, hostRuas.section, tapIndex, oppositeTowardFar);
+        push(
+          `${incInfo.gi} - ${opposite.endLabel}`,
+          hostRuas.unit,
+          hostRuas.originGi,
+          incInfo.gi,
+          opposite.endLabel,
+          opposite.towers,
+          hostRuas.section,
+          incInfo.incomerSection,
+          tap.towerNo,
+          incInfo.gi,
+          opposite.towers.length,
+          0,
+          false,
+        );
+      } else {
+        // Terminal tap (the splice sits exactly at this host ruas's own
+        // recorded end, e.g. INCOMER SKS at "KASONGAN - SKS"'s tower 236):
+        // the incomer really is "what comes next" physically, so it's
+        // appended after chain-walking the ONLY meaningful direction (away
+        // from the terminal where the tap sits) as far as it reaches —
+        // which can now extend past this one host ruas's own recorded end
+        // through any further pass-through GI, not just stop there.
+        const walkTowardFar = !isHostFarEnd; // tap at far end -> walk toward origin, and vice versa
+        const { towers: chainTowers, endLabel } = walkChainFromTap(allRuas, graph, hostRuas.section, tapIndex, walkTowardFar);
+        // walkTowardFar=true already reads tap=0 ascending toward endLabel
+        // in the right final orientation (no flip needed); walkTowardFar=
+        // false reads tap=0 ascending toward endLabel but endLabel needs to
+        // be the LOW end for display (origin before the tap), so only that
+        // direction needs reverseFromTap's flip.
+        const hostSegment = walkTowardFar ? chainTowers : reverseFromTap(chainTowers, hostRuas.towers[tapIndex].distanceKm);
+        const incomerSegment = appendIncomerSegment(hostSegment, incomerRuas);
+        push(
+          `${endLabel} - ${incInfo.gi}`,
+          hostRuas.unit,
+          hostRuas.originGi,
+          endLabel,
+          incInfo.gi,
+          [...hostSegment, ...incomerSegment],
+          hostRuas.section,
+          incInfo.incomerSection,
+          tap.towerNo,
+          incInfo.gi,
+          hostSegment.length,
+          incomerSegment.length,
+          true,
+        );
+      }
     }
   }
   return out;

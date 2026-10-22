@@ -8,7 +8,7 @@
 // component) and the result is handed to the client map component as
 // props, same "load once, derive many" shape as every other compute lib
 // in this app.
-import { INCOMER_TAPS } from "@/lib/sutt-fault-locator";
+import { BOUNDARY_GI_NAMES, INCOMER_TAPS } from "@/lib/sutt-fault-locator";
 import type { SuttRuas, SuttTower } from "@/types";
 
 export interface MapRuasLine {
@@ -32,7 +32,10 @@ export interface MapGiMarker {
   name: string;
   lat: number;
   lon: number;
-  kind: "main" | "incomer";
+  /** "boundary" wins over "incomer"/"main" — a GI that belongs to a
+   *  different UPT (see BOUNDARY_GI_NAMES) isn't UPT Palangkaraya's own
+   *  regardless of which ruas happens to touch it. */
+  kind: "main" | "incomer" | "boundary";
   touches: MapGiTouch[];
 }
 
@@ -68,26 +71,78 @@ function findRuas(allRuas: SuttRuas[], section: string): SuttRuas | null {
   return allRuas.find((r) => r.section === section) ?? null;
 }
 
+function haversineKm(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+  const la1 = (a[0] * Math.PI) / 180;
+  const la2 = (b[0] * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** Drops a point whose own LAT,LONG is a clear data-entry error — e.g.
+ *  "MUARA TEWEH - PURUK CAHU"'s own towers 01R-08R are recorded ~40km
+ *  from both of their immediate neighbors (confirmed: every other tower
+ *  around them sits a normal ~0.3km apart), which draws a zigzag crossing
+ *  the whole map instead of the real, smooth route. Compares each point
+ *  against the median position of the last few points already KEPT
+ *  (not the raw array's immediate neighbors, which can themselves be bad
+ *  when outliers run in an alternating pattern like this ruas's own) —
+ *  the threshold is generous relative to this ruas's own typical spacing,
+ *  so it never touches a normal path (every other ruas checked this
+ *  session has a smooth, sensible route) and only catches a genuine,
+ *  order-of-magnitude jump. Map-rendering only — doesn't touch the
+ *  tower's own distanceKm (self-computed from SPAN (M), unrelated to
+ *  LAT,LONG), so the fault locator is entirely unaffected. */
+function filterPathOutliers(points: [number, number][]): [number, number][] {
+  if (points.length < 5) return points;
+  const consecutive: number[] = [];
+  for (let i = 1; i < points.length; i++) consecutive.push(haversineKm(points[i - 1], points[i]));
+  const typical = median(consecutive) || 0.3;
+  const threshold = Math.max(typical * 6, 2);
+
+  const kept: [number, number][] = [points[0]];
+  for (let i = 1; i < points.length; i++) {
+    const cur = points[i];
+    const refWindow = kept.slice(-3);
+    const avgDist = refWindow.reduce((sum, p) => sum + haversineKm(p, cur), 0) / refWindow.length;
+    if (avgDist > threshold) continue;
+    kept.push(cur);
+  }
+  if (kept[kept.length - 1] !== points[points.length - 1]) kept.push(points[points.length - 1]);
+  return kept;
+}
+
 export function buildSuttNetworkMapData(allRuas: SuttRuas[]): SuttNetworkMapData {
   const ruasLines: MapRuasLine[] = [];
   const giMap = new Map<string, MapGiMarker>();
 
   function addGiTouch(name: string, lat: number, lon: number, kind: "main" | "incomer", ruas: string, end: string, tower: string) {
+    const effectiveKind = BOUNDARY_GI_NAMES.has(name) ? "boundary" : kind;
     let g = giMap.get(name);
     if (!g) {
-      g = { name, lat, lon, kind, touches: [] };
+      g = { name, lat, lon, kind: effectiveKind, touches: [] };
       giMap.set(name, g);
     }
-    if (kind === "incomer") g.kind = "incomer";
+    if (g.kind !== "boundary" && effectiveKind === "incomer") g.kind = "incomer";
     g.touches.push({ ruas, end, tower });
   }
 
   for (const r of allRuas) {
     const isIncomer = r.section.toUpperCase().startsWith("INCOMER ");
-    const path: [number, number][] = r.towers
+    const rawPath: [number, number][] = r.towers
       .filter((t): t is SuttTower & { lat: number; lon: number } => t.lat !== null && t.lon !== null)
       .map((t) => [t.lat, t.lon]);
-    if (path.length === 0) continue;
+    if (rawPath.length === 0) continue;
+    const path = filterPathOutliers(rawPath);
 
     ruasLines.push({
       section: r.section,

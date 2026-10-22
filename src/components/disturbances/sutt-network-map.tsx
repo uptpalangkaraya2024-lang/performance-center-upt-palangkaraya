@@ -94,7 +94,7 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
           className: "sutt-gi-icon-wrap",
           html:
             `<div class="sutt-gi-dot ${g.kind}"></div>` +
-            `<div class="sutt-gi-label"><div class="sutt-gi-name">${g.name}</div>` +
+            `<div class="sutt-gi-label ${g.kind === "boundary" ? "boundary" : ""}"><div class="sutt-gi-name">${g.name}</div>` +
             (towerTagsHtml ? `<div class="sutt-gi-towers">${towerTagsHtml}</div>` : "") +
             `</div>`,
           iconSize: [13, 13],
@@ -103,8 +103,10 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
         const touchesHtml = g.touches
           .map((t) => `<span class="popup-touch">${t.ruas} &mdash; ${t.end} (tower ${t.tower})</span>`)
           .join("");
+        const kindNote =
+          g.kind === "incomer" ? " &middot; GI incomer" : g.kind === "boundary" ? " &middot; GI milik UPT lain (perbatasan aset)" : "";
         L.marker([g.lat, g.lon], { icon })
-          .bindPopup(`<b>GI ${g.name}</b>${g.kind === "incomer" ? " &middot; GI incomer" : ""}${touchesHtml}`)
+          .bindPopup(`<b>GI ${g.name}</b>${kindNote}${touchesHtml}`)
           .addTo(giLayer);
       }
 
@@ -200,6 +202,10 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full border-2 border-white" style={{ background: AMBER }} />
             GI Incomer
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full border-2 border-white" style={{ background: "#8a94a3" }} />
+            GI milik UPT lain (perbatasan aset)
           </div>
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rotate-45 border-2 border-white" style={{ background: AMBER }} />
