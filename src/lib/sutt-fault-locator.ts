@@ -124,6 +124,66 @@ export function findTowerByOrdinal(ruas: SuttRuas, ordinal: number, direction: F
   return ordered[ordinal - 1] ?? null;
 }
 
+/** A "ruas" whose own NAMA_SECTION starts with "INCOMER " is a short spur
+ *  line, not a point-to-point line between two original GIs — it exists
+ *  because a newer GI was built that physically taps into (splices onto)
+ *  one circuit of an EXISTING line at one specific tower, then runs its
+ *  own few extra towers out to the new substation. DATA SUTT UPT PKY
+ *  records the incomer's own towers as their own ruas, but never records
+ *  WHERE on the original line it taps from — that's only in the user's
+ *  own field knowledge, given here by hand and confirmed live (every
+ *  entry below: the named tap tower really exists on the named ruas, with
+ *  a sane cumulative distance and sequential neighbors — none fabricated
+ *  or guessed from the sheet alone).
+ *
+ *  INCOMER SKS (the 7th "INCOMER " ruas in the data) has no entry here —
+ *  its own tap point/tower wasn't given — so it's still flagged as an
+ *  incomer in the UI, just without the "taps from X at tower Y" detail. */
+export interface IncomerTapInfo {
+  incomerSection: string; // the INCOMER ruas's own NAMA_SECTION
+  gi: string; // the new GI's bare name (no "GI ### KV " prefix)
+  tapRuasSection: string; // the EXISTING ruas it splices into
+  tapTowerNo: string; // that ruas's own tower number at the splice point
+}
+
+export const INCOMER_TAPS: IncomerTapInfo[] = [
+  { incomerSection: "INCOMER PANGKALAN BANTENG", gi: "PANGKALAN BANTENG", tapRuasSection: "SAMPIT - PANGKALAN BUN", tapTowerNo: "345" },
+  { incomerSection: "INCOMER NANGABULIK", gi: "NANGABULIK", tapRuasSection: "PANGKALAN BUN - SUKAMARA", tapTowerNo: "137" },
+  // KASONGAN - SUDAN's own NAMA_SIRKIT is literally "KASONGAN - SAMPIT"
+  // (confirmed live) — a double-circuit line sharing one set of physical
+  // towers, where Parenggean splices into one circuit at 335 and Sudan
+  // splices into the other at 370; both tap towers genuinely exist on
+  // this one ruas's own tower list.
+  { incomerSection: "INCOMER PARENGGEAN", gi: "PARENGGEAN", tapRuasSection: "KASONGAN - SUDAN", tapTowerNo: "335" },
+  { incomerSection: "INCOMER SUDAN", gi: "SUDAN", tapRuasSection: "KASONGAN - SUDAN", tapTowerNo: "370" },
+  { incomerSection: "INCOMER SEBANGAU", gi: "SEBANGAU", tapRuasSection: "MINTIN - PALANGKARAYA", tapTowerNo: "330" },
+  { incomerSection: "INCOMER PULANG PISAU", gi: "PULANG PISAU", tapRuasSection: "MINTIN - PALANGKARAYA", tapTowerNo: "117" },
+];
+
+export function isIncomerRuas(section: string): boolean {
+  return section.toUpperCase().startsWith("INCOMER ");
+}
+
+export function findIncomerTapInfo(incomerSection: string): IncomerTapInfo | null {
+  return INCOMER_TAPS.find((t) => t.incomerSection === incomerSection) ?? null;
+}
+
+/** Every known incomer that splices into this specific ruas — a main ruas
+ *  can have more than one (KASONGAN - SUDAN and MINTIN - PALANGKARAYA each
+ *  have two), so this always returns an array, never a single value. */
+export function findIncomersTappingFrom(ruasSection: string): IncomerTapInfo[] {
+  return INCOMER_TAPS.filter((t) => t.tapRuasSection === ruasSection);
+}
+
+/** True when the matched tower IS a known incomer's own splice point on
+ *  this ruas — the strongest possible signal that the fault could be on
+ *  the incomer spur instead of (or as well as) the ruas being searched,
+ *  since the physical junction sits exactly there. */
+export function findIncomerTapAtTower(ruasSection: string, towerNo: string): IncomerTapInfo | null {
+  const needle = normalizeTowerNoForMatch(towerNo);
+  return INCOMER_TAPS.find((t) => t.tapRuasSection === ruasSection && normalizeTowerNoForMatch(t.tapTowerNo) === needle) ?? null;
+}
+
 /** Looks up this ruas's own SIGAP "bayLine" shorthand (e.g. "PKY-KSG") via
  *  each tower's funcLoc — see src/services/sigap.ts for why that's a
  *  reliable join key. Returns the first match found (a ruas maps to one
@@ -389,6 +449,18 @@ export function formatWaMessage(
   );
   if (sigapBayLine) lines.push(`Kode SIGAP: *${sigapBayLine}*`);
   if (sigapFasa) lines.push(`Urutan fasa (SIGAP): *${sigapFasa}*`);
+  const ownTap = isIncomerRuas(ruas.section) ? findIncomerTapInfo(ruas.section) : null;
+  if (ownTap) {
+    lines.push(`🔀 Ruas Incomer — tersambung dari *${ownTap.tapRuasSection}* di Tower ${ownTap.tapTowerNo}`);
+  }
+  const incomersHere = findIncomersTappingFrom(ruas.section);
+  if (incomersHere.length > 0) {
+    lines.push(
+      `🔀 Ada ${incomersHere.length} percabangan Incomer dari ruas ini: ${incomersHere
+        .map((t) => `${t.gi} (Tower ${t.tapTowerNo})`)
+        .join(", ")}`,
+    );
+  }
   lines.push("");
 
   const results = buildMethodResults(ruas, direction, entries);
@@ -437,6 +509,12 @@ export function formatWaMessage(
     }
     const headline = towerHeadline(match.tower);
     if (headline) lines.push(headline);
+    const tapHere = findIncomerTapAtTower(ruas.section, match.tower.towerNo);
+    if (tapHere) {
+      lines.push(
+        `🔀 Tower ini titik sambung Incomer ${tapHere.gi} — jika gangguan diduga di jalur incomer, cek juga ruas "${tapHere.incomerSection}".`,
+      );
+    }
     if (isTowerKritis(match.tower)) lines.push("⚠️ Tower Kritis — ada catatan penanganan/mitigasi.");
     if (hasFaultHistory(match.tower)) lines.push("⚡ Ada riwayat gangguan tercatat di tower ini.");
     const unbalanceLine = formatUnbalanceLine(match.tower);

@@ -6,6 +6,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  GitBranch,
   MapPin,
   Navigation,
   RotateCcw,
@@ -34,6 +35,9 @@ import {
   buildSuttMyMapsLink,
   buildMethodResults,
   findGangguanHistory,
+  findIncomerTapAtTower,
+  findIncomerTapInfo,
+  findIncomersTappingFrom,
   findSigapBayLine,
   findSigapFasa,
   findSigapInsight,
@@ -42,6 +46,7 @@ import {
   formatUnbalanceLine,
   formatWaMessage,
   hasFaultHistory,
+  isIncomerRuas,
   isTowerKritis,
   type FaultDirection,
   type MethodEntry,
@@ -122,10 +127,12 @@ function buildEntries(inputs: MethodInputsState): MethodEntry[] {
  *  tower-ke lookup), so every method's own card renders this same panel
  *  once it has a MethodResult. */
 function TowerResultPanel({
+  ruasSection,
   result,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
 }: {
+  ruasSection: string;
   result: MethodResult;
   sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
   gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
@@ -133,6 +140,7 @@ function TowerResultPanel({
   const { match } = result;
   const sigapInsight = findSigapInsight(match.tower, sigapInsightsByFuncLoc);
   const gangguanHistory = findGangguanHistory(match.tower, gangguanHistoryByGiTower);
+  const tapHere = findIncomerTapAtTower(ruasSection, match.tower.towerNo);
 
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5 text-xs">
@@ -161,6 +169,13 @@ function TowerResultPanel({
         <p className="flex items-center gap-1 font-semibold text-warning-foreground">
           <AlertTriangle className="size-3 shrink-0" />
           Jarak di luar panjang ruas — tower terdekat ditampilkan.
+        </p>
+      ) : null}
+      {tapHere ? (
+        <p className="flex items-center gap-1 font-semibold text-primary">
+          <GitBranch className="size-3 shrink-0" />
+          Titik sambung Incomer {tapHere.gi} — cek juga ruas &quot;{tapHere.incomerSection}&quot; kalau diduga di jalur
+          incomer.
         </p>
       ) : null}
       {isTowerKritis(match.tower) ? (
@@ -297,7 +312,12 @@ function DistanceCard({
         ) : !result ? (
           <p className="text-xs text-muted-foreground">Jarak tidak valid.</p>
         ) : (
-          <TowerResultPanel result={result} sigapInsightsByFuncLoc={sigapInsightsByFuncLoc} gangguanHistoryByGiTower={gangguanHistoryByGiTower} />
+          <TowerResultPanel
+            ruasSection={ruas.section}
+            result={result}
+            sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+            gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+          />
         )}
       </CardContent>
     </Card>
@@ -383,7 +403,12 @@ function VaisalaCard({
         ) : !result ? (
           <p className="text-xs text-muted-foreground">Nomor tower tidak ditemukan di ruas ini.</p>
         ) : (
-          <TowerResultPanel result={result} sigapInsightsByFuncLoc={sigapInsightsByFuncLoc} gangguanHistoryByGiTower={gangguanHistoryByGiTower} />
+          <TowerResultPanel
+            ruasSection={ruas.section}
+            result={result}
+            sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+            gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+          />
         )}
       </CardContent>
     </Card>
@@ -473,7 +498,12 @@ function SmdeCard({
             {entry.mode === "ordinal" ? "Tower ke- melebihi jumlah tower di ruas ini." : "Jarak tidak valid."}
           </p>
         ) : (
-          <TowerResultPanel result={result} sigapInsightsByFuncLoc={sigapInsightsByFuncLoc} gangguanHistoryByGiTower={gangguanHistoryByGiTower} />
+          <TowerResultPanel
+            ruasSection={ruas.section}
+            result={result}
+            sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+            gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+          />
         )}
       </CardContent>
     </Card>
@@ -558,41 +588,77 @@ export function SuttFaultLocatorView({
               {ruasByUnit.map(([unit, list]) => (
                 <SelectGroup key={unit}>
                   <SelectLabel>{unit}</SelectLabel>
-                  {list.map((r) => (
-                    <SelectItem key={r.section} value={r.section}>
-                      {r.section} ({formatKm(r.lengthKm)})
-                    </SelectItem>
-                  ))}
+                  {list.map((r) => {
+                    const tap = isIncomerRuas(r.section) ? findIncomerTapInfo(r.section) : null;
+                    return (
+                      <SelectItem key={r.section} value={r.section}>
+                        {isIncomerRuas(r.section) ? (
+                          <>
+                            ↳ {r.section} ({formatKm(r.lengthKm)}) — Incomer
+                            {tap ? ` dari ${tap.tapRuasSection} @ Tower ${tap.tapTowerNo}` : " (titik sambung belum ada data)"}
+                          </>
+                        ) : (
+                          `${r.section} (${formatKm(r.lengthKm)})`
+                        )}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectGroup>
               ))}
             </SelectContent>
           </Select>
 
           {ruas ? (
-            <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-xs sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-muted-foreground">
-                {ruas.unit} · {ruas.towers.length} tower · panjang {formatKm(ruas.lengthKm)}
-                {sigapBayLine ? (
-                  <>
-                    {" "}
-                    · Kode SIGAP <span className="font-semibold text-foreground">{sigapBayLine}</span>
-                  </>
-                ) : null}
-                {sigapFasa ? (
-                  <>
-                    {" "}
-                    · Urutan fasa (SIGAP) <span className="font-semibold text-foreground">{sigapFasa}</span>
-                  </>
-                ) : null}
-              </p>
-              <Tabs value={direction} onValueChange={(v) => setDirection((v as FaultDirection) ?? "origin")}>
-                <TabsList>
-                  <TabsTrigger value="origin">Dari {ruas.originLabel} (km 0)</TabsTrigger>
-                  <TabsTrigger value="far">
-                    Dari {ruas.farEndLabel} (km {formatKm(ruas.lengthKm)})
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+            <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-xs">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-muted-foreground">
+                  {ruas.unit} · {ruas.towers.length} tower · panjang {formatKm(ruas.lengthKm)}
+                  {sigapBayLine ? (
+                    <>
+                      {" "}
+                      · Kode SIGAP <span className="font-semibold text-foreground">{sigapBayLine}</span>
+                    </>
+                  ) : null}
+                  {sigapFasa ? (
+                    <>
+                      {" "}
+                      · Urutan fasa (SIGAP) <span className="font-semibold text-foreground">{sigapFasa}</span>
+                    </>
+                  ) : null}
+                </p>
+                <Tabs value={direction} onValueChange={(v) => setDirection((v as FaultDirection) ?? "origin")}>
+                  <TabsList>
+                    <TabsTrigger value="origin">Dari {ruas.originLabel} (km 0)</TabsTrigger>
+                    <TabsTrigger value="far">
+                      Dari {ruas.farEndLabel} (km {formatKm(ruas.lengthKm)})
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+              {isIncomerRuas(ruas.section) ? (
+                (() => {
+                  const tap = findIncomerTapInfo(ruas.section);
+                  return (
+                    <p className="flex items-center gap-1 font-semibold text-primary">
+                      <GitBranch className="size-3 shrink-0" />
+                      {tap
+                        ? `Ruas Incomer — tersambung dari ${tap.tapRuasSection} di Tower ${tap.tapTowerNo}`
+                        : "Ruas Incomer — titik sambung ke ruas utama belum ada data"}
+                    </p>
+                  );
+                })()
+              ) : (
+                (() => {
+                  const incomersHere = findIncomersTappingFrom(ruas.section);
+                  return incomersHere.length > 0 ? (
+                    <p className="flex items-center gap-1 font-semibold text-primary">
+                      <GitBranch className="size-3 shrink-0" />
+                      {incomersHere.length} percabangan Incomer dari ruas ini:{" "}
+                      {incomersHere.map((t) => `${t.gi} (Tower ${t.tapTowerNo})`).join(", ")}
+                    </p>
+                  ) : null;
+                })()
+              )}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
