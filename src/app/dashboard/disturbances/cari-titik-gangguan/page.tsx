@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Radar, Satellite } from "lucide-react";
+import { ArrowLeft, ExternalLink, Map, Radar, Satellite } from "lucide-react";
 
 import { PageHero } from "@/components/dashboard/page-hero";
 import { buttonVariants } from "@/components/ui/button";
@@ -30,6 +30,14 @@ const LIGHTNING_WATCH_URL = "https://lightning-watch.uptpky.workers.dev/";
 // from the UPT's own REKAP GANGGUAN instead (src/services/gangguan-
 // history.ts), not SIGAP — see that file's own comment for why.
 const SIGAP_URL = "https://sigap.uip3bkal.com/";
+
+// Peta/SLD seluruh ruas SUTT UPT Palangkaraya (semua ULTG) — dipublikasikan
+// sebagai halaman terpisah (bukan dibangun di app ini) sebagai langkah
+// sementara: lihat seluruh jaringan sekaligus untuk kroscek, dengan
+// penanda awal tower tiap GI dan titik potong ruas incomer. Link ini
+// privat (milik akun yang mempublikasikannya) — anggota tim lain perlu
+// diberi akses lewat menu Share halaman tersebut sebelum bisa membukanya.
+const SUTT_SLD_URL = "https://claude.ai/artifact/EeKU9352Nceuhw22vdLAwN";
 
 export default async function CariTitikGangguanPage() {
   const [{ ruasList, error }, sigapInsightsByFuncLoc, gangguanHistoryByGiTower] = await Promise.all([
@@ -63,6 +71,16 @@ export default async function CariTitikGangguanPage() {
             >
               <Radar className="size-3.5" />
               Lightning Watch
+              <ExternalLink className="size-3" />
+            </a>
+            <a
+              href={SUTT_SLD_URL}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Map className="size-3.5" />
+              Peta/SLD SUTT
               <ExternalLink className="size-3" />
             </a>
             <Link href="/dashboard/disturbances" className={buttonVariants({ variant: "outline", size: "sm" })}>

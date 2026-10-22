@@ -44,6 +44,12 @@ export interface TowerMatch {
    *  ordinal (SMDE) input rather than a nearest-match-to-a-distance guess
    *  — no selisih/bracketing towers to show, since there's no ambiguity. */
   exact: boolean;
+  /** Set when a distance overflowed past this ruas's own end at a tower
+   *  that's a known incomer splice point, and the match below is actually
+   *  on that INCOMER's own tower chain, not on the ruas that was searched
+   *  — see locateFaultWithIncomerCrossing(). `overflowKm` is how far past
+   *  the splice tower the raw distance landed. */
+  crossedToIncomer?: { incomerSection: string; overflowKm: number };
 }
 
 /** `towers` must already be sorted ascending by distanceKm (true of every
@@ -88,6 +94,69 @@ export function effectiveDistanceKm(ruas: SuttRuas, rawDistanceKm: number, direc
 
 export function locateFault(ruas: SuttRuas, rawDistanceKm: number, direction: FaultDirection): TowerMatch | null {
   return findNearestTower(ruas.towers, effectiveDistanceKm(ruas, rawDistanceKm, direction));
+}
+
+function findRuasBySection(allRuas: SuttRuas[], section: string): SuttRuas | null {
+  return allRuas.find((r) => r.section === section) ?? null;
+}
+
+/** Plain Pythagorean distance in degrees between two towers' own lat/lon —
+ *  only used to rank which of an incomer's two ends sits physically next
+ *  to a given splice point, never as a real-world distance, so no need
+ *  for haversine at this scale. Infinity when either point lacks a GPS
+ *  fix, so an uncoordinated tower never wins the comparison. */
+function roughDegDistance(a: { lat: number | null; lon: number | null }, b: { lat: number | null; lon: number | null }): number {
+  if (a.lat === null || a.lon === null || b.lat === null || b.lon === null) return Infinity;
+  const dLat = a.lat - b.lat;
+  const dLon = a.lon - b.lon;
+  return Math.sqrt(dLat * dLat + dLon * dLon);
+}
+
+/** Same as locateFault, but when the distance overflows past this ruas's
+ *  own end AT A KNOWN INCOMER SPLICE TOWER, continues the measurement onto
+ *  that incomer's own tower chain instead of just reporting "out of
+ *  range" — a fault 18km past the KASONGAN - SKS splice (tower 236) isn't
+ *  18km off the end of nowhere, it's somewhere on INCOMER SKS's own spur.
+ *  Requires the full ruas list (`allRuas`) so the incomer's own towers are
+ *  available to search; falls back to the plain locateFault result when
+ *  there's no tap at the overflowed end, the incomer isn't in `allRuas`,
+ *  or the match wasn't out of range to begin with. Only applies to plain
+ *  distance input (TWFL/SMDE-km/Relay) — VAISALA's direct tower lookup
+ *  and SMDE's tower-ke ordinal are exact-by-construction and don't
+ *  "overflow" the same way. */
+export function locateFaultWithIncomerCrossing(
+  ruas: SuttRuas,
+  allRuas: SuttRuas[],
+  rawDistanceKm: number,
+  direction: FaultDirection,
+): TowerMatch | null {
+  const base = locateFault(ruas, rawDistanceKm, direction);
+  if (!base || !base.outOfRange || ruas.towers.length === 0) return base;
+
+  const eff = effectiveDistanceKm(ruas, rawDistanceKm, direction);
+  const overflowPastEnd = eff > ruas.lengthKm;
+  const boundaryTower = overflowPastEnd ? ruas.towers[ruas.towers.length - 1] : ruas.towers[0];
+  const overflowKm = overflowPastEnd ? eff - ruas.lengthKm : -eff;
+  if (overflowKm <= 0) return base;
+
+  const tapInfo = findIncomerTapAtTower(ruas.section, boundaryTower.towerNo);
+  if (!tapInfo) return base;
+
+  const incomerRuas = findRuasBySection(allRuas, tapInfo.incomerSection);
+  if (!incomerRuas || incomerRuas.towers.length === 0) return base;
+
+  const first = incomerRuas.towers[0];
+  const last = incomerRuas.towers[incomerRuas.towers.length - 1];
+  const nearEndIsFirst = roughDegDistance(boundaryTower, first) <= roughDegDistance(boundaryTower, last);
+  const targetKm = nearEndIsFirst ? first.distanceKm + overflowKm : last.distanceKm - overflowKm;
+
+  const incomerMatch = findNearestTower(incomerRuas.towers, targetKm);
+  if (!incomerMatch) return base;
+
+  return {
+    ...incomerMatch,
+    crossedToIncomer: { incomerSection: incomerRuas.section, overflowKm: Math.round(overflowKm * 1000) / 1000 },
+  };
 }
 
 function exactMatch(tower: SuttTower): TowerMatch {
@@ -293,10 +362,15 @@ export type MethodEntry =
    *  but the WA text says something different for each. */
   | { method: FaultMethod; mode: "no-strike" };
 
-export function resolveMethodEntry(ruas: SuttRuas, entry: MethodEntry, direction: FaultDirection): TowerMatch | null {
+export function resolveMethodEntry(
+  ruas: SuttRuas,
+  allRuas: SuttRuas[],
+  entry: MethodEntry,
+  direction: FaultDirection,
+): TowerMatch | null {
   switch (entry.mode) {
     case "distance":
-      return locateFault(ruas, entry.distanceKm, direction);
+      return locateFaultWithIncomerCrossing(ruas, allRuas, entry.distanceKm, direction);
     case "tower": {
       const tower = findTowerByNumber(ruas, entry.towerNo);
       return tower ? exactMatch(tower) : null;
@@ -344,11 +418,16 @@ export interface MethodResult {
   match: TowerMatch;
 }
 
-export function buildMethodResults(ruas: SuttRuas, direction: FaultDirection, entries: MethodEntry[]): MethodResult[] {
+export function buildMethodResults(
+  ruas: SuttRuas,
+  allRuas: SuttRuas[],
+  direction: FaultDirection,
+  entries: MethodEntry[],
+): MethodResult[] {
   const results: MethodResult[] = [];
   for (const entry of entries) {
     if (entry.mode === "empty" || entry.mode === "no-strike") continue;
-    const match = resolveMethodEntry(ruas, entry, direction);
+    const match = resolveMethodEntry(ruas, allRuas, entry, direction);
     if (match) results.push({ method: entry.method, entry, inputLabel: describeEntry(entry, direction, ruas), match });
   }
   return results;
@@ -459,6 +538,7 @@ export function formatGangguanHistoryLines(entries: GangguanHistoryEntry[]): str
  *  from, since that's invisible once a number is typed in. */
 export function formatWaMessage(
   ruas: SuttRuas,
+  allRuas: SuttRuas[],
   direction: FaultDirection,
   entries: MethodEntry[],
   insightsByFuncLoc?: Record<string, SigapTowerInsight>,
@@ -492,16 +572,14 @@ export function formatWaMessage(
   }
   lines.push("");
 
-  const results = buildMethodResults(ruas, direction, entries);
+  const results = buildMethodResults(ruas, allRuas, direction, entries);
   const resultByMethod = new Map(results.map((r) => [r.method, r]));
 
   for (const entry of entries) {
+    // Unfilled fields are simply left out of the message — no "Tidak
+    // diisi" clutter for a method nobody reported on.
+    if (entry.mode === "empty") continue;
     lines.push(`📍 *${FAULT_METHOD_LABELS[entry.method]}*`);
-    if (entry.mode === "empty") {
-      lines.push("Tidak diisi");
-      lines.push("");
-      continue;
-    }
     if (entry.mode === "no-strike") {
       lines.push("Tidak terdapat sambaran petir");
       lines.push("");
@@ -523,13 +601,28 @@ export function formatWaMessage(
 
     if (entry.mode === "distance") {
       lines.push(`Jarak dilaporkan: ${formatKm(entry.distanceKm)}`);
-      lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)}, selisih ${formatSignedKm(match.deltaKm)})`);
+      if (match.crossedToIncomer) {
+        lines.push(
+          `↪ Melebihi ruas ini ${formatKm(match.crossedToIncomer.overflowKm)}, dilanjutkan ke *${match.crossedToIncomer.incomerSection}*`,
+        );
+        lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)} dari ${match.crossedToIncomer.incomerSection})`);
+      } else {
+        lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)}, selisih ${formatSignedKm(match.deltaKm)})`);
+      }
     } else {
       lines.push(`${result.inputLabel}`);
       lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)}) — pasti, bukan estimasi`);
     }
     if (match.outOfRange) {
-      lines.push(`⚠️ Jarak di luar panjang ruas (0 – ${formatKm(ruas.lengthKm)}) — tower terdekat ditampilkan.`);
+      const rangeRuas = match.crossedToIncomer ? match.crossedToIncomer.incomerSection : ruas.section;
+      const rangeLenKm = match.crossedToIncomer
+        ? (findRuasBySection(allRuas, match.crossedToIncomer.incomerSection)?.lengthKm ?? null)
+        : ruas.lengthKm;
+      lines.push(
+        rangeLenKm !== null
+          ? `⚠️ Jarak di luar panjang ruas "${rangeRuas}" (0 – ${formatKm(rangeLenKm)}) — tower terdekat ditampilkan.`
+          : `⚠️ Jarak di luar panjang ruas "${rangeRuas}" — tower terdekat ditampilkan.`,
+      );
     }
     if (match.before && match.after && match.before.towerNo !== match.after.towerNo) {
       lines.push(
@@ -538,7 +631,7 @@ export function formatWaMessage(
     }
     const headline = towerHeadline(match.tower);
     if (headline) lines.push(headline);
-    const tapHere = findIncomerTapAtTower(ruas.section, match.tower.towerNo);
+    const tapHere = match.crossedToIncomer ? null : findIncomerTapAtTower(ruas.section, match.tower.towerNo);
     if (tapHere) {
       lines.push(
         `🔀 Tower ini titik sambung Incomer ${tapHere.gi} — jika gangguan diduga di jalur incomer, cek juga ruas "${tapHere.incomerSection}".`,

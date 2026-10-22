@@ -141,7 +141,11 @@ function TowerResultPanel({
   const { match } = result;
   const sigapInsight = findSigapInsight(match.tower, sigapInsightsByFuncLoc);
   const gangguanHistory = findGangguanHistory(match.tower, gangguanHistoryByGiTower);
-  const tapHere = findIncomerTapAtTower(ruasSection, match.tower.towerNo);
+  // Once a distance has crossed into an incomer's own tower chain, the
+  // matched tower belongs to THAT ruas, not the one being searched — so
+  // the "this tower is a splice point" hint (which assumes ruasSection)
+  // no longer applies; the crossing banner below already says where it is.
+  const tapHere = match.crossedToIncomer ? null : findIncomerTapAtTower(ruasSection, match.tower.towerNo);
 
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5 text-xs">
@@ -166,10 +170,18 @@ function TowerResultPanel({
           </>
         ) : null}
       </p>
+      {match.crossedToIncomer ? (
+        <p className="flex items-center gap-1 font-semibold text-primary">
+          <GitBranch className="size-3 shrink-0" />
+          Melebihi ruas ini {formatKm(match.crossedToIncomer.overflowKm)}, dilanjutkan ke{" "}
+          <span className="font-extrabold">{match.crossedToIncomer.incomerSection}</span>
+        </p>
+      ) : null}
       {match.outOfRange ? (
         <p className="flex items-center gap-1 font-semibold text-warning-foreground">
           <AlertTriangle className="size-3 shrink-0" />
-          Jarak di luar panjang ruas — tower terdekat ditampilkan.
+          Jarak di luar panjang ruas{match.crossedToIncomer ? ` "${match.crossedToIncomer.incomerSection}"` : ""} —
+          tower terdekat ditampilkan.
         </p>
       ) : null}
       {tapHere ? (
@@ -255,6 +267,7 @@ function TowerResultPanel({
 
 type SharedCardProps = {
   ruas: SuttRuas | null;
+  allRuas: SuttRuas[];
   direction: FaultDirection;
   sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
   gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
@@ -269,6 +282,7 @@ function DistanceCard({
   value,
   onChange,
   ruas,
+  allRuas,
   direction,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
@@ -280,7 +294,7 @@ function DistanceCard({
 }) {
   const n = value.trim() === "" ? null : Number(value);
   const entry: MethodEntry | null = value.trim() !== "" && n !== null && Number.isFinite(n) ? { method, mode: "distance", distanceKm: n } : null;
-  const result = ruas && entry ? buildMethodResults(ruas, direction, [entry])[0] : null;
+  const result = ruas && entry ? buildMethodResults(ruas, allRuas, direction, [entry])[0] : null;
 
   return (
     <Card className="print:break-inside-avoid">
@@ -336,6 +350,7 @@ function VaisalaCard({
   onStatusChange,
   onTowerNoChange,
   ruas,
+  allRuas,
   direction,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
@@ -347,7 +362,7 @@ function VaisalaCard({
 }) {
   const entry: MethodEntry | null =
     status === "detected" && towerNo.trim() !== "" ? { method: "VAISALA", mode: "tower", towerNo: towerNo.trim() } : null;
-  const result = ruas && entry ? buildMethodResults(ruas, direction, [entry])[0] : null;
+  const result = ruas && entry ? buildMethodResults(ruas, allRuas, direction, [entry])[0] : null;
 
   return (
     <Card className="print:break-inside-avoid">
@@ -426,6 +441,7 @@ function SmdeCard({
   onDistanceChange,
   onOrdinalChange,
   ruas,
+  allRuas,
   direction,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
@@ -446,7 +462,7 @@ function SmdeCard({
   } else if (distanceTrim !== "" && Number.isFinite(distanceNum)) {
     entry = { method: "SMDE", mode: "distance", distanceKm: distanceNum };
   }
-  const result = ruas && entry ? buildMethodResults(ruas, direction, [entry])[0] : null;
+  const result = ruas && entry ? buildMethodResults(ruas, allRuas, direction, [entry])[0] : null;
   const refLabel = ruas ? (direction === "origin" ? ruas.originLabel : ruas.farEndLabel) : "GI";
 
   return (
@@ -550,7 +566,7 @@ export function SuttFaultLocatorView({
   const entries = useMemo(() => buildEntries(inputs), [inputs]);
   const filledCount = entries.filter((e) => e.mode !== "empty").length;
   const waText = ruas
-    ? formatWaMessage(ruas, direction, entries, sigapInsightsByFuncLoc, gangguanHistoryByGiTower)
+    ? formatWaMessage(ruas, ruasList, direction, entries, sigapInsightsByFuncLoc, gangguanHistoryByGiTower)
     : "";
 
   function reset() {
@@ -658,9 +674,13 @@ export function SuttFaultLocatorView({
                       {incomersHere
                         .map((t) => {
                           const tap = t.taps.find((x) => x.ruasSection === ruas.section);
-                          return `${t.gi} (Tower ${tap?.towerNo ?? "?"})`;
+                          const incomerRuas = ruasList.find((r) => r.section === t.incomerSection);
+                          return `${t.gi} (Tower ${tap?.towerNo ?? "?"}${
+                            incomerRuas ? `, +${incomerRuas.towers.length} tower lanjutan` : ""
+                          })`;
                         })
-                        .join(", ")}
+                        .join(", ")}{" "}
+                      — jarak yang melebihi ruas ini di titik sambung otomatis dilanjutkan ke ruas incomer-nya.
                     </p>
                   ) : null;
                 })()
@@ -690,6 +710,7 @@ export function SuttFaultLocatorView({
             onStatusChange={(status) => setInputs((prev) => ({ ...prev, VAISALA: { ...prev.VAISALA, status } }))}
             onTowerNoChange={(towerNo) => setInputs((prev) => ({ ...prev, VAISALA: { ...prev.VAISALA, towerNo } }))}
             ruas={ruas}
+            allRuas={ruasList}
             direction={direction}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
@@ -700,6 +721,7 @@ export function SuttFaultLocatorView({
             value={inputs.TWFL.distanceKm}
             onChange={(v) => setInputs((prev) => ({ ...prev, TWFL: { distanceKm: v } }))}
             ruas={ruas}
+            allRuas={ruasList}
             direction={direction}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
@@ -710,6 +732,7 @@ export function SuttFaultLocatorView({
             onDistanceChange={(v) => setInputs((prev) => ({ ...prev, SMDE: { ...prev.SMDE, distanceKm: v } }))}
             onOrdinalChange={(v) => setInputs((prev) => ({ ...prev, SMDE: { ...prev.SMDE, ordinal: v } }))}
             ruas={ruas}
+            allRuas={ruasList}
             direction={direction}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
@@ -720,6 +743,7 @@ export function SuttFaultLocatorView({
             value={inputs.FAULT_LOCATOR_RELAY.distanceKm}
             onChange={(v) => setInputs((prev) => ({ ...prev, FAULT_LOCATOR_RELAY: { distanceKm: v } }))}
             ruas={ruas}
+            allRuas={ruasList}
             direction={direction}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}

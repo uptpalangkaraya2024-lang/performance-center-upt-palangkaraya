@@ -76,6 +76,35 @@ interface RawTower {
   gi: string;
 }
 
+/** `originLabel`/`farEndLabel` are derived below from each ruas's own
+ *  GARDU_INDUK column — confirmed live that this column is wrong on 4
+ *  ruas, caught while building the fault-locator's network map (geometric
+ *  cross-check: a GI name's coordinate on one ruas landed nowhere near
+ *  that same GI name's confirmed-correct coordinate on another ruas).
+ *  Overridden here by hand rather than trusting the sheet, same precedent
+ *  as the self-computed distanceKm fix above (buildRuasList's own cumKm).
+ *    - "SKS - KUALA KURUN": read origin=KASONGAN/far=SKS, but tower 238
+ *      (the "origin") sits ~1km from GI SKS's other confirmed splice
+ *      point, not ~60km away where the real KASONGAN GI is.
+ *    - "KASONGAN - SUDAN": read far=SAMPIT, but tower 370 sits exactly at
+ *      INCOMER SUDAN's own tap point (the real SUDAN splice), ~45km short
+ *      of the real SAMPIT GI.
+ *    - "SUDAN - SAMPIT": read origin=SAMPIT/far=SUDAN — fully backwards.
+ *      Tower 371 ("SAMPIT") sits ~300m from the same Sudan splice point
+ *      above; tower 490 ("SUDAN") sits at the real SAMPIT GI instead.
+ *    - "SAMPIT - BAGENDANG": read origin=BAGENDANG/far=SAMPIT — also
+ *      backwards. Tower 1 ("BAGENDANG") sits at the real SAMPIT GI; tower
+ *      118 ("SAMPIT") sits ~400m from the real BAGENDANG GI (confirmed
+ *      against "BAGENDANG - KUALA PAMBUANG"'s own tower 1).
+ *  Only the display labels are overridden — tower order/distanceKm is
+ *  untouched (self-computed from SPAN (M), unrelated to GARDU_INDUK). */
+const GI_LABEL_OVERRIDE: Record<string, { originLabel: string; farEndLabel: string }> = {
+  "SKS - KUALA KURUN": { originLabel: "SKS", farEndLabel: "KUALA KURUN" },
+  "KASONGAN - SUDAN": { originLabel: "KASONGAN", farEndLabel: "SUDAN" },
+  "SUDAN - SAMPIT": { originLabel: "SUDAN", farEndLabel: "SAMPIT" },
+  "SAMPIT - BAGENDANG": { originLabel: "SAMPIT", farEndLabel: "BAGENDANG" },
+};
+
 /** Groups by NAMA_SECTION (the ruas identity — see data-sources.ts's own
  *  comment on `suttAsset` for why not NO TOWER, GARDU_INDUK, or
  *  NAMA_SIRKIT), sorts each group into true physical tower sequence, then
@@ -153,12 +182,13 @@ function buildRuasList(records: Record<string, string>[]): SuttRuas[] {
       farEndLabel = parts.find((p) => p.toUpperCase() !== originNorm) ?? parts[parts.length - 1] ?? section;
     }
 
+    const override = GI_LABEL_OVERRIDE[section];
     ruasList.push({
       section,
       unit,
       originGi: originGiRaw,
-      originLabel: normalizeGiName(originGiRaw),
-      farEndLabel,
+      originLabel: override ? override.originLabel : normalizeGiName(originGiRaw),
+      farEndLabel: override ? override.farEndLabel : farEndLabel,
       lengthKm: towers[towers.length - 1].distanceKm,
       towers,
     });
