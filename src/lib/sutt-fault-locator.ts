@@ -231,7 +231,24 @@ export const INCOMER_TAPS: IncomerTapInfo[] = [
   // splices into the other at 370; both tap towers genuinely exist on
   // this one ruas's own tower list.
   { incomerSection: "INCOMER PARENGGEAN", gi: "PARENGGEAN", taps: [{ ruasSection: "KASONGAN - SUDAN", towerNo: "335" }] },
-  { incomerSection: "INCOMER SUDAN", gi: "SUDAN", taps: [{ ruasSection: "KASONGAN - SUDAN", towerNo: "370" }] },
+  // SUDAN sits exactly at the boundary between "KASONGAN - SUDAN" (ending
+  // at its own tower 370) and "SUDAN - SAMPIT" (starting at its own tower
+  // 371, confirmed ~0.29km away — the same physical point, same pattern
+  // as SKS below) rather than mid-splicing into one — so it gets two taps
+  // too, and (being an incomer with 2+ taps) counts as a chain-walkable
+  // pass-through: see buildCombinedIncomerRuasList's own PASS_THROUGH_GI
+  // comment for why that's the ONLY thing that makes a GI chain-walkable,
+  // not just "happens to connect exactly 2 ruas" (a real substation like
+  // PANGKALAN BUN or SUKAMARA also does, but is a genuine stop, not a
+  // leftover mid-conductor splice point).
+  {
+    incomerSection: "INCOMER SUDAN",
+    gi: "SUDAN",
+    taps: [
+      { ruasSection: "KASONGAN - SUDAN", towerNo: "370" },
+      { ruasSection: "SUDAN - SAMPIT", towerNo: "371" },
+    ],
+  },
   { incomerSection: "INCOMER SEBANGAU", gi: "SEBANGAU", taps: [{ ruasSection: "MINTIN - PALANGKARAYA", towerNo: "330" }] },
   { incomerSection: "INCOMER PULANG PISAU", gi: "PULANG PISAU", taps: [{ ruasSection: "MINTIN - PALANGKARAYA", towerNo: "117" }] },
   {
@@ -279,31 +296,29 @@ export function formatIncomerTapsLabel(taps: IncomerTap[]): string {
   return taps.map((tap) => `${tap.ruasSection} (Tower ${tap.towerNo})`).join(" dan ");
 }
 
-/** GIs that sit right at UPT Palangkaraya's own asset boundary — the
- *  substation itself belongs to a different UPT (confirmed by the user),
- *  even though the ruas approaching it is still recorded in DATA SUTT UPT
- *  PKY and still fully walkable/searchable here. Two things key off this
- *  set: the network map excludes these three from "Total GI" (they aren't
- *  UPT Palangkaraya's own) and marks them visually distinct, and chain-
- *  walking (buildCombinedIncomerRuasList below) treats them as a hard stop
- *  rather than a pass-through, even where one happens to have exactly 2
- *  connections — UPT Palangkaraya's own network conceptually ends there,
- *  so a through-route has no business reasoning about what's beyond it. */
-export const BOUNDARY_GI_NAMES = new Set(["TANJUNG", "MINTIN", "KENDAWANGAN"]);
+/** GIs a chain is allowed to walk straight through without stopping —
+ *  derived from INCOMER_TAPS itself (any incomer whose own `gi` has 2+
+ *  taps recorded), NOT from raw graph degree. This matters: PANGKALAN
+ *  BUN, SUKAMARA, KASONGAN and friends also connect exactly 2 (sometimes
+ *  3+) main ruas each, but they're real substations where a circuit
+ *  genuinely terminates (a transformer bay, not a bare wire) — a through-
+ *  route has to stop there, the same as at a real junction. SKS and SUDAN
+ *  are different: both are confirmed (by hand, geometrically) to sit
+ *  exactly at the boundary between two existing ruas that were ONE
+ *  physical conductor before that GI was spliced in later — recording
+ *  two taps for an incomer is itself the signal that it's this kind of
+ *  pass-through point, not a judgment call made separately here. */
+const PASS_THROUGH_GI_NAMES = new Set(INCOMER_TAPS.filter((t) => t.taps.length >= 2).map((t) => t.gi));
 
 interface MainRuasTouch {
   section: string;
   end: "origin" | "farEnd";
 }
 
-/** name -> every main-ruas (origin/farEnd) touch at that GI — the graph
- *  degree of each GI in the main-ruas network. A name with exactly one
- *  touch is a true dead end; exactly two (and not a boundary GI) is a
- *  simple pass-through a chain can walk straight through (e.g. SUDAN,
- *  sitting between "KASONGAN - SUDAN" and "SUDAN - SAMPIT" with nothing
- *  else there); three or more is a real junction (e.g. SAMPIT, KASONGAN,
- *  PALANGKARAYA) where a chain has no single correct way to continue, so
- *  it stops rather than guess. */
+/** name -> every main-ruas (origin/farEnd) touch at that GI — used only to
+ *  find WHICH ruas continues from a confirmed pass-through GI (see
+ *  PASS_THROUGH_GI_NAMES above for what actually makes a GI eligible to
+ *  walk through in the first place). */
 function buildMainRuasTouchGraph(allRuas: SuttRuas[]): Map<string, MainRuasTouch[]> {
   const graph = new Map<string, MainRuasTouch[]>();
   function add(name: string, section: string, end: "origin" | "farEnd") {
@@ -322,13 +337,14 @@ function buildMainRuasTouchGraph(allRuas: SuttRuas[]): Map<string, MainRuasTouch
 /** Walks the main-ruas network starting partway through `hostSection` (at
  *  `tapIndex`), heading toward that ruas's own far end (`towardFar: true`)
  *  or its own origin, then keeps walking straight through any further
- *  pass-through GI it reaches (never a boundary GI, never a junction) —
+ *  confirmed pass-through GI it reaches (see PASS_THROUGH_GI_NAMES) —
  *  e.g. starting at INCOMER PARENGGEAN's own tap (tower 335 on "KASONGAN -
  *  SUDAN") and walking away from Kasongan doesn't stop at tower 370 just
- *  because that's where this one sheet record ends: SUDAN only connects
- *  two ways, so the walk continues straight into "SUDAN - SAMPIT" and
- *  only really stops at SAMPIT, a genuine 3-way junction. Distances are
- *  re-based so the starting tap itself reads as 0. */
+ *  because that's where this one sheet record ends: SUDAN is a confirmed
+ *  pass-through, so the walk continues straight into "SUDAN - SAMPIT" and
+ *  only really stops at SAMPIT, a genuine 3-way junction with no single
+ *  correct way to continue. Distances are re-based so the starting tap
+ *  itself reads as 0. */
 function walkChainFromTap(
   allRuas: SuttRuas[],
   graph: Map<string, MainRuasTouch[]>,
@@ -345,9 +361,9 @@ function walkChainFromTap(
   const visited = new Set([hostSection]);
 
   for (;;) {
-    if (BOUNDARY_GI_NAMES.has(endLabel)) break; // UPT Palangkaraya's own network ends here
+    if (!PASS_THROUGH_GI_NAMES.has(endLabel)) break; // a real substation (or a true dead end) — stop, never guess past it
     const neighbors = (graph.get(endLabel) ?? []).filter((t) => !visited.has(t.section));
-    if (neighbors.length !== 1) break; // true dead end (0) or junction (2+) — never guess
+    if (neighbors.length !== 1) break; // shouldn't happen for a confirmed 2-tap boundary GI, but stay defensive
     const next = neighbors[0];
     visited.add(next.section);
     const nextRuas = allRuas.find((r) => r.section === next.section)!;

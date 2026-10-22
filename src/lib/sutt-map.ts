@@ -8,8 +8,8 @@
 // component) and the result is handed to the client map component as
 // props, same "load once, derive many" shape as every other compute lib
 // in this app.
-import { BOUNDARY_GI_NAMES, INCOMER_TAPS } from "@/lib/sutt-fault-locator";
-import type { SuttRuas, SuttTower } from "@/types";
+import { INCOMER_TAPS } from "@/lib/sutt-fault-locator";
+import type { GiRecord, SuttRuas, SuttTower } from "@/types";
 
 export interface MapRuasLine {
   section: string;
@@ -26,16 +26,22 @@ export interface MapGiTouch {
   ruas: string;
   end: string;
   tower: string;
+  /** The GI at the OTHER end of this same ruas — e.g. at GI Sampit, the
+   *  touch for "SAMPIT - BAGENDANG" carries otherEnd "BAGENDANG", so the
+   *  map can label the tag "awal, menuju Bagendang" instead of a bare
+   *  tower number with no indication of which direction/ruas it's on. */
+  otherEnd: string;
 }
 
 export interface MapGiMarker {
   name: string;
   lat: number;
   lon: number;
-  /** "boundary" wins over "incomer"/"main" — a GI that belongs to a
-   *  different UPT (see BOUNDARY_GI_NAMES) isn't UPT Palangkaraya's own
-   *  regardless of which ruas happens to touch it. */
-  kind: "main" | "incomer" | "boundary";
+  /** "unregistered" wins over "incomer"/"main" — a GI name that isn't in
+   *  DATA GARDU INDUK's own 20-row list isn't confirmed as UPT
+   *  Palangkaraya's own, regardless of which ruas happens to touch it
+   *  (see buildSuttNetworkMapData's own comment on `giRegistry`). */
+  kind: "main" | "incomer" | "unregistered";
   touches: MapGiTouch[];
 }
 
@@ -121,19 +127,45 @@ function filterPathOutliers(points: [number, number][]): [number, number][] {
   return kept;
 }
 
-export function buildSuttNetworkMapData(allRuas: SuttRuas[]): SuttNetworkMapData {
+/** `giRegistry` is DATA GARDU INDUK's own list — the authoritative source
+ *  for both a GI's real coordinate (its own substation-yard LATITUDE/
+ *  LONGITUDE, not inferred from whichever tower happens to be nearest)
+ *  and for which GI names are actually UPT Palangkaraya's own: a name
+ *  that only ever shows up as a ruas's own GARDU_INDUK/NAMA_SECTION
+ *  endpoint in DATA SUTT, but never here, isn't confirmed as a UPT
+ *  Palangkaraya GI (could be a real substation operated by a different
+ *  UPT, or a short tap/sectionalizing point that was never actually
+ *  registered as its own GI — this map can't tell the two apart, so both
+ *  are shown the same way: present for context, excluded from "Total
+ *  GI"). Confirmed live: all 20 of UPT Palangkaraya's real GIs are here,
+ *  including every incomer's own new substation (SKS, SUDAN, PARENGGEAN,
+ *  SEBANGAU, PULANG PISAU, PANGKALAN BANTENG, NANGABULIK) — only TANJUNG,
+ *  KENDAWANGAN and SELAT (a 12-tower, ~4km dead-end stub off MINTIN) are
+ *  absent. */
+export function buildSuttNetworkMapData(allRuas: SuttRuas[], giRegistry: GiRecord[]): SuttNetworkMapData {
   const ruasLines: MapRuasLine[] = [];
   const giMap = new Map<string, MapGiMarker>();
+  const registryByName = new Map(giRegistry.map((g) => [g.name.toUpperCase(), g]));
 
-  function addGiTouch(name: string, lat: number, lon: number, kind: "main" | "incomer", ruas: string, end: string, tower: string) {
-    const effectiveKind = BOUNDARY_GI_NAMES.has(name) ? "boundary" : kind;
+  function addGiTouch(
+    name: string,
+    lat: number,
+    lon: number,
+    kind: "main" | "incomer",
+    ruas: string,
+    end: string,
+    tower: string,
+    otherEnd: string,
+  ) {
+    const registered = registryByName.get(name.toUpperCase());
+    const effectiveKind: MapGiMarker["kind"] = registered ? kind : "unregistered";
     let g = giMap.get(name);
     if (!g) {
-      g = { name, lat, lon, kind: effectiveKind, touches: [] };
+      g = { name, lat: registered?.lat ?? lat, lon: registered?.lon ?? lon, kind: effectiveKind, touches: [] };
       giMap.set(name, g);
     }
-    if (g.kind !== "boundary" && effectiveKind === "incomer") g.kind = "incomer";
-    g.touches.push({ ruas, end, tower });
+    if (g.kind !== "unregistered" && effectiveKind === "incomer") g.kind = "incomer";
+    g.touches.push({ ruas, end, tower, otherEnd });
   }
 
   for (const r of allRuas) {
@@ -159,10 +191,10 @@ export function buildSuttNetworkMapData(allRuas: SuttRuas[]): SuttNetworkMapData
       const first = r.towers.find((t) => t.lat !== null && t.lon !== null);
       const last = [...r.towers].reverse().find((t) => t.lat !== null && t.lon !== null);
       if (first && first.lat !== null && first.lon !== null) {
-        addGiTouch(r.originLabel, first.lat, first.lon, "main", r.section, "awal", first.towerNo);
+        addGiTouch(r.originLabel, first.lat, first.lon, "main", r.section, "awal", first.towerNo, r.farEndLabel);
       }
       if (last && last.lat !== null && last.lon !== null) {
-        addGiTouch(r.farEndLabel, last.lat, last.lon, "main", r.section, "akhir", last.towerNo);
+        addGiTouch(r.farEndLabel, last.lat, last.lon, "main", r.section, "akhir", last.towerNo, r.originLabel);
       }
     }
   }
@@ -198,7 +230,7 @@ export function buildSuttNetworkMapData(allRuas: SuttRuas[]): SuttNetworkMapData
       }
     }
     if (giEnd.lat !== null && giEnd.lon !== null) {
-      addGiTouch(inc.gi, giEnd.lat, giEnd.lon, "incomer", inc.incomerSection, "GI baru", giEnd.towerNo);
+      addGiTouch(inc.gi, giEnd.lat, giEnd.lon, "incomer", inc.incomerSection, "GI baru", giEnd.towerNo, "titik sambung");
     }
 
     for (const t of tapCoords) {

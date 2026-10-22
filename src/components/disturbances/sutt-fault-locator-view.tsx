@@ -553,33 +553,38 @@ export function SuttFaultLocatorView({
   const [inputs, setInputs] = useState<MethodInputsState>(EMPTY_INPUTS);
   const [copied, setCopied] = useState(false);
 
-  const ruasByUnit = useMemo(() => {
-    const map = new Map<string, SuttRuas[]>();
-    for (const r of ruasList) {
-      const list = map.get(r.unit) ?? [];
-      list.push(r);
-      map.set(r.unit, list);
-    }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [ruasList]);
-
   // Through-routes: host ruas (from its own origin) continued straight
   // onto an incomer's own towers out to its new GI, selectable as one
   // single ruas instead of requiring the search to land exactly on the
   // splice tower before the user thinks to switch ruas — see
   // buildCombinedIncomerRuasList's own comment in the lib for why this
   // also fixes SMDE's "tower ke-" ordinal cleanly (it just counts through
-  // one combined tower array).
+  // one combined tower array). Shown inside each ULTG's own group (not a
+  // separate top-level one) so a combined route sits next to the plain
+  // ruas it's built from.
   const combinedList = useMemo(() => buildCombinedIncomerRuasList(ruasList), [ruasList]);
-  const combinedByUnit = useMemo(() => {
-    const map = new Map<string, CombinedIncomerRuas[]>();
-    for (const c of combinedList) {
-      const list = map.get(c.ruas.unit) ?? [];
-      list.push(c);
-      map.set(c.ruas.unit, list);
+
+  type PickerRow = { key: string; unit: string; sortKey: string; combined: CombinedIncomerRuas | null; plain: SuttRuas | null };
+  const pickerByUnit = useMemo(() => {
+    const rows: PickerRow[] = [
+      ...ruasList.map((r) => ({ key: r.section, unit: r.unit, sortKey: r.section, combined: null, plain: r })),
+      ...combinedList.map((c) => ({
+        key: combinedIncomerKey(c.ruas.section),
+        unit: c.ruas.unit,
+        sortKey: c.ruas.section,
+        combined: c,
+        plain: null,
+      })),
+    ];
+    const map = new Map<string, PickerRow[]>();
+    for (const row of rows) {
+      const list = map.get(row.unit) ?? [];
+      list.push(row);
+      map.set(row.unit, list);
     }
+    for (const list of map.values()) list.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [combinedList]);
+  }, [ruasList, combinedList]);
 
   const selectedCombined =
     sectionKey && sectionKey.startsWith("combined::")
@@ -624,34 +629,39 @@ export function SuttFaultLocatorView({
               reset();
             }}
           >
-            <SelectTrigger className="w-full sm:w-[420px]">
+            <SelectTrigger className="w-full sm:w-[460px]">
               <SelectValue placeholder="Pilih ruas SUTT...">
                 {selectedCombined ? `⇒ ${selectedCombined.ruas.section}` : (sectionKey ?? "Pilih ruas SUTT...")}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent>
-              {combinedByUnit.length > 0 ? (
-                <SelectGroup>
-                  <SelectLabel>Ruas gabungan (titik sambung incomer)</SelectLabel>
-                  {combinedByUnit.flatMap(([, list]) =>
-                    list.map((c) => (
-                      <SelectItem key={combinedIncomerKey(c.ruas.section)} value={combinedIncomerKey(c.ruas.section)}>
-                        ⇒ {c.ruas.section} ({formatKm(c.ruas.lengthKm)}, {c.ruas.towers.length} tower) —{" "}
-                        {c.includesIncomer
-                          ? `terpotong dari ${c.hostSection} Tower ${c.tapTowerNo}, lanjut ke INCOMER ${c.gi}`
-                          : `sisi lain dari titik sambung INCOMER ${c.gi} (Tower ${c.tapTowerNo} di ${c.hostSection})`}
-                      </SelectItem>
-                    )),
-                  )}
-                </SelectGroup>
-              ) : null}
-              {ruasByUnit.map(([unit, list]) => (
+            {/* The underlying Select primitive ties its popup width to the
+                trigger's own anchor width and forces each item's text onto
+                one line (see src/components/ui/select.tsx's own SelectItem)
+                — fine for short labels, but a combined through-route's own
+                description is a full sentence. Overridden here, for this
+                one Select only, rather than changing that shared primitive
+                (every other dropdown in the app still wants its normal
+                single-line, trigger-width behavior). */}
+            <SelectContent className="!w-[min(92vw,760px)] [&_[data-slot=select-item]]:!whitespace-normal [&_[data-slot=select-item]>div]:!whitespace-normal">
+              {pickerByUnit.map(([unit, rows]) => (
                 <SelectGroup key={unit}>
                   <SelectLabel>{unit}</SelectLabel>
-                  {list.map((r) => {
+                  {rows.map((row) => {
+                    if (row.combined) {
+                      const c = row.combined;
+                      return (
+                        <SelectItem key={row.key} value={row.key} className="whitespace-normal">
+                          ⇒ {c.ruas.section} ({formatKm(c.ruas.lengthKm)}, {c.ruas.towers.length} tower) —{" "}
+                          {c.includesIncomer
+                            ? `terpotong dari ${c.hostSection} Tower ${c.tapTowerNo}, lanjut ke INCOMER ${c.gi}`
+                            : `sisi lain dari titik sambung INCOMER ${c.gi} (Tower ${c.tapTowerNo} di ${c.hostSection})`}
+                        </SelectItem>
+                      );
+                    }
+                    const r = row.plain!;
                     const tap = isIncomerRuas(r.section) ? findIncomerTapInfo(r.section) : null;
                     return (
-                      <SelectItem key={r.section} value={r.section}>
+                      <SelectItem key={row.key} value={row.key} className="whitespace-normal">
                         {isIncomerRuas(r.section) ? (
                           <>
                             ↳ {r.section} ({formatKm(r.lengthKm)}) — Incomer

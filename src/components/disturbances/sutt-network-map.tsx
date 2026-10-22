@@ -84,17 +84,28 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
       for (const g of data.gis) {
         // Tower-number tags shown directly on the map (no click needed) —
         // "awal" (▸, where this GI's own tower numbering starts for that
-        // ruas) vs "akhir" (◂, where it ends), deduped since a GI can be
-        // the start of one ruas and the end of another at the same tower.
+        // ruas) vs "akhir" (◂, where it ends), each labeled with WHICH
+        // ruas/direction it's on (e.g. "▸T1 → BAGENDANG" at GI Sampit for
+        // "SAMPIT - BAGENDANG" starting there at tower 1) instead of a
+        // bare tower number — a GI with several ruas touching it (Sampit,
+        // Muara Teweh, Kasongan, ...) would otherwise show several tower
+        // numbers with no way to tell which belongs to which line. Deduped
+        // since a GI can be the start of one ruas and the end of another
+        // at the exact same tower.
         const uniqueTowerTags = [...new Map(g.touches.map((t) => [`${t.end}:${t.tower}`, t])).values()];
         const towerTagsHtml = uniqueTowerTags
-          .map((t) => `<span class="sutt-gi-tower-tag">${t.end === "awal" ? "&#9656;" : "&#9666;"}T${t.tower}</span>`)
+          .map(
+            (t) =>
+              `<div class="sutt-gi-tower-tag">${t.end === "awal" ? "&#9656;" : "&#9666;"}T${t.tower}` +
+              (t.otherEnd === "titik sambung" ? "" : ` &rarr; ${t.otherEnd}`) +
+              `</div>`,
+          )
           .join("");
         const icon = L.divIcon({
           className: "sutt-gi-icon-wrap",
           html:
             `<div class="sutt-gi-dot ${g.kind}"></div>` +
-            `<div class="sutt-gi-label ${g.kind === "boundary" ? "boundary" : ""}"><div class="sutt-gi-name">${g.name}</div>` +
+            `<div class="sutt-gi-label ${g.kind === "unregistered" ? "unregistered" : ""}"><div class="sutt-gi-name">${g.name}</div>` +
             (towerTagsHtml ? `<div class="sutt-gi-towers">${towerTagsHtml}</div>` : "") +
             `</div>`,
           iconSize: [13, 13],
@@ -104,7 +115,11 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
           .map((t) => `<span class="popup-touch">${t.ruas} &mdash; ${t.end} (tower ${t.tower})</span>`)
           .join("");
         const kindNote =
-          g.kind === "incomer" ? " &middot; GI incomer" : g.kind === "boundary" ? " &middot; GI milik UPT lain (perbatasan aset)" : "";
+          g.kind === "incomer"
+            ? " &middot; GI incomer"
+            : g.kind === "unregistered"
+              ? " &middot; tidak terdaftar di DATA GARDU INDUK UPT Palangkaraya"
+              : "";
         L.marker([g.lat, g.lon], { icon })
           .bindPopup(`<b>GI ${g.name}</b>${kindNote}${touchesHtml}`)
           .addTo(giLayer);
@@ -205,7 +220,7 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full border-2 border-white" style={{ background: "#8a94a3" }} />
-            GI milik UPT lain (perbatasan aset)
+            Tidak terdaftar di DATA GARDU INDUK
           </div>
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rotate-45 border-2 border-white" style={{ background: AMBER }} />

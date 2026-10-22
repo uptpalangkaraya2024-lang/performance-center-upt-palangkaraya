@@ -403,6 +403,22 @@ export const dataSources = {
             purpose:
               "Satu baris per tower SUTT — LAT/LONG, GARDU_INDUK, NAMA_SECTION (ruas), NO TOWER, SPAN (M)/TOTAL SPAN (KM), jenis/tipe tower, dan riwayat gangguan/tower kritis per tower. LINK GOOGLE MAPS/EARTH are HYPERLINK() formulas — a values-only read returns just their display text, not the real URL, so the service synthesizes its own Maps/Earth links from LAT/LONG instead.",
           },
+          {
+            name: "DATA GARDU INDUK",
+            required: false,
+            // Header is row 1 here (unlike DATA SUTT UPT PKY's row 2) —
+            // confirmed live. One row per real GI — 20 for UPT Palangkaraya,
+            // all three ULTG — with its own LATITUDE/LONGITUDE (the GI's own
+            // substation-yard coordinate, not inferred from a tower). This is
+            // the authoritative source for which GI names genuinely belong to
+            // UPT Palangkaraya: a GI that only ever appears as DATA SUTT's own
+            // GARDU_INDUK column on a ruas's far end, but never here, belongs
+            // to a different UPT (confirmed live for MINTIN/TANJUNG/
+            // KENDAWANGAN — the ruas approaching them is still UPT
+            // Palangkaraya's own asset, the substation at the far end isn't).
+            purpose:
+              "Satu baris per GI (bukan per tower) — NAMA GARDU INDUK, UNIT (ULTG), LATITUDE/LONGITUDE milik GI itu sendiri. Dipakai sebagai sumber koordinat GI yang akurat untuk peta jaringan (lebih tepat daripada menebak dari tower pertama/terakhir suatu ruas) dan sebagai daftar otoritatif GI mana saja yang benar-benar milik UPT Palangkaraya.",
+          },
         ],
       },
     ],

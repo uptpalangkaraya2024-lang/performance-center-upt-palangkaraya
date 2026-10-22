@@ -37,7 +37,7 @@
 .sutt-gi-dot.incomer {
   background: #c2690a;
 }
-.sutt-gi-dot.boundary {
+.sutt-gi-dot.unregistered {
   background: #8a94a3;
 }
 .sutt-gi-label {
@@ -55,7 +55,7 @@
      neighboring marker's own pane-level z-index (see .sutt-gi-icon-wrap) */
   z-index: 2;
 }
-.sutt-gi-label.boundary {
+.sutt-gi-label.unregistered {
   border-color: #8a94a3;
   color: #5c6b80;
   font-style: italic;
@@ -66,13 +66,17 @@
 }
 .sutt-gi-towers {
   display: flex;
-  gap: 4px;
-  margin-top: 1px;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+  border-top: 1px solid #eef0f3;
+  padding-top: 2px;
 }
 .sutt-gi-tower-tag {
   font-size: 8.5px;
   font-weight: 600;
   color: #5c6b80;
+  white-space: nowrap;
 }
 .sutt-splice-diamond {
   width: 12px;

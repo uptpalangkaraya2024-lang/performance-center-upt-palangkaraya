@@ -1342,7 +1342,20 @@ export interface GangguanHistoryEntry {
   penyebab: string; // PENYEBAB, e.g. "PETIR", "HEWAN", "TEGAKAN" — "" if blank
 }
 
+/** One row from DATA GARDU INDUK — the GI's own substation-yard
+ *  coordinate (not inferred from a tower), used for accurate GI placement
+ *  on the network map and as the authoritative list of which GI names
+ *  genuinely belong to UPT Palangkaraya (see src/config/data-sources.ts's
+ *  own comment on the suttAsset entry). */
+export interface GiRecord {
+  name: string; // normalized, no "GI ### KV " prefix
+  unit: string; // ULTG
+  lat: number;
+  lon: number;
+}
+
 export interface SuttSnapshot {
   ruasList: SuttRuas[];
+  giRegistry: GiRecord[];
   error: string | null;
 }

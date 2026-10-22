@@ -2,11 +2,12 @@ import "server-only";
 
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSource } from "@/lib/data-connector";
-import type { SuttRuas, SuttSnapshot, SuttTower } from "@/types";
+import type { GiRecord, SuttRuas, SuttSnapshot, SuttTower } from "@/types";
 
 const SOURCE = dataSources.suttAsset;
 const EXPECTED_FILE = SOURCE.sources[0].file;
 const EXPECTED_SHEET = SOURCE.sources[0].sheets[0].name;
+const GI_REGISTRY_SHEET = SOURCE.sources[0].sheets[1].name; // "DATA GARDU INDUK"
 
 // Same prefix the Gangguan service strips off GARDU INDUK/GARDU_INDUK values
 // everywhere else in this app ("GI 150 KV X" / "GIS 150 KV X" -> "X").
@@ -221,17 +222,39 @@ function buildRuasList(records: Record<string, string>[]): SuttRuas[] {
   return ruasList.sort((a, b) => a.section.localeCompare(b.section));
 }
 
+/** DATA GARDU INDUK: one row per real GI, with the GI's own
+ *  LATITUDE/LONGITUDE — not per-tower, so parsed separately from
+ *  buildRuasList's own per-tower grouping. Optional (required: false) —
+ *  a missing/unreadable sheet just means the map falls back to inferring
+ *  a GI's position from its nearest tower, same as before this sheet was
+ *  wired in, rather than failing the whole snapshot. */
+function buildGiRegistry(records: Record<string, string>[]): GiRecord[] {
+  const out: GiRecord[] = [];
+  for (const record of records) {
+    const rawName = record["NAMA GARDU INDUK"]?.trim();
+    const unit = record["UNIT"]?.trim();
+    const lat = num(record["LATITUDE"]);
+    const lon = num(record["LONGITUDE"]);
+    if (!rawName || !unit || lat === null || lon === null) continue;
+    out.push({ name: normalizeGiName(rawName), unit, lat, lon });
+  }
+  return out;
+}
+
 export async function getSuttSnapshot(): Promise<SuttSnapshot> {
   const results = await readConfiguredSource(SOURCE);
   const sheetResult = results.find((r) => r.file === EXPECTED_FILE && r.sheet === EXPECTED_SHEET);
+  const giSheetResult = results.find((r) => r.file === EXPECTED_FILE && r.sheet === GI_REGISTRY_SHEET);
+  const giRegistry = giSheetResult ? buildGiRegistry(giSheetResult.records) : [];
 
   if (!sheetResult || sheetResult.records.length === 0) {
     return {
       ruasList: [],
+      giRegistry,
       error: `Gagal membaca sheet "${EXPECTED_SHEET}" dari file "${EXPECTED_FILE}" — lihat halaman Data & Sync.`,
     };
   }
 
   const ruasList = buildRuasList(sheetResult.records);
-  return { ruasList, error: ruasList.length === 0 ? "Data ruas SUTT belum tersedia." : null };
+  return { ruasList, giRegistry, error: ruasList.length === 0 ? "Data ruas SUTT belum tersedia." : null };
 }
