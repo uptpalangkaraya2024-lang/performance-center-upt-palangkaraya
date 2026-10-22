@@ -609,6 +609,11 @@ export function SuttFaultLocatorView({
     const counts = new Map<string, number>();
     for (const row of pickerRows) {
       if (row.unit !== selectedUnit) continue;
+      // A plain incomer ruas (e.g. "INCOMER SKS") isn't itself a GI and
+      // isn't a complete point-to-point ruas — just a spur, already
+      // represented in step 3's own full description once its real host
+      // GI is picked — so it doesn't contribute its own entry here.
+      if (row.plain && isIncomerRuas(row.plain.section)) continue;
       counts.set(row.originLabel, (counts.get(row.originLabel) ?? 0) + 1);
       counts.set(row.farEndLabel, (counts.get(row.farEndLabel) ?? 0) + 1);
     }
@@ -669,7 +674,12 @@ export function SuttFaultLocatorView({
               <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue placeholder="1. Pilih ULTG...">{selectedUnit ?? "1. Pilih ULTG..."}</SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              {/* alignItemWithTrigger (the primitive's own default) centers
+                  the currently-selected item over the trigger instead of
+                  just dropping the panel below it — which can push it
+                  upward or sideways depending on which item that is. These
+                  three pickers want a plain, always-downward dropdown. */}
+              <SelectContent alignItemWithTrigger={false}>
                 {units.map((u) => (
                   <SelectItem key={u} value={u}>
                     {u}
@@ -691,7 +701,7 @@ export function SuttFaultLocatorView({
               <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue placeholder="2. Pilih GI...">{selectedGi ?? "2. Pilih GI..."}</SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent alignItemWithTrigger={false}>
                 {gisForSelectedUnit.map(([gi, count]) => (
                   <SelectItem key={gi} value={gi}>
                     {gi} ({count} ruas)
@@ -722,7 +732,10 @@ export function SuttFaultLocatorView({
                   one Select only, rather than changing that shared primitive
                   (every other dropdown in the app still wants its normal
                   single-line, trigger-width behavior). */}
-              <SelectContent className="!w-[min(92vw,620px)] [&_[data-slot=select-item]]:!whitespace-normal [&_[data-slot=select-item]>div]:!whitespace-normal">
+              <SelectContent
+                alignItemWithTrigger={false}
+                className="!w-[min(92vw,620px)] [&_[data-slot=select-item]]:!whitespace-normal [&_[data-slot=select-item]>div]:!whitespace-normal"
+              >
                 {rowsForSelectedGi.map((row) => {
                   if (row.combined) {
                     const c = row.combined;
