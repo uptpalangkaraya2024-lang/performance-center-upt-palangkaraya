@@ -77,12 +77,17 @@ interface RawTower {
 }
 
 /** `originLabel`/`farEndLabel` are derived below from each ruas's own
- *  GARDU_INDUK column — confirmed live that this column is wrong on 4
- *  ruas, caught while building the fault-locator's network map (geometric
- *  cross-check: a GI name's coordinate on one ruas landed nowhere near
- *  that same GI name's confirmed-correct coordinate on another ruas).
- *  Overridden here by hand rather than trusting the sheet, same precedent
- *  as the self-computed distanceKm fix above (buildRuasList's own cumKm).
+ *  GARDU_INDUK column — confirmed live that this column is wrong/swapped
+ *  on 8 of the 16 main ruas, caught while building the fault-locator's
+ *  network map (geometric cross-check: for every GI name, compare its
+ *  coordinate across every ruas that claims to touch it — a name whose
+ *  points scatter tens of km apart instead of clustering within a couple
+ *  km means one of its claimed touches is actually a DIFFERENT GI).
+ *  A systematic sweep of all 16 main ruas (not just ones noticed by
+ *  chance) found exactly these 8 needing correction; every other ruas's
+ *  own cluster spread stayed under ~7km (ordinary substation-area
+ *  variance, left alone). Overridden here by hand rather than trusting
+ *  the sheet, same precedent as the self-computed distanceKm fix above.
  *    - "SKS - KUALA KURUN": read origin=KASONGAN/far=SKS, but tower 238
  *      (the "origin") sits ~1km from GI SKS's other confirmed splice
  *      point, not ~60km away where the real KASONGAN GI is.
@@ -96,6 +101,21 @@ interface RawTower {
  *      backwards. Tower 1 ("BAGENDANG") sits at the real SAMPIT GI; tower
  *      118 ("SAMPIT") sits ~400m from the real BAGENDANG GI (confirmed
  *      against "BAGENDANG - KUALA PAMBUANG"'s own tower 1).
+ *    - "TANJUNG - BUNTOK": read origin=BUNTOK/far=TANJUNG — backwards.
+ *      Tower 124 ("BUNTOK") sits ~35km from the real Buntok GI; tower 239
+ *      ("TANJUNG") sits ~110m from it instead (confirmed against "BUNTOK
+ *      - MUARA TEWEH"'s own tower 1).
+ *    - "MUARA TEWEH - BANGKANAI": read origin=BANGKANAI/far=MUARA TEWEH —
+ *      backwards. Tower 1 ("BANGKANAI") sits ~170m from the real Muara
+ *      Teweh GI; tower 130 ("MUARA TEWEH") is the real ~43km-distant
+ *      Bangkanai GI instead.
+ *    - "MUARA TEWEH - PURUK CAHU": same backwards pattern — tower 1
+ *      ("PURUK CAHU") sits ~180m from the real Muara Teweh GI; tower 134
+ *      ("MUARA TEWEH") is the real ~48km-distant Puruk Cahu GI instead.
+ *    - "SUKAMARA - KENDAWANGAN": read origin=SUKAMARA/far=KENDAWANGAN —
+ *      backwards. Tower 216 ("SUKAMARA") sits ~70km from the real Sukamara
+ *      GI; tower 438 ("KENDAWANGAN") sits ~190m from it instead (confirmed
+ *      against "PANGKALAN BUN - SUKAMARA"'s own tower 249).
  *  Only the display labels are overridden — tower order/distanceKm is
  *  untouched (self-computed from SPAN (M), unrelated to GARDU_INDUK). */
 const GI_LABEL_OVERRIDE: Record<string, { originLabel: string; farEndLabel: string }> = {
@@ -103,6 +123,10 @@ const GI_LABEL_OVERRIDE: Record<string, { originLabel: string; farEndLabel: stri
   "KASONGAN - SUDAN": { originLabel: "KASONGAN", farEndLabel: "SUDAN" },
   "SUDAN - SAMPIT": { originLabel: "SUDAN", farEndLabel: "SAMPIT" },
   "SAMPIT - BAGENDANG": { originLabel: "SAMPIT", farEndLabel: "BAGENDANG" },
+  "TANJUNG - BUNTOK": { originLabel: "TANJUNG", farEndLabel: "BUNTOK" },
+  "MUARA TEWEH - BANGKANAI": { originLabel: "MUARA TEWEH", farEndLabel: "BANGKANAI" },
+  "MUARA TEWEH - PURUK CAHU": { originLabel: "MUARA TEWEH", farEndLabel: "PURUK CAHU" },
+  "SUKAMARA - KENDAWANGAN": { originLabel: "KENDAWANGAN", farEndLabel: "SUKAMARA" },
 };
 
 /** Groups by NAMA_SECTION (the ruas identity — see data-sources.ts's own

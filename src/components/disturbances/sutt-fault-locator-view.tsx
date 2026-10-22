@@ -51,6 +51,7 @@ import {
   hasFaultHistory,
   isIncomerRuas,
   isTowerKritis,
+  towerDisplayLabel,
   type CombinedIncomerRuas,
   type FaultDirection,
   type MethodEntry,
@@ -153,7 +154,7 @@ function TowerResultPanel({
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5 text-xs">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-extrabold text-foreground">Tower {match.tower.towerNo}</span>
+        <span className="text-sm font-extrabold text-foreground">{towerDisplayLabel(match.tower)}</span>
         {match.exact ? (
           <span className="flex items-center gap-1 font-semibold text-success">
             <Check className="size-3" />
@@ -168,8 +169,8 @@ function TowerResultPanel({
         {match.before && match.after && match.before.towerNo !== match.after.towerNo ? (
           <>
             {" "}
-            · antara Tower {match.before.towerNo} ({formatKm(match.before.distanceKm)}) – Tower{" "}
-            {match.after.towerNo} ({formatKm(match.after.distanceKm)})
+            · antara {towerDisplayLabel(match.before)} ({formatKm(match.before.distanceKm)}) –{" "}
+            {towerDisplayLabel(match.after)} ({formatKm(match.after.distanceKm)})
           </>
         ) : null}
       </p>

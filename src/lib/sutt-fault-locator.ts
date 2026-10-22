@@ -574,6 +574,21 @@ function towerHeadline(tower: SuttTower): string {
   return bits.join(" · ");
 }
 
+/** "Tower 236" for an ordinary tower, or the real NAMA_PENGHANTAR value
+ *  ("INCOMER SKS #008") when the tower is on an incomer — DATA SUTT
+ *  already records that exact label per-tower (confirmed live: every
+ *  incomer tower's own penghantar field reads "INCOMER <gi> #<NNN>"), so
+ *  this trusts that data directly rather than reconstructing it. Matters
+ *  on a combined through-route (see buildCombinedIncomerRuasList): its
+ *  towers array concatenates a host segment and an incomer segment that
+ *  can share plain numeric labels (both commonly start their own
+ *  numbering at "1"), so a bare "Tower 4" is genuinely ambiguous there —
+ *  this disambiguates every incomer-segment tower everywhere a matched or
+ *  bracketing tower is shown, in the UI and the WA text alike. */
+export function towerDisplayLabel(tower: SuttTower): string {
+  return tower.penghantar.toUpperCase().startsWith("INCOMER ") ? tower.penghantar : `Tower ${tower.towerNo}`;
+}
+
 /** Compact lines for one tower's SIGAP history — last 3 years of recorded
  *  lightning strikes (not the full history, to keep the WA text short).
  *  SIGAP's own "Gangguan <year>" series used to be shown here too, but was
@@ -727,13 +742,13 @@ export function formatWaMessage(
         lines.push(
           `↪ Melebihi ruas ini ${formatKm(match.crossedToIncomer.overflowKm)}, dilanjutkan ke *${match.crossedToIncomer.incomerSection}*`,
         );
-        lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)} dari ${match.crossedToIncomer.incomerSection})`);
+        lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatKm(match.tower.distanceKm)} dari ${match.crossedToIncomer.incomerSection})`);
       } else {
-        lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)}, selisih ${formatSignedKm(match.deltaKm)})`);
+        lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatKm(match.tower.distanceKm)}, selisih ${formatSignedKm(match.deltaKm)})`);
       }
     } else {
       lines.push(`${result.inputLabel}`);
-      lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)}) — pasti, bukan estimasi`);
+      lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatKm(match.tower.distanceKm)}) — pasti, bukan estimasi`);
     }
     if (match.outOfRange) {
       const rangeRuas = match.crossedToIncomer ? match.crossedToIncomer.incomerSection : ruas.section;
@@ -748,7 +763,7 @@ export function formatWaMessage(
     }
     if (match.before && match.after && match.before.towerNo !== match.after.towerNo) {
       lines.push(
-        `Di antara Tower ${match.before.towerNo} (${formatKm(match.before.distanceKm)}) – Tower ${match.after.towerNo} (${formatKm(match.after.distanceKm)})`,
+        `Di antara ${towerDisplayLabel(match.before)} (${formatKm(match.before.distanceKm)}) – ${towerDisplayLabel(match.after)} (${formatKm(match.after.distanceKm)})`,
       );
     }
     const headline = towerHeadline(match.tower);
@@ -781,8 +796,8 @@ export function formatWaMessage(
     if (spread) {
       lines.push(
         spread.spreadKm === 0
-          ? `✅ Semua metode mengarah ke Tower ${spread.lowest.towerNo} — konsisten.`
-          : `Rentang gabungan: Tower ${spread.lowest.towerNo} – Tower ${spread.highest.towerNo} (selisih ${formatKm(spread.spreadKm)}).`,
+          ? `✅ Semua metode mengarah ke ${towerDisplayLabel(spread.lowest)} — konsisten.`
+          : `Rentang gabungan: ${towerDisplayLabel(spread.lowest)} – ${towerDisplayLabel(spread.highest)} (selisih ${formatKm(spread.spreadKm)}).`,
       );
     }
   }

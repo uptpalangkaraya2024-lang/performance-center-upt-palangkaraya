@@ -82,9 +82,21 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
       }
 
       for (const g of data.gis) {
+        // Tower-number tags shown directly on the map (no click needed) —
+        // "awal" (▸, where this GI's own tower numbering starts for that
+        // ruas) vs "akhir" (◂, where it ends), deduped since a GI can be
+        // the start of one ruas and the end of another at the same tower.
+        const uniqueTowerTags = [...new Map(g.touches.map((t) => [`${t.end}:${t.tower}`, t])).values()];
+        const towerTagsHtml = uniqueTowerTags
+          .map((t) => `<span class="sutt-gi-tower-tag">${t.end === "awal" ? "&#9656;" : "&#9666;"}T${t.tower}</span>`)
+          .join("");
         const icon = L.divIcon({
           className: "sutt-gi-icon-wrap",
-          html: `<div class="sutt-gi-dot ${g.kind}"></div><div class="sutt-gi-label">${g.name}</div>`,
+          html:
+            `<div class="sutt-gi-dot ${g.kind}"></div>` +
+            `<div class="sutt-gi-label"><div class="sutt-gi-name">${g.name}</div>` +
+            (towerTagsHtml ? `<div class="sutt-gi-towers">${towerTagsHtml}</div>` : "") +
+            `</div>`,
           iconSize: [13, 13],
           iconAnchor: [6, 6],
         });
@@ -183,7 +195,7 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full border-2 border-white" style={{ background: "#1d3461" }} />
-            GI (awal/akhir tower)
+            GI
           </div>
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full border-2 border-white" style={{ background: AMBER }} />
@@ -192,6 +204,9 @@ export function SuttNetworkMap({ data }: { data: SuttNetworkMapData }) {
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rotate-45 border-2 border-white" style={{ background: AMBER }} />
             Titik potong (tap incomer)
+          </div>
+          <div className="mt-1 border-t pt-1 text-[10.5px] text-muted-foreground">
+            ▸ Tower awal &middot; ◂ Tower akhir (per ruas yang tersambung)
           </div>
         </div>
       </div>
