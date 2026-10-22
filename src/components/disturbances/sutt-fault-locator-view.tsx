@@ -548,6 +548,8 @@ export function SuttFaultLocatorView({
    *  the UPT's own REKAP GANGGUAN — see src/services/gangguan-history.ts. */
   gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
 }) {
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [selectedGi, setSelectedGi] = useState<string | null>(null);
   const [sectionKey, setSectionKey] = useState<string | null>(null);
   const [direction, setDirection] = useState<FaultDirection>("origin");
   const [inputs, setInputs] = useState<MethodInputsState>(EMPTY_INPUTS);
@@ -559,32 +561,64 @@ export function SuttFaultLocatorView({
   // splice tower before the user thinks to switch ruas — see
   // buildCombinedIncomerRuasList's own comment in the lib for why this
   // also fixes SMDE's "tower ke-" ordinal cleanly (it just counts through
-  // one combined tower array). Shown inside each ULTG's own group (not a
-  // separate top-level one) so a combined route sits next to the plain
-  // ruas it's built from.
+  // one combined tower array).
   const combinedList = useMemo(() => buildCombinedIncomerRuasList(ruasList), [ruasList]);
 
-  type PickerRow = { key: string; unit: string; sortKey: string; combined: CombinedIncomerRuas | null; plain: SuttRuas | null };
-  const pickerByUnit = useMemo(() => {
+  // Picking a ruas is a 3-step cascade (ULTG -> GI -> ruas) rather than one
+  // long dropdown of all ~37 entries at once — each row below carries its
+  // own origin/far-end GI names so step 2 can list every GI actually
+  // touched by something in the chosen ULTG, and step 3 can filter down to
+  // just the ruas (plain or combined) touching the chosen GI.
+  type PickerRow = {
+    key: string;
+    unit: string;
+    sortKey: string;
+    originLabel: string;
+    farEndLabel: string;
+    combined: CombinedIncomerRuas | null;
+    plain: SuttRuas | null;
+  };
+  const pickerRows = useMemo(() => {
     const rows: PickerRow[] = [
-      ...ruasList.map((r) => ({ key: r.section, unit: r.unit, sortKey: r.section, combined: null, plain: r })),
+      ...ruasList.map((r) => ({
+        key: r.section,
+        unit: r.unit,
+        sortKey: r.section,
+        originLabel: r.originLabel,
+        farEndLabel: r.farEndLabel,
+        combined: null,
+        plain: r,
+      })),
       ...combinedList.map((c) => ({
         key: combinedIncomerKey(c.ruas.section),
         unit: c.ruas.unit,
         sortKey: c.ruas.section,
+        originLabel: c.ruas.originLabel,
+        farEndLabel: c.ruas.farEndLabel,
         combined: c,
         plain: null,
       })),
     ];
-    const map = new Map<string, PickerRow[]>();
-    for (const row of rows) {
-      const list = map.get(row.unit) ?? [];
-      list.push(row);
-      map.set(row.unit, list);
-    }
-    for (const list of map.values()) list.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    return rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   }, [ruasList, combinedList]);
+
+  const units = useMemo(() => [...new Set(pickerRows.map((r) => r.unit))].sort((a, b) => a.localeCompare(b)), [pickerRows]);
+
+  const gisForSelectedUnit = useMemo(() => {
+    if (!selectedUnit) return [];
+    const counts = new Map<string, number>();
+    for (const row of pickerRows) {
+      if (row.unit !== selectedUnit) continue;
+      counts.set(row.originLabel, (counts.get(row.originLabel) ?? 0) + 1);
+      counts.set(row.farEndLabel, (counts.get(row.farEndLabel) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [pickerRows, selectedUnit]);
+
+  const rowsForSelectedGi = useMemo(() => {
+    if (!selectedUnit || !selectedGi) return [];
+    return pickerRows.filter((row) => row.unit === selectedUnit && (row.originLabel === selectedGi || row.farEndLabel === selectedGi));
+  }, [pickerRows, selectedUnit, selectedGi]);
 
   const selectedCombined =
     sectionKey && sectionKey.startsWith("combined::")
@@ -621,62 +655,104 @@ export function SuttFaultLocatorView({
           <CardTitle className="text-base font-extrabold">1. Pilih Ruas</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Select
-            value={sectionKey ?? ""}
-            onValueChange={(v) => {
-              setSectionKey(v || null);
-              setDirection("origin");
-              reset();
-            }}
-          >
-            <SelectTrigger className="w-full sm:w-[460px]">
-              <SelectValue placeholder="Pilih ruas SUTT...">
-                {selectedCombined ? `⇒ ${selectedCombined.ruas.section}` : (sectionKey ?? "Pilih ruas SUTT...")}
-              </SelectValue>
-            </SelectTrigger>
-            {/* The underlying Select primitive ties its popup width to the
-                trigger's own anchor width and forces each item's text onto
-                one line (see src/components/ui/select.tsx's own SelectItem)
-                — fine for short labels, but a combined through-route's own
-                description is a full sentence. Overridden here, for this
-                one Select only, rather than changing that shared primitive
-                (every other dropdown in the app still wants its normal
-                single-line, trigger-width behavior). */}
-            <SelectContent className="!w-[min(92vw,760px)] [&_[data-slot=select-item]]:!whitespace-normal [&_[data-slot=select-item]>div]:!whitespace-normal">
-              {pickerByUnit.map(([unit, rows]) => (
-                <SelectGroup key={unit}>
-                  <SelectLabel>{unit}</SelectLabel>
-                  {rows.map((row) => {
-                    if (row.combined) {
-                      const c = row.combined;
-                      return (
-                        <SelectItem key={row.key} value={row.key} className="whitespace-normal">
-                          ⇒ {c.ruas.section} ({formatKm(c.ruas.lengthKm)}, {c.ruas.towers.length} tower) —{" "}
-                          {c.includesIncomer
-                            ? `terpotong dari ${c.hostSection} Tower ${c.tapTowerNo}, lanjut ke INCOMER ${c.gi}`
-                            : `sisi lain dari titik sambung INCOMER ${c.gi} (Tower ${c.tapTowerNo} di ${c.hostSection})`}
-                        </SelectItem>
-                      );
-                    }
-                    const r = row.plain!;
-                    const tap = isIncomerRuas(r.section) ? findIncomerTapInfo(r.section) : null;
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <Select
+              value={selectedUnit ?? ""}
+              onValueChange={(v) => {
+                setSelectedUnit(v || null);
+                setSelectedGi(null);
+                setSectionKey(null);
+                setDirection("origin");
+                reset();
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="1. Pilih ULTG...">{selectedUnit ?? "1. Pilih ULTG..."}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {units.map((u) => (
+                  <SelectItem key={u} value={u}>
+                    {u}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedGi ?? ""}
+              onValueChange={(v) => {
+                setSelectedGi(v || null);
+                setSectionKey(null);
+                setDirection("origin");
+                reset();
+              }}
+              disabled={!selectedUnit}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="2. Pilih GI...">{selectedGi ?? "2. Pilih GI..."}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {gisForSelectedUnit.map(([gi, count]) => (
+                  <SelectItem key={gi} value={gi}>
+                    {gi} ({count} ruas)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={sectionKey ?? ""}
+              onValueChange={(v) => {
+                setSectionKey(v || null);
+                setDirection("origin");
+                reset();
+              }}
+              disabled={!selectedGi}
+            >
+              <SelectTrigger className="w-full sm:flex-1">
+                <SelectValue placeholder="3. Pilih Ruas...">
+                  {selectedCombined ? `⇒ ${selectedCombined.ruas.section}` : (sectionKey ?? "3. Pilih Ruas...")}
+                </SelectValue>
+              </SelectTrigger>
+              {/* The underlying Select primitive ties its popup width to the
+                  trigger's own anchor width and forces each item's text onto
+                  one line (see src/components/ui/select.tsx's own SelectItem)
+                  — fine for short labels, but a combined through-route's own
+                  description is a full sentence. Overridden here, for this
+                  one Select only, rather than changing that shared primitive
+                  (every other dropdown in the app still wants its normal
+                  single-line, trigger-width behavior). */}
+              <SelectContent className="!w-[min(92vw,620px)] [&_[data-slot=select-item]]:!whitespace-normal [&_[data-slot=select-item]>div]:!whitespace-normal">
+                {rowsForSelectedGi.map((row) => {
+                  if (row.combined) {
+                    const c = row.combined;
                     return (
                       <SelectItem key={row.key} value={row.key} className="whitespace-normal">
-                        {isIncomerRuas(r.section) ? (
-                          <>
-                            ↳ {r.section} ({formatKm(r.lengthKm)}) — Incomer
-                            {tap ? ` dari ${formatIncomerTapsLabel(tap.taps)}` : " (titik sambung belum ada data)"}
-                          </>
-                        ) : (
-                          `${r.section} (${formatKm(r.lengthKm)})`
-                        )}
+                        ⇒ {c.ruas.section} ({formatKm(c.ruas.lengthKm)}, {c.ruas.towers.length} tower) —{" "}
+                        {c.includesIncomer
+                          ? `terpotong dari ${c.hostSection} Tower ${c.tapTowerNo}, lanjut ke INCOMER ${c.gi}`
+                          : `sisi lain dari titik sambung INCOMER ${c.gi} (Tower ${c.tapTowerNo} di ${c.hostSection})`}
                       </SelectItem>
                     );
-                  })}
-                </SelectGroup>
-              ))}
-            </SelectContent>
-          </Select>
+                  }
+                  const r = row.plain!;
+                  const tap = isIncomerRuas(r.section) ? findIncomerTapInfo(r.section) : null;
+                  return (
+                    <SelectItem key={row.key} value={row.key} className="whitespace-normal">
+                      {isIncomerRuas(r.section) ? (
+                        <>
+                          ↳ {r.section} ({formatKm(r.lengthKm)}) — Incomer
+                          {tap ? ` dari ${formatIncomerTapsLabel(tap.taps)}` : " (titik sambung belum ada data)"}
+                        </>
+                      ) : (
+                        `${r.section} (${formatKm(r.lengthKm)})`
+                      )}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
 
           {ruas ? (
             <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-xs">
