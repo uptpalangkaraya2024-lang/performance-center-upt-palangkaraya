@@ -31,14 +31,19 @@ export type FaultDirection = "origin" | "far";
 
 export interface TowerMatch {
   tower: SuttTower;
-  /** matched tower's own distance minus the (direction-adjusted) input distance — signed, km. */
+  /** matched tower's own distance minus the (direction-adjusted) input distance — signed, km. 0 for an exact match. */
   deltaKm: number;
   before: SuttTower | null;
   after: SuttTower | null;
   /** true when the input distance fell outside [0, ruas.lengthKm] — the
    *  match is still the nearest valid tower (clamped to an end), just
-   *  flagged so the UI can warn instead of presenting it as exact. */
+   *  flagged so the UI can warn instead of presenting it as exact. Always
+   *  false for an exact match (there's no "nearest" guess to flag). */
   outOfRange: boolean;
+  /** true when this came from a direct tower-number (VAISALA) or tower-ke
+   *  ordinal (SMDE) input rather than a nearest-match-to-a-distance guess
+   *  — no selisih/bracketing towers to show, since there's no ambiguity. */
+  exact: boolean;
 }
 
 /** `towers` must already be sorted ascending by distanceKm (true of every
@@ -70,6 +75,7 @@ export function findNearestTower(towers: SuttTower[], distanceKm: number): Tower
     before,
     after,
     outOfRange,
+    exact: false,
   };
 }
 
@@ -82,6 +88,40 @@ export function effectiveDistanceKm(ruas: SuttRuas, rawDistanceKm: number, direc
 
 export function locateFault(ruas: SuttRuas, rawDistanceKm: number, direction: FaultDirection): TowerMatch | null {
   return findNearestTower(ruas.towers, effectiveDistanceKm(ruas, rawDistanceKm, direction));
+}
+
+function exactMatch(tower: SuttTower): TowerMatch {
+  return { tower, deltaKm: 0, before: null, after: null, outOfRange: false, exact: true };
+}
+
+/** Strips a leading zero run before a digit ("001A" -> "1A", "036" ->
+ *  "36") so a user typing the number as they'd naturally say it ("1A",
+ *  "36") still matches the sheet's own zero-padded sub-tower labels. */
+function normalizeTowerNoForMatch(raw: string): string {
+  return raw.trim().toUpperCase().replace(/^0+(?=\d)/, "");
+}
+
+/** VAISALA's own report names a tower directly (it locates a strike point,
+ *  not a distance along the conductor) — exact lookup by label, not a
+ *  nearest-km guess. */
+export function findTowerByNumber(ruas: SuttRuas, towerNo: string): SuttTower | null {
+  const needle = normalizeTowerNoForMatch(towerNo);
+  if (!needle) return null;
+  return ruas.towers.find((t) => normalizeTowerNoForMatch(t.towerNo) === needle) ?? null;
+}
+
+/** SMDE can report "tower ke-N dari GI X" (the Nth physical tower counting
+ *  from one end) instead of a km figure — resolved by indexing straight
+ *  into `ruas.towers` (already physical order, ascending by distanceKm),
+ *  reversed when counting from the far end. This deliberately ignores the
+ *  tower's own NO TOWER label for the counting itself: that label can
+ *  skip/insert (e.g. "036A" between 36 and 37), so "the Nth physical
+ *  structure" and "the tower labeled N" are not the same thing — counting
+ *  array position sidesteps that mismatch entirely. */
+export function findTowerByOrdinal(ruas: SuttRuas, ordinal: number, direction: FaultDirection): SuttTower | null {
+  if (!Number.isInteger(ordinal) || ordinal < 1) return null;
+  const ordered = direction === "origin" ? ruas.towers : [...ruas.towers].reverse();
+  return ordered[ordinal - 1] ?? null;
 }
 
 /** Looks up this ruas's own SIGAP "bayLine" shorthand (e.g. "PKY-KSG") via
@@ -152,10 +192,49 @@ export function hasFaultHistory(tower: SuttTower): boolean {
   return Boolean(tower.historyGangguan || tower.historyGangguanPetir);
 }
 
-export interface MethodEntry {
-  method: FaultMethod;
-  /** null = this method's field was left blank, skipped entirely. */
-  distanceKm: number | null;
+/** Every method funnels through one of these. Which modes a given method's
+ *  own UI actually offers is a UI concern (see sutt-fault-locator-view.tsx)
+ *  — this type itself doesn't restrict e.g. VAISALA to "tower"/"no-strike"
+ *  only, since the matching/formatting logic below is happy to resolve
+ *  any mode for any method. */
+export type MethodEntry =
+  | { method: FaultMethod; mode: "empty" }
+  | { method: FaultMethod; mode: "distance"; distanceKm: number }
+  | { method: FaultMethod; mode: "tower"; towerNo: string }
+  | { method: FaultMethod; mode: "ordinal"; ordinal: number }
+  /** VAISALA-specific: a positive "no lightning recorded here" finding,
+   *  distinct from "the field was left blank" — both skip a tower match,
+   *  but the WA text says something different for each. */
+  | { method: FaultMethod; mode: "no-strike" };
+
+export function resolveMethodEntry(ruas: SuttRuas, entry: MethodEntry, direction: FaultDirection): TowerMatch | null {
+  switch (entry.mode) {
+    case "distance":
+      return locateFault(ruas, entry.distanceKm, direction);
+    case "tower": {
+      const tower = findTowerByNumber(ruas, entry.towerNo);
+      return tower ? exactMatch(tower) : null;
+    }
+    case "ordinal": {
+      const tower = findTowerByOrdinal(ruas, entry.ordinal, direction);
+      return tower ? exactMatch(tower) : null;
+    }
+    default:
+      return null; // "empty" / "no-strike" — nothing to resolve
+  }
+}
+
+function describeEntry(entry: MethodEntry, direction: FaultDirection, ruas: SuttRuas): string {
+  switch (entry.mode) {
+    case "distance":
+      return formatKm(entry.distanceKm);
+    case "tower":
+      return `Tower ${entry.towerNo} (dilaporkan langsung)`;
+    case "ordinal":
+      return `Tower ke-${entry.ordinal} dari ${direction === "origin" ? ruas.originLabel : ruas.farEndLabel}`;
+    default:
+      return "";
+  }
 }
 
 function formatKm(km: number): string {
@@ -172,16 +251,19 @@ function formatSignedKm(km: number): string {
  *  two never drift out of sync. */
 export interface MethodResult {
   method: FaultMethod;
-  distanceKm: number;
+  entry: MethodEntry;
+  /** human-readable description of what was entered, e.g. "12,40 km",
+   *  "Tower 36 (dilaporkan langsung)", "Tower ke-12 dari BAGENDANG". */
+  inputLabel: string;
   match: TowerMatch;
 }
 
 export function buildMethodResults(ruas: SuttRuas, direction: FaultDirection, entries: MethodEntry[]): MethodResult[] {
   const results: MethodResult[] = [];
   for (const entry of entries) {
-    if (entry.distanceKm === null) continue;
-    const match = locateFault(ruas, entry.distanceKm, direction);
-    if (match) results.push({ method: entry.method, distanceKm: entry.distanceKm, match });
+    if (entry.mode === "empty" || entry.mode === "no-strike") continue;
+    const match = resolveMethodEntry(ruas, entry, direction);
+    if (match) results.push({ method: entry.method, entry, inputLabel: describeEntry(entry, direction, ruas), match });
   }
   return results;
 }
@@ -314,21 +396,37 @@ export function formatWaMessage(
 
   for (const entry of entries) {
     lines.push(`📍 *${FAULT_METHOD_LABELS[entry.method]}*`);
-    if (entry.distanceKm === null) {
+    if (entry.mode === "empty") {
       lines.push("Tidak diisi");
+      lines.push("");
+      continue;
+    }
+    if (entry.mode === "no-strike") {
+      lines.push("Tidak terdapat sambaran petir");
       lines.push("");
       continue;
     }
     const result = resultByMethod.get(entry.method);
     if (!result) {
-      lines.push("Data ruas tidak tersedia");
+      lines.push(
+        entry.mode === "tower"
+          ? `Nomor tower "${entry.towerNo}" tidak ditemukan di ruas ini`
+          : entry.mode === "ordinal"
+            ? `Tower ke-${entry.ordinal} melebihi jumlah tower di ruas ini`
+            : "Data ruas tidak tersedia",
+      );
       lines.push("");
       continue;
     }
     const { match } = result;
 
-    lines.push(`Jarak dilaporkan: ${formatKm(entry.distanceKm)}`);
-    lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)}, selisih ${formatSignedKm(match.deltaKm)})`);
+    if (entry.mode === "distance") {
+      lines.push(`Jarak dilaporkan: ${formatKm(entry.distanceKm)}`);
+      lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)}, selisih ${formatSignedKm(match.deltaKm)})`);
+    } else {
+      lines.push(`${result.inputLabel}`);
+      lines.push(`→ Tower *${match.tower.towerNo}* (${formatKm(match.tower.distanceKm)}) — pasti, bukan estimasi`);
+    }
     if (match.outOfRange) {
       lines.push(`⚠️ Jarak di luar panjang ruas (0 – ${formatKm(ruas.lengthKm)}) — tower terdekat ditampilkan.`);
     }

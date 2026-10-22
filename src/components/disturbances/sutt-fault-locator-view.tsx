@@ -28,7 +28,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { cn } from "@/lib/utils";
 import {
-  FAULT_METHODS,
   FAULT_METHOD_LABELS,
   buildDirectionsLink,
   buildEarthLink,
@@ -45,8 +44,8 @@ import {
   hasFaultHistory,
   isTowerKritis,
   type FaultDirection,
-  type FaultMethod,
   type MethodEntry,
+  type MethodResult,
 } from "@/lib/sutt-fault-locator";
 import type { SigapTowerInsight } from "@/services/sigap";
 import type { GangguanHistoryEntry, SuttRuas } from "@/types";
@@ -60,37 +59,219 @@ function formatSignedKm(km: number): string {
   return `${sign}${km.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 3 })} km`;
 }
 
-/** One method's own input + result, side by side so the number typed and
- *  the tower it resolved to are never more than a glance apart. */
-function MethodCard({
+type VaisalaStatus = "unknown" | "detected" | "not-detected";
+
+interface MethodInputsState {
+  VAISALA: { status: VaisalaStatus; towerNo: string };
+  TWFL: { distanceKm: string };
+  SMDE: { distanceKm: string; ordinal: string };
+  FAULT_LOCATOR_RELAY: { distanceKm: string };
+}
+
+const EMPTY_INPUTS: MethodInputsState = {
+  VAISALA: { status: "unknown", towerNo: "" },
+  TWFL: { distanceKm: "" },
+  SMDE: { distanceKm: "", ordinal: "" },
+  FAULT_LOCATOR_RELAY: { distanceKm: "" },
+};
+
+/** Converts the UI's own per-method input state into the lib's
+ *  MethodEntry union — the one place that translation happens, so the
+ *  live preview cards and the WA text (which both call buildMethodResults/
+ *  formatWaMessage downstream) are always built from the exact same
+ *  interpretation of what's in each box. Order matches FAULT_METHODS. */
+function buildEntries(inputs: MethodInputsState): MethodEntry[] {
+  const vaisala: MethodEntry =
+    inputs.VAISALA.status === "not-detected"
+      ? { method: "VAISALA", mode: "no-strike" }
+      : inputs.VAISALA.status === "detected" && inputs.VAISALA.towerNo.trim() !== ""
+        ? { method: "VAISALA", mode: "tower", towerNo: inputs.VAISALA.towerNo.trim() }
+        : { method: "VAISALA", mode: "empty" };
+
+  const twflKm = Number(inputs.TWFL.distanceKm.trim());
+  const twfl: MethodEntry =
+    inputs.TWFL.distanceKm.trim() !== "" && Number.isFinite(twflKm)
+      ? { method: "TWFL", mode: "distance", distanceKm: twflKm }
+      : { method: "TWFL", mode: "empty" };
+
+  // SMDE: tower-ke wins when both happen to be filled — the UI itself
+  // disables whichever box isn't "active" once the other has a value, so
+  // in practice only one is ever filled at a time (see SmdeCard).
+  const ordinalTrim = inputs.SMDE.ordinal.trim();
+  const ordinalNum = Number(ordinalTrim);
+  const smdeKmTrim = inputs.SMDE.distanceKm.trim();
+  const smdeKmNum = Number(smdeKmTrim);
+  const smde: MethodEntry =
+    ordinalTrim !== "" && Number.isFinite(ordinalNum)
+      ? { method: "SMDE", mode: "ordinal", ordinal: ordinalNum }
+      : smdeKmTrim !== "" && Number.isFinite(smdeKmNum)
+        ? { method: "SMDE", mode: "distance", distanceKm: smdeKmNum }
+        : { method: "SMDE", mode: "empty" };
+
+  const relayKm = Number(inputs.FAULT_LOCATOR_RELAY.distanceKm.trim());
+  const relay: MethodEntry =
+    inputs.FAULT_LOCATOR_RELAY.distanceKm.trim() !== "" && Number.isFinite(relayKm)
+      ? { method: "FAULT_LOCATOR_RELAY", mode: "distance", distanceKm: relayKm }
+      : { method: "FAULT_LOCATOR_RELAY", mode: "empty" };
+
+  return [vaisala, twfl, smde, relay];
+}
+
+/** The "we found a tower" block — identical regardless of how the tower
+ *  was resolved (nearest-to-a-distance guess, or an exact tower-number/
+ *  tower-ke lookup), so every method's own card renders this same panel
+ *  once it has a MethodResult. */
+function TowerResultPanel({
+  result,
+  sigapInsightsByFuncLoc,
+  gangguanHistoryByGiTower,
+}: {
+  result: MethodResult;
+  sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
+  gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
+}) {
+  const { match } = result;
+  const sigapInsight = findSigapInsight(match.tower, sigapInsightsByFuncLoc);
+  const gangguanHistory = findGangguanHistory(match.tower, gangguanHistoryByGiTower);
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-extrabold text-foreground">Tower {match.tower.towerNo}</span>
+        {match.exact ? (
+          <span className="flex items-center gap-1 font-semibold text-success">
+            <Check className="size-3" />
+            Pasti
+          </span>
+        ) : (
+          <span className="text-muted-foreground">selisih {formatSignedKm(match.deltaKm)}</span>
+        )}
+      </div>
+      <p className="text-muted-foreground">
+        Jarak tower {formatKm(match.tower.distanceKm)}
+        {match.before && match.after && match.before.towerNo !== match.after.towerNo ? (
+          <>
+            {" "}
+            · antara Tower {match.before.towerNo} ({formatKm(match.before.distanceKm)}) – Tower{" "}
+            {match.after.towerNo} ({formatKm(match.after.distanceKm)})
+          </>
+        ) : null}
+      </p>
+      {match.outOfRange ? (
+        <p className="flex items-center gap-1 font-semibold text-warning-foreground">
+          <AlertTriangle className="size-3 shrink-0" />
+          Jarak di luar panjang ruas — tower terdekat ditampilkan.
+        </p>
+      ) : null}
+      {isTowerKritis(match.tower) ? (
+        <p className="flex items-center gap-1 font-semibold text-critical">
+          <AlertTriangle className="size-3 shrink-0" />
+          Tower Kritis — ada catatan penanganan/mitigasi.
+        </p>
+      ) : null}
+      {hasFaultHistory(match.tower) ? (
+        <p className="flex items-center gap-1 font-semibold text-warning-foreground">
+          <Zap className="size-3 shrink-0" />
+          Ada riwayat gangguan tercatat di tower ini.
+        </p>
+      ) : null}
+      {formatUnbalanceLine(match.tower) ? (
+        <p className="flex items-center gap-1 font-semibold text-warning-foreground">
+          <AlertTriangle className="size-3 shrink-0" />
+          {formatUnbalanceLine(match.tower)}
+        </p>
+      ) : null}
+      <p className="text-muted-foreground">
+        {[match.tower.jenisTower, match.tower.tipeTower, match.tower.tahunOperasi ? `Thn ${match.tower.tahunOperasi}` : ""]
+          .filter(Boolean)
+          .join(" · ") || "—"}
+      </p>
+      {gangguanHistory.length > 0
+        ? formatGangguanHistoryLines(gangguanHistory).map((line, i) => (
+            <p key={i} className={cn(i === 0 ? "font-semibold text-warning-foreground" : "text-muted-foreground")}>
+              {line}
+            </p>
+          ))
+        : null}
+      {sigapInsight
+        ? formatSigapInsightLines(sigapInsight).map((line, i) => (
+            <p key={i} className="text-muted-foreground">
+              {line}
+            </p>
+          ))
+        : null}
+      {buildSuttMyMapsLink(match.tower.lat, match.tower.lon) ? (
+        <div className="flex flex-wrap gap-2 pt-0.5">
+          <a
+            href={buildSuttMyMapsLink(match.tower.lat, match.tower.lon)!}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 font-medium text-primary hover:underline"
+          >
+            <MapPin className="size-3" />
+            Peta SUTT (Tower)
+            <ExternalLink className="size-2.5" />
+          </a>
+          <a
+            href={buildDirectionsLink(match.tower.lat, match.tower.lon)!}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 text-primary hover:underline"
+          >
+            <Navigation className="size-3" />
+            Petunjuk Arah
+            <ExternalLink className="size-2.5" />
+          </a>
+          <a
+            href={buildEarthLink(match.tower.lat, match.tower.lon)!}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 text-primary hover:underline"
+          >
+            Google Earth
+            <ExternalLink className="size-2.5" />
+          </a>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type SharedCardProps = {
+  ruas: SuttRuas | null;
+  direction: FaultDirection;
+  sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
+  gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
+};
+
+/** TWFL and Fault Locator Relay: a plain km distance, nearest-match —
+ *  unchanged from how every method used to work before VAISALA/SMDE grew
+ *  their own input modes. */
+function DistanceCard({
   method,
+  label,
   value,
   onChange,
   ruas,
   direction,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
-}: {
-  method: FaultMethod;
+}: SharedCardProps & {
+  method: "TWFL" | "FAULT_LOCATOR_RELAY";
+  label: string;
   value: string;
   onChange: (v: string) => void;
-  ruas: SuttRuas | null;
-  direction: FaultDirection;
-  sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
-  gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
 }) {
-  const distanceKm = value.trim() === "" ? null : Number(value);
-  const entry: MethodEntry = { method, distanceKm: Number.isFinite(distanceKm) ? distanceKm : null };
-  const result = ruas && entry.distanceKm !== null ? buildMethodResults(ruas, direction, [entry])[0] : null;
-  const sigapInsight = result ? findSigapInsight(result.match.tower, sigapInsightsByFuncLoc) : null;
-  const gangguanHistory = result ? findGangguanHistory(result.match.tower, gangguanHistoryByGiTower) : [];
+  const n = value.trim() === "" ? null : Number(value);
+  const entry: MethodEntry | null = value.trim() !== "" && n !== null && Number.isFinite(n) ? { method, mode: "distance", distanceKm: n } : null;
+  const result = ruas && entry ? buildMethodResults(ruas, direction, [entry])[0] : null;
 
   return (
     <Card className="print:break-inside-avoid">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-extrabold">
           <Zap className="size-3.5 text-primary" />
-          {FAULT_METHOD_LABELS[method]}
+          {label}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -111,106 +292,188 @@ function MethodCard({
 
         {!ruas ? (
           <p className="text-xs text-muted-foreground">Pilih ruas terlebih dahulu.</p>
-        ) : entry.distanceKm === null ? (
+        ) : !entry ? (
           <p className="text-xs text-muted-foreground">Belum diisi.</p>
         ) : !result ? (
           <p className="text-xs text-muted-foreground">Jarak tidak valid.</p>
         ) : (
-          <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5 text-xs">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-extrabold text-foreground">Tower {result.match.tower.towerNo}</span>
-              <span className="text-muted-foreground">selisih {formatSignedKm(result.match.deltaKm)}</span>
-            </div>
-            <p className="text-muted-foreground">
-              Jarak tower {formatKm(result.match.tower.distanceKm)}
-              {result.match.before && result.match.after && result.match.before.towerNo !== result.match.after.towerNo ? (
-                <>
-                  {" "}
-                  · antara Tower {result.match.before.towerNo} ({formatKm(result.match.before.distanceKm)}) – Tower{" "}
-                  {result.match.after.towerNo} ({formatKm(result.match.after.distanceKm)})
-                </>
-              ) : null}
-            </p>
-            {result.match.outOfRange ? (
-              <p className="flex items-center gap-1 font-semibold text-warning-foreground">
-                <AlertTriangle className="size-3 shrink-0" />
-                Jarak di luar panjang ruas — tower terdekat ditampilkan.
-              </p>
-            ) : null}
-            {isTowerKritis(result.match.tower) ? (
-              <p className="flex items-center gap-1 font-semibold text-critical">
-                <AlertTriangle className="size-3 shrink-0" />
-                Tower Kritis — ada catatan penanganan/mitigasi.
-              </p>
-            ) : null}
-            {hasFaultHistory(result.match.tower) ? (
-              <p className="flex items-center gap-1 font-semibold text-warning-foreground">
-                <Zap className="size-3 shrink-0" />
-                Ada riwayat gangguan tercatat di tower ini.
-              </p>
-            ) : null}
-            {formatUnbalanceLine(result.match.tower) ? (
-              <p className="flex items-center gap-1 font-semibold text-warning-foreground">
-                <AlertTriangle className="size-3 shrink-0" />
-                {formatUnbalanceLine(result.match.tower)}
-              </p>
-            ) : null}
-            <p className="text-muted-foreground">
-              {[result.match.tower.jenisTower, result.match.tower.tipeTower, result.match.tower.tahunOperasi ? `Thn ${result.match.tower.tahunOperasi}` : ""]
-                .filter(Boolean)
-                .join(" · ") || "—"}
-            </p>
-            {gangguanHistory.length > 0
-              ? formatGangguanHistoryLines(gangguanHistory).map((line, i) => (
-                  <p
-                    key={i}
-                    className={cn(i === 0 ? "font-semibold text-warning-foreground" : "text-muted-foreground")}
-                  >
-                    {line}
-                  </p>
-                ))
-              : null}
-            {sigapInsight
-              ? formatSigapInsightLines(sigapInsight).map((line, i) => (
-                  <p key={i} className="text-muted-foreground">
-                    {line}
-                  </p>
-                ))
-              : null}
-            {buildSuttMyMapsLink(result.match.tower.lat, result.match.tower.lon) ? (
-              <div className="flex flex-wrap gap-2 pt-0.5">
-                <a
-                  href={buildSuttMyMapsLink(result.match.tower.lat, result.match.tower.lon)!}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 font-medium text-primary hover:underline"
-                >
-                  <MapPin className="size-3" />
-                  Peta SUTT (Tower)
-                  <ExternalLink className="size-2.5" />
-                </a>
-                <a
-                  href={buildDirectionsLink(result.match.tower.lat, result.match.tower.lon)!}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-primary hover:underline"
-                >
-                  <Navigation className="size-3" />
-                  Petunjuk Arah
-                  <ExternalLink className="size-2.5" />
-                </a>
-                <a
-                  href={buildEarthLink(result.match.tower.lat, result.match.tower.lon)!}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-primary hover:underline"
-                >
-                  Google Earth
-                  <ExternalLink className="size-2.5" />
-                </a>
-              </div>
-            ) : null}
+          <TowerResultPanel result={result} sigapInsightsByFuncLoc={sigapInsightsByFuncLoc} gangguanHistoryByGiTower={gangguanHistoryByGiTower} />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** VAISALA locates a strike point directly rather than reporting a km
+ *  distance along the conductor, so its own input is a tower number, not
+ *  a distance — gated behind an explicit "ada/tidak ada sambaran" choice
+ *  (a genuine "no lightning here" finding is a different, still useful
+ *  answer from "this field is just empty"). */
+function VaisalaCard({
+  status,
+  towerNo,
+  onStatusChange,
+  onTowerNoChange,
+  ruas,
+  direction,
+  sigapInsightsByFuncLoc,
+  gangguanHistoryByGiTower,
+}: SharedCardProps & {
+  status: VaisalaStatus;
+  towerNo: string;
+  onStatusChange: (s: VaisalaStatus) => void;
+  onTowerNoChange: (v: string) => void;
+}) {
+  const entry: MethodEntry | null =
+    status === "detected" && towerNo.trim() !== "" ? { method: "VAISALA", mode: "tower", towerNo: towerNo.trim() } : null;
+  const result = ruas && entry ? buildMethodResults(ruas, direction, [entry])[0] : null;
+
+  return (
+    <Card className="print:break-inside-avoid">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-extrabold">
+          <Zap className="size-3.5 text-primary" />
+          VAISALA
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={status === "detected" ? "default" : "outline"}
+            disabled={!ruas}
+            className="flex-1"
+            onClick={() => onStatusChange("detected")}
+          >
+            Ada Sambaran
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={status === "not-detected" ? "default" : "outline"}
+            disabled={!ruas}
+            className="flex-1"
+            onClick={() => onStatusChange("not-detected")}
+          >
+            Tidak Ada Sambaran
+          </Button>
+        </div>
+
+        {status === "detected" ? (
+          <Input
+            type="text"
+            inputMode="numeric"
+            placeholder="Nomor tower (mis. 36)"
+            value={towerNo}
+            onChange={(e) => onTowerNoChange(e.target.value)}
+            disabled={!ruas}
+            className="max-w-[200px]"
+          />
+        ) : null}
+
+        {!ruas ? (
+          <p className="text-xs text-muted-foreground">Pilih ruas terlebih dahulu.</p>
+        ) : status === "unknown" ? (
+          <p className="text-xs text-muted-foreground">Pilih apakah terdapat sambaran petir.</p>
+        ) : status === "not-detected" ? (
+          <p className="text-xs font-semibold text-muted-foreground">Tidak terdapat sambaran petir.</p>
+        ) : towerNo.trim() === "" ? (
+          <p className="text-xs text-muted-foreground">Masukkan nomor tower dari laporan VAISALA.</p>
+        ) : !result ? (
+          <p className="text-xs text-muted-foreground">Nomor tower tidak ditemukan di ruas ini.</p>
+        ) : (
+          <TowerResultPanel result={result} sigapInsightsByFuncLoc={sigapInsightsByFuncLoc} gangguanHistoryByGiTower={gangguanHistoryByGiTower} />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** SMDE can report either a km distance OR "tower ke-N" (the Nth physical
+ *  tower from a GI) — only one box is meant to be filled at a time, so
+ *  the other disables itself the moment its sibling has a value, instead
+ *  of leaving it ambiguous which one "wins". */
+function SmdeCard({
+  distanceValue,
+  ordinalValue,
+  onDistanceChange,
+  onOrdinalChange,
+  ruas,
+  direction,
+  sigapInsightsByFuncLoc,
+  gangguanHistoryByGiTower,
+}: SharedCardProps & {
+  distanceValue: string;
+  ordinalValue: string;
+  onDistanceChange: (v: string) => void;
+  onOrdinalChange: (v: string) => void;
+}) {
+  const ordinalTrim = ordinalValue.trim();
+  const ordinalNum = Number(ordinalTrim);
+  const distanceTrim = distanceValue.trim();
+  const distanceNum = Number(distanceTrim);
+
+  let entry: MethodEntry | null = null;
+  if (ordinalTrim !== "" && Number.isFinite(ordinalNum)) {
+    entry = { method: "SMDE", mode: "ordinal", ordinal: ordinalNum };
+  } else if (distanceTrim !== "" && Number.isFinite(distanceNum)) {
+    entry = { method: "SMDE", mode: "distance", distanceKm: distanceNum };
+  }
+  const result = ruas && entry ? buildMethodResults(ruas, direction, [entry])[0] : null;
+  const refLabel = ruas ? (direction === "origin" ? ruas.originLabel : ruas.farEndLabel) : "GI";
+
+  return (
+    <Card className="print:break-inside-avoid">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-extrabold">
+          <Zap className="size-3.5 text-primary" />
+          SMDE
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min={0}
+              placeholder="Jarak (km)"
+              value={distanceValue}
+              onChange={(e) => onDistanceChange(e.target.value)}
+              disabled={!ruas || ordinalTrim !== ""}
+              className="max-w-[160px]"
+            />
+            <span className="text-xs text-muted-foreground">km</span>
           </div>
+          <p className="text-center text-[11px] text-muted-foreground">atau</p>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              inputMode="numeric"
+              step="1"
+              min={1}
+              placeholder="Tower ke-"
+              value={ordinalValue}
+              onChange={(e) => onOrdinalChange(e.target.value)}
+              disabled={!ruas || distanceTrim !== ""}
+              className="max-w-[120px]"
+            />
+            <span className="text-xs text-muted-foreground">dari {refLabel}</span>
+          </div>
+        </div>
+
+        {!ruas ? (
+          <p className="text-xs text-muted-foreground">Pilih ruas terlebih dahulu.</p>
+        ) : !entry ? (
+          <p className="text-xs text-muted-foreground">Isi jarak (km) atau tower ke-.</p>
+        ) : !result ? (
+          <p className="text-xs text-muted-foreground">
+            {entry.mode === "ordinal" ? "Tower ke- melebihi jumlah tower di ruas ini." : "Jarak tidak valid."}
+          </p>
+        ) : (
+          <TowerResultPanel result={result} sigapInsightsByFuncLoc={sigapInsightsByFuncLoc} gangguanHistoryByGiTower={gangguanHistoryByGiTower} />
         )}
       </CardContent>
     </Card>
@@ -236,12 +499,7 @@ export function SuttFaultLocatorView({
 }) {
   const [sectionKey, setSectionKey] = useState<string | null>(null);
   const [direction, setDirection] = useState<FaultDirection>("origin");
-  const [inputs, setInputs] = useState<Record<FaultMethod, string>>({
-    VAISALA: "",
-    TWFL: "",
-    SMDE: "",
-    FAULT_LOCATOR_RELAY: "",
-  });
+  const [inputs, setInputs] = useState<MethodInputsState>(EMPTY_INPUTS);
   const [copied, setCopied] = useState(false);
 
   const ruasByUnit = useMemo(() => {
@@ -258,18 +516,14 @@ export function SuttFaultLocatorView({
   const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapInsightsByFuncLoc) : null;
   const sigapFasa = ruas ? findSigapFasa(ruas, sigapInsightsByFuncLoc) : null;
 
-  const entries: MethodEntry[] = FAULT_METHODS.map((method) => {
-    const raw = inputs[method].trim();
-    const n = raw === "" ? null : Number(raw);
-    return { method, distanceKm: n !== null && Number.isFinite(n) ? n : null };
-  });
-  const filledCount = entries.filter((e) => e.distanceKm !== null).length;
+  const entries = useMemo(() => buildEntries(inputs), [inputs]);
+  const filledCount = entries.filter((e) => e.mode !== "empty").length;
   const waText = ruas
     ? formatWaMessage(ruas, direction, entries, sigapInsightsByFuncLoc, gangguanHistoryByGiTower)
     : "";
 
   function reset() {
-    setInputs({ VAISALA: "", TWFL: "", SMDE: "", FAULT_LOCATOR_RELAY: "" });
+    setInputs(EMPTY_INPUTS);
   }
 
   if (error) {
@@ -342,8 +596,8 @@ export function SuttFaultLocatorView({
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Pilih ruas, lalu masukkan jarak gangguan dari tiap metode yang tersedia (boleh salah satu, boleh semua) untuk
-              melihat perkiraan tower terdekat.
+              Pilih ruas, lalu isi hasil dari tiap metode yang tersedia (boleh salah satu, boleh semua) untuk melihat
+              perkiraan tower.
             </p>
           )}
         </CardContent>
@@ -351,25 +605,53 @@ export function SuttFaultLocatorView({
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-base font-extrabold tracking-tight">2. Jarak Gangguan per Metode</h3>
+          <h3 className="text-base font-extrabold tracking-tight">2. Hasil per Metode</h3>
           <Button variant="outline" size="sm" className="gap-1.5 print:hidden" onClick={reset} disabled={filledCount === 0}>
             <RotateCcw className="size-3.5" />
             Reset
           </Button>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {FAULT_METHODS.map((method) => (
-            <MethodCard
-              key={method}
-              method={method}
-              value={inputs[method]}
-              onChange={(v) => setInputs((prev) => ({ ...prev, [method]: v }))}
-              ruas={ruas}
-              direction={direction}
-              sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
-              gangguanHistoryByGiTower={gangguanHistoryByGiTower}
-            />
-          ))}
+          <VaisalaCard
+            status={inputs.VAISALA.status}
+            towerNo={inputs.VAISALA.towerNo}
+            onStatusChange={(status) => setInputs((prev) => ({ ...prev, VAISALA: { ...prev.VAISALA, status } }))}
+            onTowerNoChange={(towerNo) => setInputs((prev) => ({ ...prev, VAISALA: { ...prev.VAISALA, towerNo } }))}
+            ruas={ruas}
+            direction={direction}
+            sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+            gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+          />
+          <DistanceCard
+            method="TWFL"
+            label={FAULT_METHOD_LABELS.TWFL}
+            value={inputs.TWFL.distanceKm}
+            onChange={(v) => setInputs((prev) => ({ ...prev, TWFL: { distanceKm: v } }))}
+            ruas={ruas}
+            direction={direction}
+            sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+            gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+          />
+          <SmdeCard
+            distanceValue={inputs.SMDE.distanceKm}
+            ordinalValue={inputs.SMDE.ordinal}
+            onDistanceChange={(v) => setInputs((prev) => ({ ...prev, SMDE: { ...prev.SMDE, distanceKm: v } }))}
+            onOrdinalChange={(v) => setInputs((prev) => ({ ...prev, SMDE: { ...prev.SMDE, ordinal: v } }))}
+            ruas={ruas}
+            direction={direction}
+            sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+            gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+          />
+          <DistanceCard
+            method="FAULT_LOCATOR_RELAY"
+            label={FAULT_METHOD_LABELS.FAULT_LOCATOR_RELAY}
+            value={inputs.FAULT_LOCATOR_RELAY.distanceKm}
+            onChange={(v) => setInputs((prev) => ({ ...prev, FAULT_LOCATOR_RELAY: { distanceKm: v } }))}
+            ruas={ruas}
+            direction={direction}
+            sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
+            gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+          />
         </div>
       </div>
 
@@ -398,7 +680,7 @@ export function SuttFaultLocatorView({
         <CardContent>
           {!ruas || filledCount === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Pilih ruas dan isi minimal satu jarak gangguan untuk membuat teks siap kirim.
+              Pilih ruas dan isi minimal satu hasil metode untuk membuat teks siap kirim.
             </p>
           ) : (
             <pre className="overflow-auto rounded-lg border bg-secondary p-3 text-xs whitespace-pre-wrap text-foreground">
