@@ -19,6 +19,7 @@ import {
   ListOrdered,
   Tv,
   CalendarCheck2,
+  FileText,
 } from "lucide-react";
 
 export interface NavItem {
@@ -39,7 +40,10 @@ export interface NavGroup {
 export const navGroups: NavGroup[] = [
   {
     label: "Overview",
-    items: [{ title: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
+    items: [
+      { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { title: "Laporan Eksekutif", href: "/dashboard/laporan-eksekutif", icon: FileText },
+    ],
   },
   {
     label: "Monitoring",
