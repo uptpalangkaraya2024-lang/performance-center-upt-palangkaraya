@@ -15,6 +15,7 @@ import {
   Presentation,
   Settings,
   HeartPulse,
+  Milestone,
 } from "lucide-react";
 
 export interface NavItem {
@@ -54,7 +55,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Asset",
-    items: [{ title: "Data Aset", href: "/dashboard/assets", icon: BatteryCharging }],
+    items: [
+      { title: "Data Aset", href: "/dashboard/assets", icon: BatteryCharging },
+      { title: "Infografis Ruas", href: "/dashboard/assets/ruas-infografis", icon: Milestone },
+    ],
   },
   {
     label: "Planning",
