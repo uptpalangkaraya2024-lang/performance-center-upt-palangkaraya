@@ -374,6 +374,8 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     year: r.year,
     month: r.month.replace(/^\d+\.\s*/, ""),
     date: formatDateLabel(r.tgl) ?? r.tgl,
+    dateISO: r.tgl.slice(0, 10),
+    gi: r.gi,
     cause: CAUSE_LABELS[r.cause] ?? titleCase(r.cause),
     kind: KIND_LABELS[r.kind] ?? titleCase(r.kind),
   }));

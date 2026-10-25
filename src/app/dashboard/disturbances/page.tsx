@@ -22,8 +22,12 @@ import { UltgBreakdownChart } from "@/components/disturbances/ultg-breakdown-cha
 import { UltgCauseChart } from "@/components/disturbances/ultg-cause-chart";
 import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart";
 import { CauseByBayChart } from "@/components/disturbances/cause-by-bay-chart";
+import { RootCauseLinksCard } from "@/components/disturbances/root-cause-links-card";
 import { getDisturbances } from "@/services/disturbances";
+import { getAhiPerformance } from "@/services/ahi-performance";
+import { getCeSnapshot } from "@/services/ce-proteksi";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
+import { findRootCauseLinks } from "@/lib/root-cause-links";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { DisturbanceCategoryResult } from "@/types";
 
@@ -434,9 +438,18 @@ function CategorySection({
 }
 
 export default async function DisturbancesPage() {
-  const result = await getDisturbances();
+  const [result, ahi, ce] = await Promise.all([getDisturbances(), getAhiPerformance(), getCeSnapshot()]);
   const syncEntry = listSyncStatus().find((entry) => entry.module === "Gangguan");
   const lastUpdate = formatTime(syncEntry?.lastSync ?? null);
+
+  const rootCauseLinks = result.error
+    ? []
+    : findRootCauseLinks({
+        events: [...result.transmisi.bayEvents, ...result.trafoHv.bayEvents, ...result.trafoLv.bayEvents],
+        anomalies: ahi.data ? ahi.data.anomalies : [],
+        ceItems: ce.error ? [] : ce.items,
+        todayISO: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date()),
+      });
 
   return (
     <div className="flex flex-col gap-6">
@@ -635,6 +648,8 @@ export default async function DisturbancesPage() {
               <CategoryResumeCard title="Trafo Low Voltage" anchorId="trafo-lv" data={result.trafoLv} isTrafo />
             </div>
           </section>
+
+          <RootCauseLinksCard links={rootCauseLinks} />
 
           <CategorySection title="Transmisi" data={result.transmisi} anchorId="transmisi" />
           <CategorySection

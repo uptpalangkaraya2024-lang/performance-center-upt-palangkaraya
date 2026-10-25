@@ -141,6 +141,14 @@ export interface DisturbanceBayEventRecord {
   month: string;
   /** Formatted "DD Mon YYYY". */
   date: string;
+  /** "yyyy-MM-dd" — added alongside the formatted `date` above for date-math
+   *  callers (e.g. root-cause-links.ts's own lookback window), which can't
+   *  reliably re-parse an Indonesian-locale formatted label. */
+  dateISO: string;
+  /** Normalized GARDU INDUK, null if the raw row had none — added for
+   *  cross-module GI joins (e.g. root-cause-links.ts), same normalized
+   *  shape DisturbanceGiCount already uses. */
+  gi: string | null;
   /** Mapped label (e.g. "Petir"), same mapping as causePareto. */
   cause: string;
   /** Mapped label (e.g. "Trip", "AR Sukses", "Tidak Trip"), same mapping as kindBreakdown. */
