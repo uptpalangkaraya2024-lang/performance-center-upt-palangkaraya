@@ -13,7 +13,14 @@
 import { normalizeGiName } from "@/lib/asset-correlation";
 import type { GiCorrelationRow } from "@/lib/asset-correlation";
 import type { AhiDegradationAlert } from "@/lib/ahi-degradation";
+import type { AhiTrendProjection } from "@/lib/ahi-trend-projection";
 import type { BayLineReport } from "@/types";
+
+// A projection landing within this window is worth calling out as its own
+// proposal reason (and worth bumping the action to Penggantian) — beyond
+// this, it's still visible on the AHI page but not treated as urgent
+// enough to drive next year's priority ranking on its own.
+const NEAR_TERM_PROJECTION_DAYS = 365;
 
 export type ProposalAction = "Penggantian" | "Pemeliharaan Prioritas" | "Monitor";
 
@@ -37,6 +44,7 @@ export interface MaintenanceProposal {
   gangguanTotal: number;
   renusOverdue: number;
   degradingCount: number;
+  nearTermProjections: AhiTrendProjection[];
 }
 
 function giMatches(a: string, b: string): boolean {
@@ -51,8 +59,9 @@ export function buildMaintenanceProposals(params: {
   giCorrelation: GiCorrelationRow[];
   bayLineReports: BayLineReport[];
   degradationAlerts: AhiDegradationAlert[];
+  trendProjections: AhiTrendProjection[];
 }): MaintenanceProposal[] {
-  const { giCorrelation, bayLineReports, degradationAlerts } = params;
+  const { giCorrelation, bayLineReports, degradationAlerts, trendProjections } = params;
 
   const proposals: MaintenanceProposal[] = [];
   for (const row of giCorrelation) {
@@ -69,6 +78,9 @@ export function buildMaintenanceProposals(params: {
     }
 
     const degrading = degradationAlerts.filter((a) => giMatches(a.gi, row.gi));
+    const nearTermProjections = trendProjections.filter(
+      (p) => giMatches(p.gi, row.gi) && p.daysUntilCritical <= NEAR_TERM_PROJECTION_DAYS,
+    );
 
     const reasons: string[] = [];
     if (row.ahiCritical > 0) reasons.push(`${row.ahiCritical} temuan AHI berklasifikasi Critical.`);
@@ -79,10 +91,17 @@ export function buildMaintenanceProposals(params: {
     if (degrading.length > 0) {
       reasons.push(`${degrading.length} peralatan dengan tren hasil uji memburuk pada 2-3 pengujian terakhir.`);
     }
+    if (nearTermProjections.length > 0) {
+      const soonest = nearTermProjections[0];
+      const basis = soonest.pointCount <= 2 ? "hanya 2 titik data, proyeksi kasar" : `${soonest.pointCount} titik data`;
+      reasons.push(
+        `${nearTermProjections.length} peralatan diproyeksikan mencapai Critical dalam ~${Math.round(soonest.daysUntilCritical / 30)} bulan berdasarkan tren linear (${basis}, bukan kepastian).`,
+      );
+    }
 
     const hasCriticalDegradation = degrading.some((d) => d.trend[d.trend.length - 1]?.klasifikasi === "CRITICAL");
     const action: ProposalAction =
-      row.ahiCritical > 0 || hasCriticalDegradation
+      row.ahiCritical > 0 || hasCriticalDegradation || nearTermProjections.length > 0
         ? "Penggantian"
         : row.ahiPoor > 0 || row.ceOpen > 0 || row.renusOverdue > 0 || degrading.length > 0
           ? "Pemeliharaan Prioritas"
@@ -100,6 +119,7 @@ export function buildMaintenanceProposals(params: {
       gangguanTotal: row.gangguanTotal,
       renusOverdue: row.renusOverdue,
       degradingCount: degrading.length,
+      nearTermProjections,
     });
   }
 

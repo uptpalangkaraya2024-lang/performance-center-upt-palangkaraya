@@ -14,6 +14,7 @@ import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
 import { buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import { findAhiDegradationAlerts } from "@/lib/ahi-degradation";
+import { buildAhiTrendProjections } from "@/lib/ahi-trend-projection";
 
 /** href -> count of "belum" items for that module, at today's period.
  *  Rendered as a small pill next to the matching sidebar entry so a user
@@ -77,6 +78,17 @@ export async function getNavBadges(): Promise<Record<string, number>> {
     const reports = await getAllBayLineReportsWithHistory();
     const degradingCount = findAhiDegradationAlerts(reports).length;
     if (degradingCount > 0) badges["/dashboard/ahi"] = (badges["/dashboard/ahi"] ?? 0) + degradingCount;
+  } catch {
+    // ditto
+  }
+
+  // Equipment projected to reach Critical within 180 days on its current
+  // trend (see ahi-trend-projection.ts) — same "add to the AHI badge" shape
+  // as the degradation count above, its own independent try/catch.
+  try {
+    const reports = await getAllBayLineReportsWithHistory();
+    const nearTermCount = buildAhiTrendProjections(reports).filter((p) => p.daysUntilCritical <= 180).length;
+    if (nearTermCount > 0) badges["/dashboard/ahi"] = (badges["/dashboard/ahi"] ?? 0) + nearTermCount;
   } catch {
     // ditto
   }

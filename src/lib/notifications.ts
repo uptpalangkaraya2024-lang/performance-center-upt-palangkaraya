@@ -8,6 +8,7 @@ import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 import { buildAboSnapshotComputed, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
 import { findAhiDegradationAlerts } from "@/lib/ahi-degradation";
+import { buildAhiTrendProjections } from "@/lib/ahi-trend-projection";
 import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
 import { buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 import { listSyncStatus } from "@/lib/sync-status";
@@ -132,6 +133,26 @@ export async function getNotifications(): Promise<AppNotification[]> {
         id: "ahi-degradation",
         text: `${degrading.length} peralatan AHI hasil ujinya memburuk 2-3x terakhir`,
         detail: "Tren skor AHI menurun berturut-turut",
+        href: "/dashboard/ahi",
+        severity: "warning",
+      });
+    }
+  } catch {
+    // ditto
+  }
+
+  try {
+    const reports = await getAllBayLineReportsWithHistory();
+    // Only the near-term ones are worth a notification — the full 3-year
+    // cap on buildAhiTrendProjections itself is for planning pages (Usulan
+    // Prioritas), not an inbox alert someone has to act on this week.
+    const NEAR_TERM_DAYS = 180;
+    const nearTerm = buildAhiTrendProjections(reports).filter((p) => p.daysUntilCritical <= NEAR_TERM_DAYS);
+    if (nearTerm.length > 0) {
+      notifications.push({
+        id: "ahi-trend-projection",
+        text: `${nearTerm.length} peralatan AHI diproyeksikan Critical dalam ${NEAR_TERM_DAYS} hari`,
+        detail: "Proyeksi tren linear dari riwayat skor AHI",
         href: "/dashboard/ahi",
         severity: "warning",
       });

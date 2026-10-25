@@ -5,6 +5,7 @@ import { UsulanPrioritasClient } from "@/components/assets/usulan-prioritas-clie
 import { buildGiCorrelation } from "@/lib/asset-correlation";
 import { buildMaintenanceProposals } from "@/lib/maintenance-proposals";
 import { findAhiDegradationAlerts } from "@/lib/ahi-degradation";
+import { buildAhiTrendProjections } from "@/lib/ahi-trend-projection";
 import { getDisturbances } from "@/services/disturbances";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
@@ -49,11 +50,13 @@ export default async function UsulanPrioritasPage() {
   });
 
   const degradationAlerts = findAhiDegradationAlerts(bayLineReports);
+  const trendProjections = buildAhiTrendProjections(bayLineReports);
 
   const proposals = buildMaintenanceProposals({
     giCorrelation,
     bayLineReports,
     degradationAlerts,
+    trendProjections,
   });
 
   return (
