@@ -228,33 +228,52 @@ function buildRuasList(records: Record<string, string>[]): SuttRuas[] {
  *  a missing/unreadable sheet just means the map falls back to inferring
  *  a GI's position from its nearest tower, same as before this sheet was
  *  wired in, rather than failing the whole snapshot. */
-function buildGiRegistry(records: Record<string, string>[]): GiRecord[] {
-  const out: GiRecord[] = [];
+/** Rows with a GI name but missing unit/coordinates — a genuine data gap in
+ *  DATA GARDU INDUK (as opposed to a fully blank trailing row, which isn't
+ *  flagged since that's just normal sheet padding). Collected alongside the
+ *  registry itself so this silent drop is surfaced on the Kesehatan Data
+ *  page instead of just vanishing — a GI missing here never gets a map
+ *  marker and never counts toward "GI terdaftar" anywhere. */
+function buildGiRegistry(records: Record<string, string>[]): { registry: GiRecord[]; dropped: string[] } {
+  const registry: GiRecord[] = [];
+  const dropped: string[] = [];
   for (const record of records) {
     const rawName = record["NAMA GARDU INDUK"]?.trim();
+    if (!rawName) continue;
     const unit = record["UNIT"]?.trim();
     const lat = num(record["LATITUDE"]);
     const lon = num(record["LONGITUDE"]);
-    if (!rawName || !unit || lat === null || lon === null) continue;
-    out.push({ name: normalizeGiName(rawName), unit, lat, lon });
+    if (!unit || lat === null || lon === null) {
+      dropped.push(rawName);
+      continue;
+    }
+    registry.push({ name: normalizeGiName(rawName), unit, lat, lon });
   }
-  return out;
+  return { registry, dropped };
 }
 
 export async function getSuttSnapshot(): Promise<SuttSnapshot> {
   const results = await readConfiguredSource(SOURCE);
   const sheetResult = results.find((r) => r.file === EXPECTED_FILE && r.sheet === EXPECTED_SHEET);
   const giSheetResult = results.find((r) => r.file === EXPECTED_FILE && r.sheet === GI_REGISTRY_SHEET);
-  const giRegistry = giSheetResult ? buildGiRegistry(giSheetResult.records) : [];
+  const { registry: giRegistry, dropped: giRegistryDropped } = giSheetResult
+    ? buildGiRegistry(giSheetResult.records)
+    : { registry: [], dropped: [] };
 
   if (!sheetResult || sheetResult.records.length === 0) {
     return {
       ruasList: [],
       giRegistry,
+      giRegistryDropped,
       error: `Gagal membaca sheet "${EXPECTED_SHEET}" dari file "${EXPECTED_FILE}" — lihat halaman Data & Sync.`,
     };
   }
 
   const ruasList = buildRuasList(sheetResult.records);
-  return { ruasList, giRegistry, error: ruasList.length === 0 ? "Data ruas SUTT belum tersedia." : null };
+  return {
+    ruasList,
+    giRegistry,
+    giRegistryDropped,
+    error: ruasList.length === 0 ? "Data ruas SUTT belum tersedia." : null,
+  };
 }

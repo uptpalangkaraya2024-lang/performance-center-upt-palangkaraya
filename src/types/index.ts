@@ -1357,5 +1357,9 @@ export interface GiRecord {
 export interface SuttSnapshot {
   ruasList: SuttRuas[];
   giRegistry: GiRecord[];
+  /** Names of DATA GARDU INDUK rows that had a GI name but were missing
+   *  unit/coordinates, so buildGiRegistry silently dropped them — surfaced
+   *  so the drop isn't invisible (see data-health.ts's own check). */
+  giRegistryDropped: string[];
   error: string | null;
 }
