@@ -5,6 +5,7 @@ import { getAboHargiSnapshot } from "@/services/abo-hargi";
 import { getFourDxSnapshot } from "@/services/four-dx";
 import { getCeSnapshot } from "@/services/ce-proteksi";
 import { getAhiPerformance } from "@/services/ahi-performance";
+import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 import { getRenusData } from "@/services/renus";
 import { getAssetScanning } from "@/services/asset-scanning";
 import { getDisturbances } from "@/services/disturbances";
@@ -12,6 +13,7 @@ import { buildAboSnapshotComputed, defaultAboWeekLabel } from "@/lib/abo-proteks
 import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
 import { buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
+import { findAhiDegradationAlerts } from "@/lib/ahi-degradation";
 
 /** href -> count of "belum" items for that module, at today's period.
  *  Rendered as a small pill next to the matching sidebar entry so a user
@@ -64,6 +66,17 @@ export async function getNavBadges(): Promise<Record<string, number>> {
       const criticalCount = data.anomalies.filter((a) => a.kategoriAhi >= 5).length;
       if (criticalCount > 0) badges["/dashboard/ahi"] = criticalCount;
     }
+  } catch {
+    // ditto
+  }
+
+  // Equipment whose last 2-3 recorded tests have been getting worse (see
+  // ahi-degradation.ts) — added on top of the critical-anomaly count above
+  // in its own try/catch, so one failing to compute never drops the other.
+  try {
+    const reports = await getAllBayLineReportsWithHistory();
+    const degradingCount = findAhiDegradationAlerts(reports).length;
+    if (degradingCount > 0) badges["/dashboard/ahi"] = (badges["/dashboard/ahi"] ?? 0) + degradingCount;
   } catch {
     // ditto
   }

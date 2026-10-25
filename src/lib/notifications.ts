@@ -5,7 +5,9 @@ import { getAboHargiSnapshot } from "@/services/abo-hargi";
 import { getFourDxSnapshot } from "@/services/four-dx";
 import { getCeSnapshot } from "@/services/ce-proteksi";
 import { getAhiPerformance } from "@/services/ahi-performance";
+import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 import { buildAboSnapshotComputed, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
+import { findAhiDegradationAlerts } from "@/lib/ahi-degradation";
 import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
 import { buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 import { listSyncStatus } from "@/lib/sync-status";
@@ -117,6 +119,22 @@ export async function getNotifications(): Promise<AppNotification[]> {
           severity: "critical",
         });
       }
+    }
+  } catch {
+    // ditto
+  }
+
+  try {
+    const reports = await getAllBayLineReportsWithHistory();
+    const degrading = findAhiDegradationAlerts(reports);
+    if (degrading.length > 0) {
+      notifications.push({
+        id: "ahi-degradation",
+        text: `${degrading.length} peralatan AHI hasil ujinya memburuk 2-3x terakhir`,
+        detail: "Tren skor AHI menurun berturut-turut",
+        href: "/dashboard/ahi",
+        severity: "warning",
+      });
     }
   } catch {
     // ditto
