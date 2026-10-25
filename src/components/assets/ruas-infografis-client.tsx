@@ -16,6 +16,7 @@ import {
   ClipboardList,
   Gauge,
   ListChecks,
+  Network,
   Zap,
 } from "lucide-react";
 
@@ -248,6 +249,37 @@ export function RuasInfografisClient({ summaries }: { summaries: RuasInfographic
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-1.5 text-base font-extrabold">
+            <Network className="size-4.5 text-primary" />
+            Simulator Dampak Padam
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Analisis konektivitas jaringan (bukan simulasi aliran daya) — apakah ruas ini satu-satunya jalur ke GI
+            tertentu, berdasarkan topologi ruas di Data Aset.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {selected.outageImpact?.isBridge ? (
+            <div className="flex items-start gap-2 rounded-lg border border-critical/40 bg-critical/10 p-3 text-sm">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-critical" />
+              <p className="text-foreground">
+                Ruas ini adalah <span className="font-bold">satu-satunya jalur</span> ke{" "}
+                {selected.outageImpact.isolatedGis.length} GI — jika dipadamkan, GI berikut kehilangan koneksi ke
+                jaringan utama:{" "}
+                <span className="font-semibold">{selected.outageImpact.isolatedGis.join(", ")}</span>.
+              </p>
+            </div>
+          ) : (
+            <p className="flex items-center gap-1.5 text-sm text-success">
+              <CheckCircle2 className="size-4 shrink-0" /> Ada jalur alternatif — padam ruas ini tidak mengisolasi GI
+              manapun dari jaringan utama.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {selected.ahiAnomalies.length > 0 ? (
         <Card>

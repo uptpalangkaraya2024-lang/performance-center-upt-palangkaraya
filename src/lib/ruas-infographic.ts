@@ -6,6 +6,7 @@
 // already loads elsewhere in this app; this only re-groups it by ruas.
 import { normalizeGiName } from "@/lib/asset-correlation";
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
+import type { OutageImpactResult } from "@/lib/outage-impact";
 import type {
   AboRuasItem,
   AhiAnomalyRecord,
@@ -129,6 +130,13 @@ export interface RuasInfographicSummary {
    *  principle as every other AiInsight-style list in this app. Empty when
    *  nothing in the joined data warrants a note. */
   readinessChecklist: string[];
+
+  /** Graph-connectivity answer to "if this ruas is taken out, does any GI
+   *  lose its only path to the network" — see outage-impact.ts for exactly
+   *  what this does and doesn't claim to simulate. Null when the impact
+   *  wasn't computed for this ruas (shouldn't happen in practice, since the
+   *  caller runs buildOutageImpact over the same ruasList). */
+  outageImpact: OutageImpactResult | null;
 }
 
 function daysBetween(fromISO: string, toISO: string): number {
@@ -146,9 +154,22 @@ export function buildRuasInfographic(params: {
   renusRows: RenusRow[];
   gangguanByTowerGi: Record<string, GangguanHistoryEntry[]>;
   todayISO: string;
+  /** Pre-computed over the WHOLE ruasList by the caller (buildOutageImpact
+   *  needs the full network graph, not just this one ruas) — looked up by
+   *  section here. */
+  outageImpactBySection?: Map<string, OutageImpactResult>;
 }): RuasInfographicSummary {
-  const { ruas, ahiAnomalies, ahiBayLineReports, ceItems, aboRuasItems, renusRows, gangguanByTowerGi, todayISO } =
-    params;
+  const {
+    ruas,
+    ahiAnomalies,
+    ahiBayLineReports,
+    ceItems,
+    aboRuasItems,
+    renusRows,
+    gangguanByTowerGi,
+    todayISO,
+    outageImpactBySection,
+  } = params;
 
   const originGi = ruas.originLabel.toUpperCase();
   const farEndGi = ruas.farEndLabel.toUpperCase();
@@ -273,6 +294,12 @@ export function buildRuasInfographic(params: {
   if (nextOutage && isRenusHighRisk(nextOutage)) {
     readinessChecklist.push(`Pekerjaan padam berikutnya berisiko ${nextOutage.risk} — pastikan mitigasi risiko sudah disiapkan.`);
   }
+  const outageImpact = outageImpactBySection?.get(ruas.section) ?? null;
+  if (outageImpact && outageImpact.isBridge) {
+    readinessChecklist.push(
+      `Ruas ini adalah satu-satunya jalur ke ${outageImpact.isolatedGis.length} GI (${outageImpact.isolatedGis.slice(0, 5).join(", ")}) — pastikan koordinasi padam total di GI tersebut sebelum dijadwalkan.`,
+    );
+  }
 
   return {
     section: ruas.section,
@@ -294,5 +321,6 @@ export function buildRuasInfographic(params: {
     nextOutage,
     daysUntilNextOutage,
     readinessChecklist,
+    outageImpact,
   };
 }

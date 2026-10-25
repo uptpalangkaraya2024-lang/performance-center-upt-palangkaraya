@@ -3,6 +3,7 @@ import { PageHero } from "@/components/dashboard/page-hero";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { RuasInfografisClient } from "@/components/assets/ruas-infografis-client";
 import { buildRuasInfographic } from "@/lib/ruas-infographic";
+import { buildOutageImpact } from "@/lib/outage-impact";
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getAllBayLineReports } from "@/services/ahi-bay-line-report";
@@ -45,6 +46,7 @@ export default async function RuasInfografisPage() {
   }
 
   const aboRuasItems = [...aboProteksi.programs, ...aboHargi.programs].flatMap((p) => p.ruasItems);
+  const outageImpactBySection = new Map(buildOutageImpact(sutt.ruasList).map((r) => [r.section, r]));
 
   const summaries = sutt.ruasList.map((ruas) =>
     buildRuasInfographic({
@@ -56,6 +58,7 @@ export default async function RuasInfografisPage() {
       renusRows: renus.error ? [] : renus.rows,
       gangguanByTowerGi,
       todayISO: renus.today,
+      outageImpactBySection,
     }),
   );
 
