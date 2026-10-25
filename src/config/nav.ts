@@ -17,6 +17,7 @@ import {
   HeartPulse,
   Milestone,
   ListOrdered,
+  Tv,
 } from "lucide-react";
 
 export interface NavItem {
@@ -70,7 +71,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Presentasi",
-    items: [{ title: "Presentasi", href: "/dashboard/presentasi", icon: Presentation }],
+    items: [
+      { title: "Presentasi", href: "/dashboard/presentasi", icon: Presentation },
+      { title: "Mode TV", href: "/tv", icon: Tv },
+    ],
   },
   {
     label: "Data",
