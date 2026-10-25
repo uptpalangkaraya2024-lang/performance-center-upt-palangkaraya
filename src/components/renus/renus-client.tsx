@@ -30,6 +30,7 @@ import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-help
 import { buildRenusUltgResume, type RenusUltgResumeEntry } from "@/lib/renus-compute";
 import { RenusWorkTable } from "./renus-work-table";
 import { RenusWorkloadHeatmap } from "./renus-workload-heatmap";
+import { CalendarSubscribeCard } from "./calendar-subscribe-card";
 import type { RenusData, RenusRow, RenusWeekPeriod } from "@/types";
 
 const ALL = "__all__";
@@ -430,6 +431,8 @@ export function RenusClient({ data }: { data: RenusData }) {
       </div>
 
       <RenusWorkloadHeatmap rows={data.rows} todayISO={data.today} />
+
+      <CalendarSubscribeCard />
 
       <Card>
         <CardHeader>
