@@ -16,6 +16,7 @@ import {
   Settings,
   HeartPulse,
   Milestone,
+  ListOrdered,
 } from "lucide-react";
 
 export interface NavItem {
@@ -62,7 +63,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Planning",
-    items: [{ title: "RENUS", href: "/dashboard/renus", icon: ClipboardList }],
+    items: [
+      { title: "RENUS", href: "/dashboard/renus", icon: ClipboardList },
+      { title: "Usulan Prioritas", href: "/dashboard/planning/usulan-prioritas", icon: ListOrdered },
+    ],
   },
   {
     label: "Presentasi",

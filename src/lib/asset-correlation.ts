@@ -40,6 +40,17 @@ export function normalizeGiName(raw: string): string {
   return raw.replace(/^GIS?\s*(\d+\s*KV\s*)?/i, "").trim();
 }
 
+// "KUALA PEMBUANG" (AHI's own sheet spelling) vs "KUALA PAMBUANG" (DATA
+// GARDU INDUK's own registered spelling, also what CE/RENUS/SUTT asset
+// all use) name the SAME GI — confirmed live, the same mismatch already
+// fixed for RENUS<->AHI bay matching in renus-ahi-bay-match.ts's own
+// WORD_ALIASES. Applied here too, to every source's own GI key, so this
+// join never fractures one real GI into two separate (and individually
+// weaker) rows just because one sheet misspells it.
+function canonicalGiKey(gi: string): string {
+  return gi.replace(/\bPEMBUANG\b/gi, "PAMBUANG");
+}
+
 /**
  * Joins Gangguan (per-GI disturbance counts), AHI (per-GI anomaly records),
  * CE (per-GI Common Enemy findings), and RENUS (per-GI maintenance work
@@ -64,7 +75,8 @@ export function buildGiCorrelation(params: {
   const { trafoGi, transmisiGi, anomalies, ceItems, renusRows } = params;
   const rows = new Map<string, GiCorrelationRow>();
 
-  function ensure(gi: string): GiCorrelationRow {
+  function ensure(giRaw: string): GiCorrelationRow {
+    const gi = canonicalGiKey(giRaw);
     let row = rows.get(gi);
     if (!row) {
       row = {
