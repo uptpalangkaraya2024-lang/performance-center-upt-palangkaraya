@@ -18,6 +18,7 @@ import {
   Milestone,
   ListOrdered,
   Tv,
+  CalendarCheck2,
 } from "lucide-react";
 
 export interface NavItem {
@@ -67,6 +68,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { title: "RENUS", href: "/dashboard/renus", icon: ClipboardList },
       { title: "Usulan Prioritas", href: "/dashboard/planning/usulan-prioritas", icon: ListOrdered },
+      { title: "Jadwal Rapat Rutin", href: "/dashboard/planning/rapat-rutin", icon: CalendarCheck2 },
     ],
   },
   {

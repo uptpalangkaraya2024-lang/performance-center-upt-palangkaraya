@@ -1363,3 +1363,26 @@ export interface SuttSnapshot {
   giRegistryDropped: string[];
   error: string | null;
 }
+
+// Jadwal Rapat Rutin (feature #3) — the user will send a Google Sheet with
+// the actual recurring-meeting schedule later; this shape is the agreed
+// menu ("jadwal, link ROM, hasil pembahasan, dll" — user's own words) so
+// the page/service stay ready to wire in that sheet as a data-source +
+// parser change only, not a new feature build. See
+// src/services/meeting-schedule.ts for the current stub.
+export interface MeetingScheduleRow {
+  id: string;
+  tanggal: string; // yyyy-MM-dd
+  waktu: string | null; // HH:mm
+  topik: string;
+  penyelenggara: string | null;
+  linkRom: string | null;
+  hasilPembahasan: string | null;
+  tindakLanjut: string | null;
+  status: string | null;
+}
+
+export interface MeetingScheduleData {
+  rows: MeetingScheduleRow[];
+  error: string | null;
+}
