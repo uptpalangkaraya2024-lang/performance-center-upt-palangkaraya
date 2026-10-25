@@ -29,6 +29,7 @@ import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
 import { buildRenusUltgResume, type RenusUltgResumeEntry } from "@/lib/renus-compute";
 import { RenusWorkTable } from "./renus-work-table";
+import { RenusWorkloadHeatmap } from "./renus-workload-heatmap";
 import type { RenusData, RenusRow, RenusWeekPeriod } from "@/types";
 
 const ALL = "__all__";
@@ -427,6 +428,8 @@ export function RenusClient({ data }: { data: RenusData }) {
           </CardContent>
         </Card>
       </div>
+
+      <RenusWorkloadHeatmap rows={data.rows} todayISO={data.today} />
 
       <Card>
         <CardHeader>
