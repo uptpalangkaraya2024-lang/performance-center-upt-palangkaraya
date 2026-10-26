@@ -8,7 +8,7 @@
 // proposal that's easier to defend needs its reasoning visible, not just
 // a ranked number).
 import { useMemo, useState } from "react";
-import { AlertTriangle, Calculator, Info, ShieldAlert, Wrench } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, ClipboardX, Info, ShieldAlert, Wrench } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -288,6 +288,7 @@ export function UsulanPrioritasClient({ proposals }: { proposals: MaintenancePro
                 Gangguan: p.gangguanTotal,
                 "RENUS Overdue": p.renusOverdue,
                 "Tren Memburuk": p.degradingCount,
+                "Ada Rencana RENUS": p.hasActiveRenusPlan ? "Ya" : "Tidak",
                 Alasan: p.reasons.join(" | "),
               })),
             },
@@ -309,9 +310,22 @@ export function UsulanPrioritasClient({ proposals }: { proposals: MaintenancePro
                       <CardTitle className="text-lg font-extrabold">GI {p.gi}</CardTitle>
                       <p className="text-xs text-muted-foreground">Skor risiko: {p.riskScore}</p>
                     </div>
-                    <span className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap", ACTION_STYLE[p.action])}>
-                      <Icon className="size-3.5" /> {p.action}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap", ACTION_STYLE[p.action])}>
+                        <Icon className="size-3.5" /> {p.action}
+                      </span>
+                      {p.action !== "Monitor" ? (
+                        p.hasActiveRenusPlan ? (
+                          <span className="flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-3 py-1 text-xs font-bold whitespace-nowrap text-success">
+                            <CheckCircle2 className="size-3.5" /> Sudah ada rencana RENUS
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 rounded-full border border-warning/50 bg-warning/10 px-3 py-1 text-xs font-bold whitespace-nowrap text-warning-foreground">
+                            <ClipboardX className="size-3.5" /> Belum ada rencana RENUS
+                          </span>
+                        )
+                      ) : null}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">

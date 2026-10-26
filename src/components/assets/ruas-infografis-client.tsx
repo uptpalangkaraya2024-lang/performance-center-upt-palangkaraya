@@ -36,14 +36,6 @@ function klasifikasiClass(k: AhiKlasifikasi): string {
   return "border-border text-muted-foreground";
 }
 
-function KlasifikasiPill({ value }: { value: AhiKlasifikasi }) {
-  return (
-    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap", klasifikasiClass(value))}>
-      {value}
-    </span>
-  );
-}
-
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 function formatShort(iso: string): string {
   const [year, month, day] = iso.split("-").map(Number);

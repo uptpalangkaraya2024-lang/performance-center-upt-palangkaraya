@@ -57,6 +57,7 @@ export default async function UsulanPrioritasPage() {
     bayLineReports,
     degradationAlerts,
     trendProjections,
+    renusRows: renus.error ? [] : renus.rows,
   });
 
   return (

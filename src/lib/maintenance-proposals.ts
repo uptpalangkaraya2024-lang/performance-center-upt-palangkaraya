@@ -12,9 +12,10 @@
 // module only computes what the data actually shows.
 import { normalizeGiName } from "@/lib/asset-correlation";
 import type { GiCorrelationRow } from "@/lib/asset-correlation";
+import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import type { AhiDegradationAlert } from "@/lib/ahi-degradation";
 import type { AhiTrendProjection } from "@/lib/ahi-trend-projection";
-import type { BayLineReport } from "@/types";
+import type { BayLineReport, RenusRow } from "@/types";
 
 // A projection landing within this window is worth calling out as its own
 // proposal reason (and worth bumping the action to Penggantian) — beyond
@@ -45,6 +46,12 @@ export interface MaintenanceProposal {
   renusOverdue: number;
   degradingCount: number;
   nearTermProjections: AhiTrendProjection[];
+  /** True when this GI already has an active (not done, not cancelled)
+   *  RENUS entry — surfaces the gap between "this GI should be planned"
+   *  (this proposal) and "this GI IS actually planned" (RENUS), per user
+   *  request. False doesn't mean nothing was ever planned, only that
+   *  nothing is CURRENTLY open for it. */
+  hasActiveRenusPlan: boolean;
 }
 
 function giMatches(a: string, b: string): boolean {
@@ -60,8 +67,9 @@ export function buildMaintenanceProposals(params: {
   bayLineReports: BayLineReport[];
   degradationAlerts: AhiDegradationAlert[];
   trendProjections: AhiTrendProjection[];
+  renusRows: RenusRow[];
 }): MaintenanceProposal[] {
-  const { giCorrelation, bayLineReports, degradationAlerts, trendProjections } = params;
+  const { giCorrelation, bayLineReports, degradationAlerts, trendProjections, renusRows } = params;
 
   const proposals: MaintenanceProposal[] = [];
   for (const row of giCorrelation) {
@@ -80,6 +88,9 @@ export function buildMaintenanceProposals(params: {
     const degrading = degradationAlerts.filter((a) => giMatches(a.gi, row.gi));
     const nearTermProjections = trendProjections.filter(
       (p) => giMatches(p.gi, row.gi) && p.daysUntilCritical <= NEAR_TERM_PROJECTION_DAYS,
+    );
+    const hasActiveRenusPlan = renusRows.some(
+      (r) => r.gi && giMatches(r.gi, row.gi) && !isRenusCancelled(r) && !isRenusDone(r),
     );
 
     const reasons: string[] = [];
@@ -120,6 +131,7 @@ export function buildMaintenanceProposals(params: {
       renusOverdue: row.renusOverdue,
       degradingCount: degrading.length,
       nearTermProjections,
+      hasActiveRenusPlan,
     });
   }
 

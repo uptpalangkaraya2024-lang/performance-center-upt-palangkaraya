@@ -74,7 +74,13 @@ export default async function LaporanEksekutifPage() {
       : [];
   const degradationAlerts = findAhiDegradationAlerts(bayLineReports);
   const trendProjections = buildAhiTrendProjections(bayLineReports);
-  const topProposals = buildMaintenanceProposals({ giCorrelation, bayLineReports, degradationAlerts, trendProjections });
+  const topProposals = buildMaintenanceProposals({
+    giCorrelation,
+    bayLineReports,
+    degradationAlerts,
+    trendProjections,
+    renusRows: renus.error ? [] : renus.rows,
+  });
 
   const renusOverdueCount = renus.error
     ? 0
