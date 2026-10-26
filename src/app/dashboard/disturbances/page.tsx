@@ -29,7 +29,7 @@ import { getCeSnapshot } from "@/services/ce-proteksi";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { findRootCauseLinks } from "@/lib/root-cause-links";
 import { listSyncStatus } from "@/lib/sync-status";
-import type { DisturbanceCategoryResult } from "@/types";
+import type { DisturbanceBayEventRecord, DisturbanceCategoryResult } from "@/types";
 
 // DURASI GGN (MENIT) is a spreadsheet TIME value, already converted to a
 // plain minute count by parseDurationMinutes() in the service — this only
@@ -114,6 +114,58 @@ function CategoryBanner({ title, subtitle, latest }: { title: string; subtitle?:
         {latest ? <span className="text-xs text-muted-foreground">Gangguan terakhir: {latest}</span> : null}
       </div>
     </div>
+  );
+}
+
+// Pairs with the YoY chart (per user request: that chart at half-width,
+// a Trip list filling the other half) — every individual Trip event for
+// THIS category only (not Transmisi+Trafo combined), newest first, in a
+// scrollable list so it matches the chart's own height instead of pushing
+// the page taller. AR Sukses/Tidak Trip rows are excluded on purpose: Trip
+// is the real-outage signal, the other two kinds don't represent lost
+// supply.
+function TripEventsList({ events }: { events: DisturbanceBayEventRecord[] }) {
+  const trips = events.filter((e) => e.kind === "Trip").sort((a, b) => b.dateISO.localeCompare(a.dateISO));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg font-extrabold">Daftar Gangguan Trip</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          {trips.length} kejadian Trip tercatat pada kategori ini, terbaru di atas.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {trips.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Tidak ada kejadian Trip pada kategori ini.</p>
+        ) : (
+          <div className="max-h-[320px] overflow-y-auto rounded-lg border">
+            <Table>
+              <TableHeader className="sticky top-0 bg-card">
+                <TableRow>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead>Bay</TableHead>
+                  <TableHead>GI</TableHead>
+                  <TableHead>Penyebab</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {trips.map((t, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="whitespace-nowrap">{t.date}</TableCell>
+                    <TableCell className="max-w-[200px] truncate" title={t.bay}>
+                      {t.bay}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">{t.gi ?? "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{t.cause}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -313,20 +365,24 @@ function CategorySection({
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-extrabold">Gangguan per Bulan — Year-on-Year</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DisturbanceYoyMonthlyChart
-            monthlyByYear={data.monthlyByYear}
-            monthlyByYearByCause={data.monthlyByYearByCause}
-            monthlyByYearByKind={data.monthlyByYearByKind}
-            monthlyByYearByUltg={data.monthlyByYearByUltg}
-            years={data.years}
-          />
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-extrabold">Gangguan per Bulan — Year-on-Year</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DisturbanceYoyMonthlyChart
+              monthlyByYear={data.monthlyByYear}
+              monthlyByYearByCause={data.monthlyByYearByCause}
+              monthlyByYearByKind={data.monthlyByYearByKind}
+              monthlyByYearByUltg={data.monthlyByYearByUltg}
+              years={data.years}
+            />
+          </CardContent>
+        </Card>
+
+        <TripEventsList events={data.bayEvents} />
+      </div>
 
       {/* Dua chart per baris pada layar lebar (dulu satu kartu per baris) —
           chart ULTG-scoped (hanya 3 ULTG) dan chart per-ruas (keduanya
