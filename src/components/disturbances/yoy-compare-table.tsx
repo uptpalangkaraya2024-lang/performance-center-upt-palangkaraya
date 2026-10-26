@@ -4,6 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { YoyCompareRow } from "@/lib/disturbance-yoy-compare";
 
+const MONTH_ID = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
 /** Red = more gangguan than last year (worse), green = fewer (better) —
  *  same framing used everywhere else on this page (critical/success
  *  colors), regardless of which category the row is about. */
@@ -29,19 +34,26 @@ export function YoyCompareTable({
   rows,
   currentYear,
   previousYear,
+  cutoffMonth,
 }: {
   title: string;
   rows: YoyCompareRow[];
   currentYear: string;
   previousYear: string;
+  /** 1-12 — both years are truncated to this same month, so the column
+   *  headers can say exactly what's being compared (a still-in-progress
+   *  current year was never silently compared against a previous year's
+   *  full 12 months). */
+  cutoffMonth: number;
 }) {
+  const monthLabel = MONTH_ID[cutoffMonth - 1] ?? "";
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-lg font-extrabold">{title}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Perbandingan jumlah kejadian {previousYear} vs {currentYear} — merah berarti naik (lebih banyak gangguan),
-          hijau berarti turun dibanding tahun sebelumnya.
+          Kumulatif Januari–{monthLabel} — {previousYear} vs {currentYear} — merah berarti naik (lebih banyak
+          gangguan), hijau berarti turun dibanding periode yang sama tahun sebelumnya.
         </p>
       </CardHeader>
       <CardContent>
@@ -53,8 +65,12 @@ export function YoyCompareTable({
               <thead>
                 <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
                   <th className="px-3 py-2.5 font-bold">Kategori</th>
-                  <th className="px-3 py-2.5 text-right font-bold">{previousYear}</th>
-                  <th className="px-3 py-2.5 text-right font-bold">{currentYear}</th>
+                  <th className="px-3 py-2.5 text-right font-bold">
+                    s.d. {monthLabel} {previousYear}
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-bold">
+                    s.d. {monthLabel} {currentYear}
+                  </th>
                   <th className="px-3 py-2.5 text-right font-bold">Perubahan %</th>
                 </tr>
               </thead>

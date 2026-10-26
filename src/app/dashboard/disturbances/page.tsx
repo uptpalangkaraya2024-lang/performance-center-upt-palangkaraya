@@ -189,11 +189,13 @@ function CategorySection({
   subtitle,
   data,
   anchorId,
+  cutoffMonth,
 }: {
   title: string;
   subtitle?: string;
   data: DisturbanceCategoryResult;
   anchorId: string;
+  cutoffMonth: number;
 }) {
   if (data.summary.total === 0) {
     return (
@@ -220,18 +222,24 @@ function CategorySection({
 
   // Year-on-year comparison tables (per user's own reference screenshot) —
   // always the latest year vs. the one right before it (data.years is
-  // sorted ascending, same convention monthOverMonth already uses).
+  // sorted ascending, same convention monthOverMonth already uses), both
+  // truncated to the same cutoff month so a still-in-progress current year
+  // is never compared against a previous year's full 12 months.
   const currentYear = data.years.at(-1) ?? "";
   const previousYear = data.years.at(-2) ?? "";
   const penyebabCompareRows = buildYoyCompareRows(
-    data.bayEvents.map((e) => ({ category: e.cause, year: e.year })),
+    data.bayEvents.map((e) => ({ category: e.cause, year: e.year, dateISO: e.dateISO })),
     currentYear,
     previousYear,
+    cutoffMonth,
   );
   const kinerjaCompareRows = buildYoyCompareRows(
-    data.bayEvents.filter((e) => !isTrafo || e.kind !== "AR Sukses").map((e) => ({ category: e.kind, year: e.year })),
+    data.bayEvents
+      .filter((e) => !isTrafo || e.kind !== "AR Sukses")
+      .map((e) => ({ category: e.kind, year: e.year, dateISO: e.dateISO })),
     currentYear,
     previousYear,
+    cutoffMonth,
   );
 
   return (
@@ -349,8 +357,8 @@ function CategorySection({
 
       {currentYear && previousYear ? (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <YoyCompareTable title="Perbandingan Penyebab" rows={penyebabCompareRows} currentYear={currentYear} previousYear={previousYear} />
-          <YoyCompareTable title="Perbandingan Kinerja" rows={kinerjaCompareRows} currentYear={currentYear} previousYear={previousYear} />
+          <YoyCompareTable title="Perbandingan Penyebab" rows={penyebabCompareRows} currentYear={currentYear} previousYear={previousYear} cutoffMonth={cutoffMonth} />
+          <YoyCompareTable title="Perbandingan Kinerja" rows={kinerjaCompareRows} currentYear={currentYear} previousYear={previousYear} cutoffMonth={cutoffMonth} />
         </div>
       ) : null}
 
@@ -476,6 +484,11 @@ export default async function DisturbancesPage() {
   const result = await getDisturbances();
   const syncEntry = listSyncStatus().find((entry) => entry.module === "Gangguan");
   const lastUpdate = formatTime(syncEntry?.lastSync ?? null);
+  // Asia/Jakarta, same convention every other "today" in this app uses
+  // (renus.today, root-cause-links' own todayISO, ...) — the YoY compare
+  // tables truncate both years to this same month so a still-in-progress
+  // current year is never compared against a full previous year.
+  const cutoffMonth = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(new Date()));
 
   return (
     <div className="flex flex-col gap-6">
@@ -682,18 +695,20 @@ export default async function DisturbancesPage() {
             </div>
           </section>
 
-          <CategorySection title="Transmisi" data={result.transmisi} anchorId="transmisi" />
+          <CategorySection title="Transmisi" data={result.transmisi} anchorId="transmisi" cutoffMonth={cutoffMonth} />
           <CategorySection
             title="Trafo HV"
             subtitle="T/R Bay — trafo tripped di sisi tegangan tinggi (seluruh trafo terdampak)."
             data={result.trafoHv}
             anchorId="trafo-hv"
+            cutoffMonth={cutoffMonth}
           />
           <CategorySection
             title="Trafo Low Voltage"
             subtitle="T/R Bay (LOW VOLTAGE) — hanya sisi incoming/20kV yang trip, sisi HV tetap bertegangan."
             data={result.trafoLv}
             anchorId="trafo-lv"
+            cutoffMonth={cutoffMonth}
           />
         </>
       )}
