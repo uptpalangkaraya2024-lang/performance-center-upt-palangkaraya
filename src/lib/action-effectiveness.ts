@@ -6,26 +6,76 @@
 // comparison around the completion date — never a causal claim (other
 // factors can move AHI/gangguan too), but a concrete, traceable answer to
 // "did this actually help," which this app didn't have anywhere before.
+//
+// FASE 2 additions: (1) multiple raw RENUS/CE rows for the same physical
+// intervention (same GI, same work category, same completion date — e.g.
+// CE's own "Pengujian Ulang" visit logging one row per tested parameter)
+// are merged into one intervention before scoring, so the summary counts
+// interventions, not sheet rows; (2) which metric gets evaluated now
+// depends on the work's own category (Anti Binatang -> animal-caused
+// gangguan only, ROW/Pohon -> vegetation-caused gangguan only, equipment
+// work -> AHI, facility/civil work -> not evaluated at all — see
+// src/config/effectiveness-indicator-map.ts); (3) each gangguan verdict
+// now carries a baseline: the same before/after change averaged across
+// every OTHER GI with no intervention of its own in that same window, so
+// "gangguan went down" can be read against whether gangguan went down
+// everywhere that period anyway (a system-wide trend, e.g. a drier month)
+// rather than only at this one GI.
 import { canonicalGiKey } from "@/lib/gi-name";
+import {
+  classifyCeIndikator,
+  classifyRenusWorkDetail,
+  EFFECTIVENESS_CATEGORY_CAUSE,
+  EFFECTIVENESS_CATEGORY_LABEL,
+  type EffectivenessCategory,
+} from "@/config/effectiveness-indicator-map";
 import type { BayLineReport, CeItem, DisturbanceBayEventRecord, RenusRow } from "@/types";
 
-export type EffectivenessVerdict = "membaik" | "tetap" | "memburuk" | "belum_cukup_data";
+export type EffectivenessVerdict = "membaik" | "tetap" | "memburuk" | "belum_cukup_data" | "tidak_relevan";
+
+export interface GangguanBaseline {
+  /** Average (after - before) gangguan-count change across every OTHER GI
+   *  with no intervention of its own in this same window, same cause
+   *  filter as this check's own gangguan count — null when there weren't
+   *  enough qualifying GIs to compare against. */
+  avgOtherGiDelta: number | null;
+  /** How many GIs that average is built from. */
+  controlGiCount: number;
+  /** This GI's own delta (gangguanAfter - gangguanBefore) vs avgOtherGiDelta
+   *  — "lebih_baik" means this GI improved MORE than its peers did in the
+   *  same period (stronger evidence of a localized effect), "sama" means
+   *  it tracked the general trend, "lebih_buruk" means peers improved more
+   *  than this GI did. Supplementary context only — never changes the
+   *  verdict above, which stays based on this GI's own raw before/after
+   *  numbers for traceability. */
+  relativeToBaseline: "lebih_baik" | "sama" | "lebih_buruk" | null;
+}
 
 export interface ActionEffectivenessCheck {
-  source: "RENUS" | "CE";
+  source: ("RENUS" | "CE")[];
   gi: string;
+  category: EffectivenessCategory;
+  categoryLabel: string;
   description: string;
+  /** How many raw RENUS/CE rows merged into this one intervention (same
+   *  GI, same category, same realisasi date). 1 when nothing merged. */
+  mergedCount: number;
   realisasiDate: string;
   daysSinceAction: number;
 
-  /** PLN's own 1-5 scale, 1=BEST..5=CRITICAL — lower is better. */
+  /** PLN's own 1-5 scale, 1=BEST..5=CRITICAL — lower is better. Only
+   *  scored for category "ahi" — every other category's ahiVerdict is
+   *  "tidak_relevan" and ahiBeforeAvg/ahiAfterAvg stay null. */
   ahiBeforeAvg: number | null;
   ahiAfterAvg: number | null;
   ahiVerdict: EffectivenessVerdict;
 
+  /** Cause-filtered per EFFECTIVENESS_CATEGORY_CAUSE (all-cause for "ahi",
+   *  not scored at all for "tidak_relevan"). */
   gangguanBefore: number;
   gangguanAfter: number;
   gangguanVerdict: EffectivenessVerdict;
+  gangguanBaseline: GangguanBaseline | null;
 }
 
 // Only actions completed within this window are worth re-checking — a
@@ -35,6 +85,15 @@ const LOOKBACK_DAYS = 365;
 // Before/after gangguan comparison window — matches root-cause-links.ts's
 // own 90-day lookback convention for "recent enough to be relevant."
 const GANGGUAN_WINDOW_DAYS = 90;
+// A relative change smaller than this (as a share of the larger of the two
+// averages being compared) reads as "tracked the same trend," not a real
+// difference — avoids calling a 2.1 vs 2.0 average a meaningful gap.
+const BASELINE_MEANINGFUL_GAP = 0.15;
+// Below this many qualifying control GIs, "the average of N other GIs"
+// is really just "what 1-2 other specific GIs happened to do" — too thin
+// to present as a trend comparison, so the baseline stays null (shown as
+// no comparison available) rather than overstating confidence.
+const MIN_CONTROL_GIS = 3;
 
 function giMatches(a: string | null, b: string | null): boolean {
   if (!a || !b) return false;
@@ -90,9 +149,11 @@ function countGangguanInWindow(
   gi: string,
   centerISO: string,
   direction: "before" | "after",
+  cause: string | null,
 ): number {
   return events.filter((e) => {
     if (!giMatches(e.gi, gi)) return false;
+    if (cause !== null && e.cause !== cause) return false;
     if (direction === "before") {
       const d = daysBetween(e.dateISO, centerISO);
       return d > 0 && d <= GANGGUAN_WINDOW_DAYS;
@@ -102,31 +163,199 @@ function countGangguanInWindow(
   }).length;
 }
 
-function buildCheck(params: {
+// --- Raw-row collection + merge -------------------------------------------
+
+interface RawIntervention {
   source: "RENUS" | "CE";
   gi: string;
+  category: EffectivenessCategory;
   description: string;
   realisasiDate: string;
+}
+
+function collectRawInterventions(renusRows: RenusRow[], ceItems: CeItem[], todayISO: string): RawIntervention[] {
+  const raw: RawIntervention[] = [];
+
+  for (const r of renusRows) {
+    if (!r.realisasiDate || !r.gi) continue;
+    const daysSinceAction = daysBetween(r.realisasiDate, todayISO);
+    if (daysSinceAction < 0 || daysSinceAction > LOOKBACK_DAYS) continue;
+    raw.push({
+      source: "RENUS",
+      gi: r.gi,
+      category: classifyRenusWorkDetail(r.workDetail),
+      description: r.workDetail,
+      realisasiDate: r.realisasiDate,
+    });
+  }
+
+  for (const c of ceItems) {
+    if (!c.done || !c.tanggalRealisasi || !c.gardu) continue;
+    const daysSinceAction = daysBetween(c.tanggalRealisasi, todayISO);
+    if (daysSinceAction < 0 || daysSinceAction > LOOKBACK_DAYS) continue;
+    raw.push({
+      source: "CE",
+      gi: c.gardu,
+      category: classifyCeIndikator(c.indikator),
+      description: c.namaProgram || c.anomaliPemicu || `Temuan #${c.id}`,
+      realisasiDate: c.tanggalRealisasi,
+    });
+  }
+
+  return raw;
+}
+
+interface MergedIntervention {
+  source: ("RENUS" | "CE")[];
+  gi: string; // canonical key, used for scoring — display GI comes from the first raw row
+  giDisplay: string;
+  category: EffectivenessCategory;
+  description: string;
+  mergedCount: number;
+  realisasiDate: string;
+}
+
+/** One intervention per (GI, category, realisasi date) — several raw rows
+ *  sharing all three merge into one, per the user's own instruction ("satu
+ *  intervensi = GI + jenis pekerjaan + tanggal realisasi"). Most common
+ *  case: CE logging one row per tested parameter for the same re-testing
+ *  visit (confirmed live — "Pengujian Ulang DGA C2H6", "Pengujian Ulang
+ *  Moisture", ... all same GI/date/category). */
+function mergeInterventions(raw: RawIntervention[]): MergedIntervention[] {
+  const byKey = new Map<string, MergedIntervention>();
+  for (const r of raw) {
+    const key = `${canonicalGiKey(r.gi)}::${r.category}::${r.realisasiDate}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        source: [r.source],
+        gi: canonicalGiKey(r.gi),
+        giDisplay: r.gi,
+        category: r.category,
+        description: r.description,
+        mergedCount: 1,
+        realisasiDate: r.realisasiDate,
+      });
+      continue;
+    }
+    existing.mergedCount += 1;
+    if (!existing.source.includes(r.source)) existing.source.push(r.source);
+    // Keep the merged description short and non-repetitive — list up to 3
+    // distinct descriptions, then "+N lainnya", same overflow convention
+    // used elsewhere in this app (e.g. root-cause-links' own card).
+    const parts = existing.description.split(" · ");
+    if (!parts.includes(r.description) && parts.filter((p) => !p.startsWith("+")).length < 3) {
+      existing.description = [...parts.filter((p) => !p.startsWith("+")), r.description].join(" · ");
+    } else if (!parts.includes(r.description)) {
+      const extra = existing.mergedCount - 3;
+      const base = parts.filter((p) => !p.startsWith("+"));
+      existing.description = extra > 0 ? `${base.join(" · ")} · +${extra} lainnya` : base.join(" · ");
+    }
+  }
+  return [...byKey.values()];
+}
+
+// --- Baseline comparison ---------------------------------------------------
+
+function classifyRelative(giDelta: number, baselineDelta: number): GangguanBaseline["relativeToBaseline"] {
+  const scale = Math.max(Math.abs(giDelta), Math.abs(baselineDelta), 1);
+  const gap = baselineDelta - giDelta; // positive => this GI did better than peers (smaller/more-negative delta)
+  if (Math.abs(gap) / scale < BASELINE_MEANINGFUL_GAP) return "sama";
+  return gap > 0 ? "lebih_baik" : "lebih_buruk";
+}
+
+/** Average gangguan-count change (after - before, same window/cause as the
+ *  check under test) across every OTHER GI that had NO intervention of its
+ *  own in that window — the "what would this GI's change have looked like
+ *  anyway" comparison the user asked for. A GI qualifies as a control only
+ *  if it has no merged intervention of its own whose realisasi date falls
+ *  within the same +/-GANGGUAN_WINDOW_DAYS window (otherwise its own
+ *  change is confounded by its own action, not a clean baseline). */
+function buildGangguanBaseline(
+  testGi: string,
+  realisasiDate: string,
+  cause: string | null,
+  giDelta: number,
+  allGis: string[],
+  allInterventions: MergedIntervention[],
+  disturbanceEvents: DisturbanceBayEventRecord[],
+): GangguanBaseline {
+  const deltas: number[] = [];
+  for (const gi of allGis) {
+    if (giMatches(gi, testGi)) continue;
+    const hasOwnInterventionInWindow = allInterventions.some(
+      (iv) => giMatches(iv.gi, gi) && Math.abs(daysBetween(iv.realisasiDate, realisasiDate)) <= GANGGUAN_WINDOW_DAYS,
+    );
+    if (hasOwnInterventionInWindow) continue;
+    const before = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "before", cause);
+    const after = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "after", cause);
+    if (before === 0 && after === 0) continue; // no signal either way at this GI, not useful as a control
+    deltas.push(after - before);
+  }
+  if (deltas.length < MIN_CONTROL_GIS) {
+    return { avgOtherGiDelta: null, controlGiCount: deltas.length, relativeToBaseline: null };
+  }
+  const avg = deltas.reduce((s, d) => s + d, 0) / deltas.length;
+  return {
+    avgOtherGiDelta: Math.round(avg * 100) / 100,
+    controlGiCount: deltas.length,
+    relativeToBaseline: classifyRelative(giDelta, avg),
+  };
+}
+
+// --- Per-intervention scoring -----------------------------------------------
+
+function buildCheck(params: {
+  intervention: MergedIntervention;
   daysSinceAction: number;
   bayLineReports: BayLineReport[];
   disturbanceEvents: DisturbanceBayEventRecord[];
+  allGis: string[];
+  allInterventions: MergedIntervention[];
 }): ActionEffectivenessCheck {
-  const { source, gi, description, realisasiDate, daysSinceAction, bayLineReports, disturbanceEvents } = params;
+  const { intervention, daysSinceAction, bayLineReports, disturbanceEvents, allGis, allInterventions } = params;
+  const { gi, giDisplay, category, description, mergedCount, realisasiDate, source } = intervention;
 
-  const ahiPoints = collectAhiPoints(gi, bayLineReports);
-  const ahiBeforeAvg = averageAroundDate(ahiPoints, realisasiDate, "before");
-  const ahiAfterAvg = averageAroundDate(ahiPoints, realisasiDate, "after");
-  const ahiVerdict: EffectivenessVerdict =
-    ahiBeforeAvg === null || ahiAfterAvg === null
-      ? "belum_cukup_data"
-      : ahiAfterAvg < ahiBeforeAvg
-        ? "membaik"
-        : ahiAfterAvg > ahiBeforeAvg
-          ? "memburuk"
-          : "tetap";
+  if (category === "tidak_relevan") {
+    return {
+      source,
+      gi: giDisplay,
+      category,
+      categoryLabel: EFFECTIVENESS_CATEGORY_LABEL[category],
+      description,
+      mergedCount,
+      realisasiDate,
+      daysSinceAction,
+      ahiBeforeAvg: null,
+      ahiAfterAvg: null,
+      ahiVerdict: "tidak_relevan",
+      gangguanBefore: 0,
+      gangguanAfter: 0,
+      gangguanVerdict: "tidak_relevan",
+      gangguanBaseline: null,
+    };
+  }
 
-  const gangguanBefore = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "before");
-  const gangguanAfter = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "after");
+  let ahiBeforeAvg: number | null = null;
+  let ahiAfterAvg: number | null = null;
+  let ahiVerdict: EffectivenessVerdict = "tidak_relevan";
+  if (category === "ahi") {
+    const ahiPoints = collectAhiPoints(gi, bayLineReports);
+    ahiBeforeAvg = averageAroundDate(ahiPoints, realisasiDate, "before");
+    ahiAfterAvg = averageAroundDate(ahiPoints, realisasiDate, "after");
+    ahiVerdict =
+      ahiBeforeAvg === null || ahiAfterAvg === null
+        ? "belum_cukup_data"
+        : ahiAfterAvg < ahiBeforeAvg
+          ? "membaik"
+          : ahiAfterAvg > ahiBeforeAvg
+            ? "memburuk"
+            : "tetap";
+  }
+
+  const cause = EFFECTIVENESS_CATEGORY_CAUSE[category];
+  const gangguanBefore = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "before", cause);
+  const gangguanAfter = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "after", cause);
   const gangguanVerdict: EffectivenessVerdict =
     daysSinceAction < GANGGUAN_WINDOW_DAYS
       ? "belum_cukup_data"
@@ -135,11 +364,18 @@ function buildCheck(params: {
         : gangguanAfter > gangguanBefore
           ? "memburuk"
           : "tetap";
+  const gangguanBaseline =
+    daysSinceAction < GANGGUAN_WINDOW_DAYS
+      ? null
+      : buildGangguanBaseline(gi, realisasiDate, cause, gangguanAfter - gangguanBefore, allGis, allInterventions, disturbanceEvents);
 
   return {
     source,
-    gi,
+    gi: giDisplay,
+    category,
+    categoryLabel: EFFECTIVENESS_CATEGORY_LABEL[category],
     description,
+    mergedCount,
     realisasiDate,
     daysSinceAction,
     ahiBeforeAvg,
@@ -148,13 +384,16 @@ function buildCheck(params: {
     gangguanBefore,
     gangguanAfter,
     gangguanVerdict,
+    gangguanBaseline,
   };
 }
 
-/** One check per completed RENUS/CE item within the last year — every
- *  completion gets an entry, including ones where verification isn't
- *  possible yet ("belum_cukup_data"), so this is a complete accounting of
- *  recent work, never a silently filtered subset. */
+/** One check per merged intervention (GI + jenis pekerjaan + tanggal
+ *  realisasi) completed within the last year — every intervention gets an
+ *  entry, including ones where verification isn't possible yet
+ *  ("belum_cukup_data") or isn't applicable at all ("tidak_relevan"), so
+ *  this is a complete accounting of recent work, never a silently filtered
+ *  subset. */
 export function buildActionEffectivenessChecks(params: {
   renusRows: RenusRow[];
   ceItems: CeItem[];
@@ -163,41 +402,21 @@ export function buildActionEffectivenessChecks(params: {
   todayISO: string;
 }): ActionEffectivenessCheck[] {
   const { renusRows, ceItems, bayLineReports, disturbanceEvents, todayISO } = params;
-  const checks: ActionEffectivenessCheck[] = [];
 
-  for (const r of renusRows) {
-    if (!r.realisasiDate || !r.gi) continue;
-    const daysSinceAction = daysBetween(r.realisasiDate, todayISO);
-    if (daysSinceAction < 0 || daysSinceAction > LOOKBACK_DAYS) continue;
-    checks.push(
-      buildCheck({
-        source: "RENUS",
-        gi: r.gi,
-        description: r.workDetail,
-        realisasiDate: r.realisasiDate,
-        daysSinceAction,
-        bayLineReports,
-        disturbanceEvents,
-      }),
-    );
-  }
+  const raw = collectRawInterventions(renusRows, ceItems, todayISO);
+  const merged = mergeInterventions(raw);
+  const allGis = [...new Set(disturbanceEvents.map((e) => e.gi).filter((g): g is string => g !== null))];
 
-  for (const c of ceItems) {
-    if (!c.done || !c.tanggalRealisasi || !c.gardu) continue;
-    const daysSinceAction = daysBetween(c.tanggalRealisasi, todayISO);
-    if (daysSinceAction < 0 || daysSinceAction > LOOKBACK_DAYS) continue;
-    checks.push(
-      buildCheck({
-        source: "CE",
-        gi: c.gardu,
-        description: c.namaProgram || c.anomaliPemicu || `Temuan #${c.id}`,
-        realisasiDate: c.tanggalRealisasi,
-        daysSinceAction,
-        bayLineReports,
-        disturbanceEvents,
-      }),
-    );
-  }
+  const checks = merged.map((intervention) =>
+    buildCheck({
+      intervention,
+      daysSinceAction: daysBetween(intervention.realisasiDate, todayISO),
+      bayLineReports,
+      disturbanceEvents,
+      allGis,
+      allInterventions: merged,
+    }),
+  );
 
   return checks.sort((a, b) => b.realisasiDate.localeCompare(a.realisasiDate));
 }
