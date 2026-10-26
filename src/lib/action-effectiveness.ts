@@ -95,11 +95,6 @@ const BASELINE_MEANINGFUL_GAP = 0.15;
 // no comparison available) rather than overstating confidence.
 const MIN_CONTROL_GIS = 3;
 
-function giMatches(a: string | null, b: string | null): boolean {
-  if (!a || !b) return false;
-  return canonicalGiKey(a) === canonicalGiKey(b);
-}
-
 function daysBetween(fromISO: string, toISO: string): number {
   const from = new Date(`${fromISO}T00:00:00Z`).getTime();
   const to = new Date(`${toISO}T00:00:00Z`).getTime();
@@ -112,10 +107,9 @@ function daysBetween(fromISO: string, toISO: string): number {
  *  own history (RENUS/CE items rarely name a single unit precisely enough
  *  to match bay-for-bay, same limitation already documented in
  *  ruas-infographic.ts and root-cause-links.ts). */
-function collectAhiPoints(gi: string, bayLineReports: BayLineReport[]): { tanggal: string; skorAhi: number }[] {
+function collectAhiPoints(bayLineReports: BayLineReport[]): { tanggal: string; skorAhi: number }[] {
   const points: { tanggal: string; skorAhi: number }[] = [];
   for (const report of bayLineReports) {
-    if (!giMatches(report.gi, gi)) continue;
     for (const unit of report.units) {
       for (const h of unit.history) {
         if (h.skorAhi !== null) points.push({ tanggal: h.tanggal, skorAhi: h.skorAhi });
@@ -146,13 +140,18 @@ function averageAroundDate(
 
 function countGangguanInWindow(
   events: DisturbanceBayEventRecord[],
-  gi: string,
   centerISO: string,
   direction: "before" | "after",
   cause: string | null,
 ): number {
+  // `events` is expected to already be scoped to one GI (see eventsByGi in
+  // buildActionEffectivenessChecks) — this used to re-filter the FULL
+  // disturbance-events array by GI on every single call (238 interventions
+  // x up to ~20 baseline GIs x 2 directions each), measured live as the
+  // dominant cost behind Verifikasi Efektivitas's own ~1.2-1.4s server
+  // compute time. Pre-grouping by GI once turns each of these calls into a
+  // scan over just that GI's own (much smaller) event list.
   return events.filter((e) => {
-    if (!giMatches(e.gi, gi)) return false;
     if (cause !== null && e.cause !== cause) return false;
     if (direction === "before") {
       const d = daysBetween(e.dateISO, centerISO);
@@ -270,25 +269,32 @@ function classifyRelative(giDelta: number, baselineDelta: number): GangguanBasel
  *  anyway" comparison the user asked for. A GI qualifies as a control only
  *  if it has no merged intervention of its own whose realisasi date falls
  *  within the same +/-GANGGUAN_WINDOW_DAYS window (otherwise its own
- *  change is confounded by its own action, not a clean baseline). */
+ *  change is confounded by its own action, not a clean baseline).
+ *
+ *  Takes pre-grouped-by-GI maps (built once in buildActionEffectivenessChecks)
+ *  rather than the flat lists + per-call giMatches() filtering this used to
+ *  do — see countGangguanInWindow's own comment for the measured cost that
+ *  fixed. */
 function buildGangguanBaseline(
   testGi: string,
   realisasiDate: string,
   cause: string | null,
   giDelta: number,
-  allGis: string[],
-  allInterventions: MergedIntervention[],
-  disturbanceEvents: DisturbanceBayEventRecord[],
+  allGiKeys: string[],
+  interventionsByGi: Map<string, MergedIntervention[]>,
+  eventsByGi: Map<string, DisturbanceBayEventRecord[]>,
 ): GangguanBaseline {
   const deltas: number[] = [];
-  for (const gi of allGis) {
-    if (giMatches(gi, testGi)) continue;
-    const hasOwnInterventionInWindow = allInterventions.some(
-      (iv) => giMatches(iv.gi, gi) && Math.abs(daysBetween(iv.realisasiDate, realisasiDate)) <= GANGGUAN_WINDOW_DAYS,
+  for (const giKey of allGiKeys) {
+    if (giKey === testGi) continue;
+    const ownInterventions = interventionsByGi.get(giKey);
+    const hasOwnInterventionInWindow = ownInterventions?.some(
+      (iv) => Math.abs(daysBetween(iv.realisasiDate, realisasiDate)) <= GANGGUAN_WINDOW_DAYS,
     );
     if (hasOwnInterventionInWindow) continue;
-    const before = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "before", cause);
-    const after = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "after", cause);
+    const giEvents = eventsByGi.get(giKey) ?? [];
+    const before = countGangguanInWindow(giEvents, realisasiDate, "before", cause);
+    const after = countGangguanInWindow(giEvents, realisasiDate, "after", cause);
     if (before === 0 && after === 0) continue; // no signal either way at this GI, not useful as a control
     deltas.push(after - before);
   }
@@ -308,12 +314,12 @@ function buildGangguanBaseline(
 function buildCheck(params: {
   intervention: MergedIntervention;
   daysSinceAction: number;
-  bayLineReports: BayLineReport[];
-  disturbanceEvents: DisturbanceBayEventRecord[];
-  allGis: string[];
-  allInterventions: MergedIntervention[];
+  bayLineReportsByGi: Map<string, BayLineReport[]>;
+  allGiKeys: string[];
+  interventionsByGi: Map<string, MergedIntervention[]>;
+  eventsByGi: Map<string, DisturbanceBayEventRecord[]>;
 }): ActionEffectivenessCheck {
-  const { intervention, daysSinceAction, bayLineReports, disturbanceEvents, allGis, allInterventions } = params;
+  const { intervention, daysSinceAction, bayLineReportsByGi, allGiKeys, interventionsByGi, eventsByGi } = params;
   const { gi, giDisplay, category, description, mergedCount, realisasiDate, source } = intervention;
 
   if (category === "tidak_relevan") {
@@ -340,7 +346,7 @@ function buildCheck(params: {
   let ahiAfterAvg: number | null = null;
   let ahiVerdict: EffectivenessVerdict = "tidak_relevan";
   if (category === "ahi") {
-    const ahiPoints = collectAhiPoints(gi, bayLineReports);
+    const ahiPoints = collectAhiPoints(bayLineReportsByGi.get(gi) ?? []);
     ahiBeforeAvg = averageAroundDate(ahiPoints, realisasiDate, "before");
     ahiAfterAvg = averageAroundDate(ahiPoints, realisasiDate, "after");
     ahiVerdict =
@@ -354,8 +360,9 @@ function buildCheck(params: {
   }
 
   const cause = EFFECTIVENESS_CATEGORY_CAUSE[category];
-  const gangguanBefore = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "before", cause);
-  const gangguanAfter = countGangguanInWindow(disturbanceEvents, gi, realisasiDate, "after", cause);
+  const giEvents = eventsByGi.get(gi) ?? [];
+  const gangguanBefore = countGangguanInWindow(giEvents, realisasiDate, "before", cause);
+  const gangguanAfter = countGangguanInWindow(giEvents, realisasiDate, "after", cause);
   const gangguanVerdict: EffectivenessVerdict =
     daysSinceAction < GANGGUAN_WINDOW_DAYS
       ? "belum_cukup_data"
@@ -367,7 +374,7 @@ function buildCheck(params: {
   const gangguanBaseline =
     daysSinceAction < GANGGUAN_WINDOW_DAYS
       ? null
-      : buildGangguanBaseline(gi, realisasiDate, cause, gangguanAfter - gangguanBefore, allGis, allInterventions, disturbanceEvents);
+      : buildGangguanBaseline(gi, realisasiDate, cause, gangguanAfter - gangguanBefore, allGiKeys, interventionsByGi, eventsByGi);
 
   return {
     source,
@@ -405,16 +412,51 @@ export function buildActionEffectivenessChecks(params: {
 
   const raw = collectRawInterventions(renusRows, ceItems, todayISO);
   const merged = mergeInterventions(raw);
-  const allGis = [...new Set(disturbanceEvents.map((e) => e.gi).filter((g): g is string => g !== null))];
+
+  // Grouped once up front, keyed by the same canonical GI form every
+  // MergedIntervention.gi already uses — every per-check/per-baseline-GI
+  // lookup below becomes a Map.get() into a small per-GI list instead of a
+  // full-array scan with a canonicalGiKey() call on every element. See
+  // countGangguanInWindow's own comment for the measured cost this fixed.
+  const eventsByGi = new Map<string, DisturbanceBayEventRecord[]>();
+  for (const e of disturbanceEvents) {
+    if (e.gi === null) continue;
+    const key = canonicalGiKey(e.gi);
+    const list = eventsByGi.get(key);
+    if (list) list.push(e);
+    else eventsByGi.set(key, [e]);
+  }
+
+  const interventionsByGi = new Map<string, MergedIntervention[]>();
+  for (const iv of merged) {
+    const list = interventionsByGi.get(iv.gi);
+    if (list) list.push(iv);
+    else interventionsByGi.set(iv.gi, [iv]);
+  }
+
+  const bayLineReportsByGi = new Map<string, BayLineReport[]>();
+  for (const report of bayLineReports) {
+    if (!report.gi) continue;
+    const key = canonicalGiKey(report.gi);
+    const list = bayLineReportsByGi.get(key);
+    if (list) list.push(report);
+    else bayLineReportsByGi.set(key, [report]);
+  }
+
+  // Same candidate pool as before: GIs that appear in disturbance events
+  // (a GI with only an intervention and no disturbance history at all
+  // can't be scored as a baseline anyway — see the before===0 && after===0
+  // skip in buildGangguanBaseline).
+  const allGiKeys = [...eventsByGi.keys()];
 
   const checks = merged.map((intervention) =>
     buildCheck({
       intervention,
       daysSinceAction: daysBetween(intervention.realisasiDate, todayISO),
-      bayLineReports,
-      disturbanceEvents,
-      allGis,
-      allInterventions: merged,
+      bayLineReportsByGi,
+      allGiKeys,
+      interventionsByGi,
+      eventsByGi,
     }),
   );
 
