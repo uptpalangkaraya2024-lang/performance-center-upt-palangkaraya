@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, CircleDashed, MapPinned, MonitorPlay, TrendingUp, XCircle, Zap } from "lucide-react";
+import { CheckCircle2, CircleDashed, Link2, MapPinned, MonitorPlay, TrendingUp, XCircle, Zap } from "lucide-react";
 
 import {
   Table,
@@ -22,14 +22,13 @@ import { UltgBreakdownChart } from "@/components/disturbances/ultg-breakdown-cha
 import { UltgCauseChart } from "@/components/disturbances/ultg-cause-chart";
 import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart";
 import { CauseByBayChart } from "@/components/disturbances/cause-by-bay-chart";
-import { RootCauseLinksCard } from "@/components/disturbances/root-cause-links-card";
+import { TripEventsPanel } from "@/components/disturbances/trip-events-panel";
+import { YoyCompareTable } from "@/components/disturbances/yoy-compare-table";
 import { getDisturbances } from "@/services/disturbances";
-import { getAhiPerformance } from "@/services/ahi-performance";
-import { getCeSnapshot } from "@/services/ce-proteksi";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
-import { findRootCauseLinks } from "@/lib/root-cause-links";
+import { buildYoyCompareRows } from "@/lib/disturbance-yoy-compare";
 import { listSyncStatus } from "@/lib/sync-status";
-import type { DisturbanceBayEventRecord, DisturbanceCategoryResult } from "@/types";
+import type { DisturbanceCategoryResult } from "@/types";
 
 // DURASI GGN (MENIT) is a spreadsheet TIME value, already converted to a
 // plain minute count by parseDurationMinutes() in the service — this only
@@ -114,58 +113,6 @@ function CategoryBanner({ title, subtitle, latest }: { title: string; subtitle?:
         {latest ? <span className="text-xs text-muted-foreground">Gangguan terakhir: {latest}</span> : null}
       </div>
     </div>
-  );
-}
-
-// Pairs with the YoY chart (per user request: that chart at half-width,
-// a Trip list filling the other half) — every individual Trip event for
-// THIS category only (not Transmisi+Trafo combined), newest first, in a
-// scrollable list so it matches the chart's own height instead of pushing
-// the page taller. AR Sukses/Tidak Trip rows are excluded on purpose: Trip
-// is the real-outage signal, the other two kinds don't represent lost
-// supply.
-function TripEventsList({ events }: { events: DisturbanceBayEventRecord[] }) {
-  const trips = events.filter((e) => e.kind === "Trip").sort((a, b) => b.dateISO.localeCompare(a.dateISO));
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg font-extrabold">Daftar Gangguan Trip</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          {trips.length} kejadian Trip tercatat pada kategori ini, terbaru di atas.
-        </p>
-      </CardHeader>
-      <CardContent>
-        {trips.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Tidak ada kejadian Trip pada kategori ini.</p>
-        ) : (
-          <div className="max-h-[320px] overflow-y-auto rounded-lg border">
-            <Table>
-              <TableHeader className="sticky top-0 bg-card">
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Bay</TableHead>
-                  <TableHead>GI</TableHead>
-                  <TableHead>Penyebab</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {trips.map((t, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell className="whitespace-nowrap">{t.date}</TableCell>
-                    <TableCell className="max-w-[200px] truncate" title={t.bay}>
-                      {t.bay}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{t.gi ?? "—"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{t.cause}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -270,6 +217,22 @@ function CategorySection({
   const kindBreakdownForChart = isTrafo
     ? data.kindBreakdown.filter((k) => k.cause !== "AR Sukses")
     : data.kindBreakdown;
+
+  // Year-on-year comparison tables (per user's own reference screenshot) —
+  // always the latest year vs. the one right before it (data.years is
+  // sorted ascending, same convention monthOverMonth already uses).
+  const currentYear = data.years.at(-1) ?? "";
+  const previousYear = data.years.at(-2) ?? "";
+  const penyebabCompareRows = buildYoyCompareRows(
+    data.bayEvents.map((e) => ({ category: e.cause, year: e.year })),
+    currentYear,
+    previousYear,
+  );
+  const kinerjaCompareRows = buildYoyCompareRows(
+    data.bayEvents.filter((e) => !isTrafo || e.kind !== "AR Sukses").map((e) => ({ category: e.kind, year: e.year })),
+    currentYear,
+    previousYear,
+  );
 
   return (
     <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
@@ -381,8 +344,15 @@ function CategorySection({
           </CardContent>
         </Card>
 
-        <TripEventsList events={data.bayEvents} />
+        <TripEventsPanel events={data.bayEvents} years={data.years} />
       </div>
+
+      {currentYear && previousYear ? (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <YoyCompareTable title="Perbandingan Penyebab" rows={penyebabCompareRows} currentYear={currentYear} previousYear={previousYear} />
+          <YoyCompareTable title="Perbandingan Kinerja" rows={kinerjaCompareRows} currentYear={currentYear} previousYear={previousYear} />
+        </div>
+      ) : null}
 
       {/* Dua chart per baris pada layar lebar (dulu satu kartu per baris) —
           chart ULTG-scoped (hanya 3 ULTG) dan chart per-ruas (keduanya
@@ -503,18 +473,9 @@ function CategorySection({
 }
 
 export default async function DisturbancesPage() {
-  const [result, ahi, ce] = await Promise.all([getDisturbances(), getAhiPerformance(), getCeSnapshot()]);
+  const result = await getDisturbances();
   const syncEntry = listSyncStatus().find((entry) => entry.module === "Gangguan");
   const lastUpdate = formatTime(syncEntry?.lastSync ?? null);
-
-  const rootCauseLinks = result.error
-    ? []
-    : findRootCauseLinks({
-        events: [...result.transmisi.bayEvents, ...result.trafoHv.bayEvents, ...result.trafoLv.bayEvents],
-        anomalies: ahi.data ? ahi.data.anomalies : [],
-        ceItems: ce.error ? [] : ce.items,
-        todayISO: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date()),
-      });
 
   return (
     <div className="flex flex-col gap-6">
@@ -541,6 +502,13 @@ export default async function DisturbancesPage() {
             >
               <MapPinned className="size-3.5" />
               Cari Titik Gangguan
+            </Link>
+            <Link
+              href="/dashboard/disturbances/keterkaitan-modul"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Link2 className="size-3.5" />
+              Keterkaitan Antar Modul
             </Link>
             {!result.error ? (
               <>
@@ -713,8 +681,6 @@ export default async function DisturbancesPage() {
               <CategoryResumeCard title="Trafo Low Voltage" anchorId="trafo-lv" data={result.trafoLv} isTrafo />
             </div>
           </section>
-
-          <RootCauseLinksCard links={rootCauseLinks} />
 
           <CategorySection title="Transmisi" data={result.transmisi} anchorId="transmisi" />
           <CategorySection
