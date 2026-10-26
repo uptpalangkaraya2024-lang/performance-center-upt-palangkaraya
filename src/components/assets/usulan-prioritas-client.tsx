@@ -15,20 +15,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { cn } from "@/lib/utils";
-import type { MaintenanceProposal, ProposalAction } from "@/lib/maintenance-proposals";
+import type { RuasMaintenanceProposal, RuasProposalAction } from "@/lib/ruas-maintenance-proposals";
 
 const ALL = "__all__";
 
-const ACTION_STYLE: Record<ProposalAction, string> = {
+const ACTION_STYLE: Record<RuasProposalAction, string> = {
   Penggantian: "border-critical/40 bg-critical/10 text-critical",
   "Pemeliharaan Prioritas": "border-warning/50 bg-warning/10 text-warning-foreground",
   Monitor: "border-border bg-muted text-muted-foreground",
 };
-const ACTION_ICON: Record<ProposalAction, typeof Wrench> = {
+const ACTION_ICON: Record<RuasProposalAction, typeof Wrench> = {
   Penggantian: ShieldAlert,
   "Pemeliharaan Prioritas": Wrench,
   Monitor: Info,
 };
+
+function ruasLabel(p: RuasMaintenanceProposal): string {
+  return p.circuit ? `${p.section} — Sirkit ${p.circuit}` : p.section;
+}
+function ruasKey(p: RuasMaintenanceProposal): string {
+  return `${p.section}::${p.circuit ?? "-"}`;
+}
 
 function klasifikasiPillClass(k: string): string {
   if (k === "CRITICAL") return "border-critical/40 bg-critical/20 text-critical";
@@ -55,7 +62,7 @@ const DEFAULT_COST_PEMELIHARAAN = 40_000_000;
  *  knapsack optimum, but transparent and instant — the right trade-off for
  *  a live "what-if" calculator a planner is dragging a slider on, not a
  *  one-shot optimization. */
-function BudgetCalculator({ proposals }: { proposals: MaintenanceProposal[] }) {
+function BudgetCalculator({ proposals }: { proposals: RuasMaintenanceProposal[] }) {
   const [budget, setBudget] = useState(1_000_000_000);
   const [costPenggantian, setCostPenggantian] = useState(DEFAULT_COST_PENGGANTIAN);
   const [costPemeliharaan, setCostPemeliharaan] = useState(DEFAULT_COST_PEMELIHARAAN);
@@ -69,8 +76,8 @@ function BudgetCalculator({ proposals }: { proposals: MaintenanceProposal[] }) {
       }))
       .sort((a, b) => b.proposal.riskScore / b.cost - a.proposal.riskScore / a.cost);
 
-    const selected: { proposal: MaintenanceProposal; cost: number }[] = [];
-    const cut: { proposal: MaintenanceProposal; cost: number }[] = [];
+    const selected: { proposal: RuasMaintenanceProposal; cost: number }[] = [];
+    const cut: { proposal: RuasMaintenanceProposal; cost: number }[] = [];
     let remaining = budget;
     for (const item of actionable) {
       if (item.cost <= remaining) {
@@ -142,7 +149,7 @@ function BudgetCalculator({ proposals }: { proposals: MaintenanceProposal[] }) {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-lg border bg-muted/40 p-3">
             <div className="text-lg font-extrabold tabular-nums text-foreground">{selected.length}</div>
-            <div className="text-xs text-muted-foreground">GI Terpilih</div>
+            <div className="text-xs text-muted-foreground">Ruas Terpilih</div>
           </div>
           <div className="rounded-lg border bg-muted/40 p-3">
             <div className="text-lg font-extrabold tabular-nums text-foreground">{formatRupiah(totalCost)}</div>
@@ -165,7 +172,7 @@ function BudgetCalculator({ proposals }: { proposals: MaintenanceProposal[] }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
-                  <th className="px-3 py-2 font-bold">GI</th>
+                  <th className="px-3 py-2 font-bold">Ruas</th>
                   <th className="px-3 py-2 font-bold">Usulan</th>
                   <th className="px-3 py-2 text-right font-bold">Skor Risiko</th>
                   <th className="px-3 py-2 text-right font-bold">Estimasi Biaya</th>
@@ -173,8 +180,8 @@ function BudgetCalculator({ proposals }: { proposals: MaintenanceProposal[] }) {
               </thead>
               <tbody>
                 {selected.map(({ proposal, cost }) => (
-                  <tr key={proposal.gi} className="border-b last:border-0">
-                    <td className="px-3 py-2 font-medium text-foreground">{proposal.gi}</td>
+                  <tr key={ruasKey(proposal)} className="border-b last:border-0">
+                    <td className="px-3 py-2 font-medium text-foreground">{ruasLabel(proposal)}</td>
                     <td className="px-3 py-2 text-muted-foreground">{proposal.action}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{proposal.riskScore}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{formatRupiah(cost)}</td>
@@ -189,7 +196,8 @@ function BudgetCalculator({ proposals }: { proposals: MaintenanceProposal[] }) {
 
         {cut.length > 0 ? (
           <p className="text-xs text-muted-foreground">
-            {cut.length} GI belum masuk alokasi karena anggaran habis: {cut.map((c) => c.proposal.gi).slice(0, 8).join(", ")}
+            {cut.length} ruas belum masuk alokasi karena anggaran habis:{" "}
+            {cut.map((c) => ruasLabel(c.proposal)).slice(0, 8).join(", ")}
             {cut.length > 8 ? ", dll." : "."}
           </p>
         ) : null}
@@ -198,20 +206,20 @@ function BudgetCalculator({ proposals }: { proposals: MaintenanceProposal[] }) {
   );
 }
 
-export function UsulanPrioritasClient({ proposals }: { proposals: MaintenanceProposal[] }) {
-  const [action, setAction] = useState<ProposalAction | typeof ALL>(ALL);
+export function UsulanPrioritasClient({ proposals }: { proposals: RuasMaintenanceProposal[] }) {
+  const [action, setAction] = useState<RuasProposalAction | typeof ALL>(ALL);
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(
     () =>
       proposals.filter(
-        (p) => (action === ALL || p.action === action) && (search.trim() === "" || p.gi.toLowerCase().includes(search.trim().toLowerCase())),
+        (p) => (action === ALL || p.action === action) && (search.trim() === "" || ruasLabel(p).toLowerCase().includes(search.trim().toLowerCase())),
       ),
     [proposals, action, search],
   );
 
   const countByAction = useMemo(() => {
-    const m: Record<ProposalAction, number> = { Penggantian: 0, "Pemeliharaan Prioritas": 0, Monitor: 0 };
+    const m: Record<RuasProposalAction, number> = { Penggantian: 0, "Pemeliharaan Prioritas": 0, Monitor: 0 };
     for (const p of proposals) m[p.action]++;
     return m;
   }, [proposals]);
@@ -221,9 +229,12 @@ export function UsulanPrioritasClient({ proposals }: { proposals: MaintenancePro
       <div className="flex items-start gap-2 rounded-lg border border-info/40 bg-info/10 p-3 text-sm text-foreground">
         <Info className="mt-0.5 size-4 shrink-0 text-info" />
         <p>
-          Usulan ini dihasilkan otomatis dari data historis (AHI, Common Enemy, Gangguan, RENUS) — bukan keputusan
-          otomatis. Setiap alasan dapat ditelusuri kembali ke data aslinya; tinjau kembali sebelum dimasukkan ke
-          perencanaan anggaran tahun depan.
+          Usulan ini dihasilkan otomatis dari data historis (AHI, Common Enemy, Gangguan, RENUS) per{" "}
+          <span className="font-semibold text-foreground">ruas/sirkit</span>, bukan per GI — satu GI bisa menyambung
+          beberapa ruas, dan anomali di satu ruas tidak berarti seluruh GI perlu diganti. Temuan Common Enemy hanya
+          tersedia di level GI pada sumber datanya sendiri (tidak menyebut ruas), jadi tetap ditampilkan sebagai
+          konteks GI, bukan dihitung sebagai milik satu ruas tertentu. Bukan keputusan otomatis — setiap alasan dapat
+          ditelusuri kembali ke data aslinya; tinjau kembali sebelum dimasukkan ke perencanaan anggaran tahun depan.
         </p>
       </div>
 
@@ -255,7 +266,7 @@ export function UsulanPrioritasClient({ proposals }: { proposals: MaintenancePro
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={action} onValueChange={(v) => v && setAction(v as ProposalAction | typeof ALL)}>
+          <Select value={action} onValueChange={(v) => v && setAction(v as RuasProposalAction | typeof ALL)}>
             <SelectTrigger size="sm" className="w-[200px]">
               <SelectValue placeholder="Usulan">{action === ALL ? "Semua Usulan" : action}</SelectValue>
             </SelectTrigger>
@@ -269,7 +280,7 @@ export function UsulanPrioritasClient({ proposals }: { proposals: MaintenancePro
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari GI..."
+            placeholder="Cari ruas..."
             className="h-8 w-[180px] text-sm"
           />
         </div>
@@ -279,12 +290,15 @@ export function UsulanPrioritasClient({ proposals }: { proposals: MaintenancePro
             {
               name: "Usulan Prioritas",
               rows: filtered.map((p) => ({
-                GI: p.gi,
+                Ruas: ruasLabel(p),
+                "GI Asal": p.originGi,
+                "GI Tujuan": p.farEndGi,
                 Usulan: p.action,
-                "Skor Risiko": p.riskScore,
+                Rekomendasi: p.recommendation,
+                "Skor Risiko (0-100)": p.riskScore100,
                 "AHI Critical": p.ahiCritical,
                 "AHI Poor": p.ahiPoor,
-                "CE Open": p.ceOpen,
+                "CE Open (level GI)": p.ceOpenAtEndpointGis,
                 Gangguan: p.gangguanTotal,
                 "RENUS Overdue": p.renusOverdue,
                 "Tren Memburuk": p.degradingCount,
@@ -297,18 +311,21 @@ export function UsulanPrioritasClient({ proposals }: { proposals: MaintenancePro
       </div>
 
       {filtered.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">Tidak ada GI dengan usulan pada filter ini.</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">Tidak ada ruas dengan usulan pada filter ini.</p>
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map((p) => {
             const Icon = ACTION_ICON[p.action];
             return (
-              <Card key={p.gi}>
+              <Card key={ruasKey(p)}>
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <CardTitle className="text-lg font-extrabold">GI {p.gi}</CardTitle>
-                      <p className="text-xs text-muted-foreground">Skor risiko: {p.riskScore}</p>
+                      <CardTitle className="text-lg font-extrabold">{ruasLabel(p)}</CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        {p.originGi} → {p.farEndGi} · {p.unit} · Skor risiko: {p.riskScore100}/100 ·{" "}
+                        <span className="font-semibold text-foreground">{p.recommendation}</span>
+                      </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap", ACTION_STYLE[p.action])}>
