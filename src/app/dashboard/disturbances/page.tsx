@@ -24,9 +24,13 @@ import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart
 import { CauseByBayChart } from "@/components/disturbances/cause-by-bay-chart";
 import { TripEventsPanel } from "@/components/disturbances/trip-events-panel";
 import { YoyCompareTable } from "@/components/disturbances/yoy-compare-table";
+import { GangguanHotspotsCard } from "@/components/disturbances/gangguan-hotspots-card";
 import { getDisturbances } from "@/services/disturbances";
+import { getSuttSnapshot } from "@/services/sutt-asset";
+import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { buildYoyCompareRows } from "@/lib/disturbance-yoy-compare";
+import { buildGangguanHotspots } from "@/lib/gangguan-hotspots";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { DisturbanceCategoryResult } from "@/types";
 
@@ -481,7 +485,11 @@ function CategorySection({
 }
 
 export default async function DisturbancesPage() {
-  const result = await getDisturbances();
+  const [result, sutt, gangguanByTowerGi] = await Promise.all([
+    getDisturbances(),
+    getSuttSnapshot(),
+    getGangguanHistoryByTowerGi(),
+  ]);
   const syncEntry = listSyncStatus().find((entry) => entry.module === "Gangguan");
   const lastUpdate = formatTime(syncEntry?.lastSync ?? null);
   // Asia/Jakarta, same convention every other "today" in this app uses
@@ -489,6 +497,7 @@ export default async function DisturbancesPage() {
   // tables truncate both years to this same month so a still-in-progress
   // current year is never compared against a full previous year.
   const cutoffMonth = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(new Date()));
+  const hotspots = sutt.error ? [] : buildGangguanHotspots(gangguanByTowerGi, sutt.ruasList);
 
   return (
     <div className="flex flex-col gap-6">
@@ -694,6 +703,8 @@ export default async function DisturbancesPage() {
               <CategoryResumeCard title="Trafo Low Voltage" anchorId="trafo-lv" data={result.trafoLv} isTrafo />
             </div>
           </section>
+
+          <GangguanHotspotsCard hotspots={hotspots} />
 
           <CategorySection title="Transmisi" data={result.transmisi} anchorId="transmisi" cutoffMonth={cutoffMonth} />
           <CategorySection
