@@ -68,14 +68,16 @@ function StatTile({
   label,
   className,
   barClassName = "bg-primary",
+  hint,
 }: {
   value: string;
   label: string;
   className?: string;
   barClassName?: string;
+  hint?: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-muted">
+    <div className="overflow-hidden rounded-lg border bg-muted" title={hint}>
       <div className={`h-1.5 w-full ${barClassName}`} />
       <div className="p-3">
         <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
@@ -194,12 +196,14 @@ function CategorySection({
   data,
   anchorId,
   cutoffMonth,
+  dataYearRange,
 }: {
   title: string;
   subtitle?: string;
   data: DisturbanceCategoryResult;
   anchorId: string;
   cutoffMonth: number;
+  dataYearRange: string | null;
 }) {
   if (data.summary.total === 0) {
     return (
@@ -251,7 +255,12 @@ function CategorySection({
       <CategoryBanner title={title} subtitle={subtitle} latest={data.summary.latestDisturbance} />
 
       <div className={`grid grid-cols-2 gap-3 ${isTrafo ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
-        <StatTile value={data.summary.total.toLocaleString("id-ID")} label="Total (Masuk Kinerja)" barClassName="bg-primary" />
+        <StatTile
+          value={data.summary.total.toLocaleString("id-ID")}
+          label="Total (Masuk Kinerja)"
+          barClassName="bg-primary"
+          hint={dataYearRange ? `Total sejak data tersinkron (${dataYearRange}) — bukan angka satu bulan/tahun saja.` : undefined}
+        />
         <StatTile value={data.summary.trip.toLocaleString("id-ID")} label="Trip" className="text-critical" barClassName="bg-critical" />
         {!isTrafo ? (
           <StatTile value={data.summary.arSukses.toLocaleString("id-ID")} label="AR Sukses" className="text-success" barClassName="bg-success" />
@@ -706,13 +715,20 @@ export default async function DisturbancesPage() {
 
           <GangguanHotspotsCard hotspots={hotspots} />
 
-          <CategorySection title="Transmisi" data={result.transmisi} anchorId="transmisi" cutoffMonth={cutoffMonth} />
+          <CategorySection
+            title="Transmisi"
+            data={result.transmisi}
+            anchorId="transmisi"
+            cutoffMonth={cutoffMonth}
+            dataYearRange={result.dataYearRange}
+          />
           <CategorySection
             title="Trafo HV"
             subtitle="T/R Bay — trafo tripped di sisi tegangan tinggi (seluruh trafo terdampak)."
             data={result.trafoHv}
             anchorId="trafo-hv"
             cutoffMonth={cutoffMonth}
+            dataYearRange={result.dataYearRange}
           />
           <CategorySection
             title="Trafo Low Voltage"
@@ -720,6 +736,7 @@ export default async function DisturbancesPage() {
             data={result.trafoLv}
             anchorId="trafo-lv"
             cutoffMonth={cutoffMonth}
+            dataYearRange={result.dataYearRange}
           />
         </>
       )}

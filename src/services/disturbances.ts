@@ -483,6 +483,13 @@ export interface DisturbancesResult {
    *  side stayed energized. Kept separate from trafoHv rather than combined,
    *  since which side tripped changes what actually happened operationally. */
   trafoLv: DisturbanceCategoryResult;
+  /** "2024–2026" (or a single year, e.g. "2026") spanning every row this
+   *  sheet currently holds — the summary totals (transmisi.summary.total
+   *  etc.) are NOT scoped to any one period, they're a running total since
+   *  the sheet's own data began, so a number like "322 kejadian" needs
+   *  this alongside it to say what it actually covers. Null only when
+   *  there's no data at all. */
+  dataYearRange: string | null;
   error: string | null;
 }
 
@@ -495,16 +502,20 @@ export async function getDisturbances(): Promise<DisturbancesResult> {
       transmisi: emptyCategory(),
       trafoHv: emptyCategory(),
       trafoLv: emptyCategory(),
+      dataYearRange: null,
       error: `Gagal membaca sheet "${EXPECTED_SHEET}" dari file "${EXPECTED_FILE}" — lihat halaman Data & Sync.`,
     };
   }
 
   const rows = sheetResult.records.map(normalizeRow).filter((row): row is DisturbanceRow => row !== null);
+  const years = [...new Set(rows.map((r) => r.year).filter((y) => /^\d{4}$/.test(y)))].sort();
+  const dataYearRange = years.length === 0 ? null : years.length === 1 ? years[0] : `${years[0]}–${years[years.length - 1]}`;
 
   return {
     transmisi: buildCategoryAggregates(rows.filter((r) => r.category === "transmisi")),
     trafoHv: buildCategoryAggregates(rows.filter((r) => r.category === "trafo-hv")),
     trafoLv: buildCategoryAggregates(rows.filter((r) => r.category === "trafo-lv")),
+    dataYearRange,
     error: null,
   };
 }
