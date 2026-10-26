@@ -328,56 +328,65 @@ function CategorySection({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-extrabold">Gangguan per ULTG</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Kinerja relay (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) dan status tindak lanjut per ULTG.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <UltgBreakdownChart rows={data.ultgBreakdown} showAr={!isTrafo} />
-        </CardContent>
-      </Card>
+      {/* Dua chart per baris pada layar lebar (dulu satu kartu per baris) —
+          chart ULTG-scoped (hanya 3 ULTG) dan chart per-ruas (keduanya
+          sama-sama tinggi, max 15 item) secara alami sepadan berdampingan,
+          jadi digabung jadi 2 baris saja alih-alih 4 baris penuh untuk
+          mengurangi scroll tanpa memisah kategori Transmisi/Trafo. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-extrabold">Gangguan per ULTG</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Kinerja relay (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) dan status tindak lanjut per ULTG.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <UltgBreakdownChart rows={data.ultgBreakdown} showAr={!isTrafo} />
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-extrabold">Penyebab Gangguan per ULTG</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Sebaran penyebab tiap ULTG dalam satu bar — filter satu ULTG dan/atau satu penyebab untuk fokus ke
-            kombinasi yang ingin dibandingkan.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <UltgCauseChart rows={data.ultgBreakdown} causeOrder={data.causePareto} />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-extrabold">Penyebab Gangguan per ULTG</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Sebaran penyebab tiap ULTG dalam satu bar — filter satu ULTG dan/atau satu penyebab untuk fokus ke
+              kombinasi yang ingin dibandingkan.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <UltgCauseChart rows={data.ultgBreakdown} causeOrder={data.causePareto} />
+          </CardContent>
+        </Card>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-extrabold">Gangguan per Ruas / Bay</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Kinerja relay tiap ruas/bay — filter jenis (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) atau status
-            tindak lanjut (Open / Selesai / Belum Diketahui) untuk meranking ulang ruas yang paling terdampak.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <BayBreakdownChart rows={data.bayBreakdown} showAr={!isTrafo} />
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-extrabold">Gangguan per Ruas / Bay</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Kinerja relay tiap ruas/bay — filter jenis (Trip{isTrafo ? "" : " / AR Sukses"} / Tidak Trip) atau status
+              tindak lanjut (Open / Selesai / Belum Diketahui) untuk meranking ulang ruas yang paling terdampak.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <BayBreakdownChart rows={data.bayBreakdown} showAr={!isTrafo} />
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-extrabold">Penyebab Gangguan per Ruas / Bay</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Sebaran penyebab tiap ruas/bay dalam satu bar — filter satu penyebab untuk meranking ulang ruas mana yang
-            paling terdampak.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <CauseByBayChart rows={data.bayBreakdown} causeOrder={data.causePareto} />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-extrabold">Penyebab Gangguan per Ruas / Bay</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Sebaran penyebab tiap ruas/bay dalam satu bar — filter satu penyebab untuk meranking ulang ruas mana
+              yang paling terdampak.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <CauseByBayChart rows={data.bayBreakdown} causeOrder={data.causePareto} />
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
