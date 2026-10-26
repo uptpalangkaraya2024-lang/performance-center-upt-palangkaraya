@@ -20,14 +20,22 @@ import { getAboProteksiSnapshot } from "@/services/abo-proteksi";
 import { getAboHargiSnapshot } from "@/services/abo-hargi";
 import { getFourDxSnapshot } from "@/services/four-dx";
 import { getCeSnapshot } from "@/services/ce-proteksi";
+import { getSuttSnapshot } from "@/services/sutt-asset";
 import { isRenusOverdue } from "@/lib/renus-helpers";
 import { formatDataAsOfOldest } from "@/lib/sync-status";
+import { buildDataHealthReport } from "@/lib/data-health";
+import { calculateAchievedPercentage } from "@/lib/kpi-engine";
+import {
+  buildGangguanMonthComparison,
+  buildKpiTrendComparison,
+  buildRenusOverdueComparison,
+} from "@/lib/executive-period-compare";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function LaporanEksekutifPage() {
-  const [upt, ultg, disturbances, ahi, bayLineReports, renus, aboProteksi, aboHargi, fourDx, ce] = await Promise.all([
+  const [upt, ultg, disturbances, ahi, bayLineReports, renus, aboProteksi, aboHargi, fourDx, ce, sutt] = await Promise.all([
     getUptPerformance(),
     getUltgPerformance(),
     getDisturbances(),
@@ -38,6 +46,7 @@ export default async function LaporanEksekutifPage() {
     getAboHargiSnapshot(),
     getFourDxSnapshot(),
     getCeSnapshot(),
+    getSuttSnapshot(),
   ]);
 
   const aboWeekLabel = defaultAboWeekLabel();
@@ -76,12 +85,16 @@ export default async function LaporanEksekutifPage() {
       : [];
   const degradationAlerts = findAhiDegradationAlerts(bayLineReports);
   const trendProjections = buildAhiTrendProjections(bayLineReports);
+  const disturbanceEvents = disturbances.error
+    ? []
+    : [...disturbances.transmisi.bayEvents, ...disturbances.trafoHv.bayEvents, ...disturbances.trafoLv.bayEvents];
   const topProposals = buildMaintenanceProposals({
     giCorrelation,
     bayLineReports,
     degradationAlerts,
     trendProjections,
     renusRows: renus.error ? [] : renus.rows,
+    disturbanceEvents,
   });
 
   // Previously re-derived "overdue" inline here (`!realisasiDate && ...`),
@@ -94,6 +107,29 @@ export default async function LaporanEksekutifPage() {
   // reminder, and the sidebar badge.
   const renusOverdueCount = renus.error ? 0 : renus.rows.filter((r) => isRenusOverdue(r, renus.today)).length;
 
+  const fourDxLms = fourDxWigs ? fourDxWigs.flatMap((w) => w.lms) : [];
+  const dataHealthChecks = buildDataHealthReport({
+    ceItems: ce.error ? [] : ce.items,
+    renusRows: renus.error ? [] : renus.rows,
+    anomalies: ahi.data ? ahi.data.anomalies : [],
+    aboSnapshots: [
+      { label: "Proteksi", snapshot: aboProteksi },
+      { label: "Hargi", snapshot: aboHargi },
+    ].filter((s) => !s.snapshot.error),
+    fourDxLms,
+    uptKpis: upt.data?.kpis ?? [],
+    ultgKpis: ultg.data?.flatMap((s) => s.kpis) ?? [],
+    suttRuasList: sutt.ruasList,
+    giRegistryDropped: sutt.giRegistryDropped,
+    todayISO: renus.error
+      ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date())
+      : renus.today,
+  }).checks;
+
+  const todayISO = renus.error
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date())
+    : renus.today;
+
   const sections = buildNarrativeReport({
     periodLabel: upt.data?.periodLabel ?? new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
     upt: upt.data,
@@ -101,10 +137,26 @@ export default async function LaporanEksekutifPage() {
     topProposals,
     renusSummary: renus.error ? null : renus.summary,
     renusOverdueCount,
+    renusRows: renus.error ? [] : renus.rows,
+    ceItems: ce.error ? [] : ce.items,
     disturbanceTotal: disturbances.error ? null : disturbances.transmisi.summary.total,
     disturbanceTrip: disturbances.error ? null : disturbances.transmisi.summary.trip,
     disturbanceTopCause: disturbances.error ? null : (disturbances.transmisi.causePareto[0]?.cause ?? null),
+    disturbanceYearRange: disturbances.error ? null : disturbances.dataYearRange,
     managementAttentionCritical: managementAttention.filter((i) => i.tone === "critical"),
+    kpiTrend: upt.data ? buildKpiTrendComparison(upt.data.kpis) : null,
+    renusOverdueComparison: renus.error ? null : buildRenusOverdueComparison(renus.rows, renus.today),
+    gangguanMonthComparison: disturbances.error
+      ? null
+      : buildGangguanMonthComparison(
+          [disturbances.transmisi.monthlyByYear, disturbances.trafoHv.monthlyByYear, disturbances.trafoLv.monthlyByYear],
+          todayISO,
+        ),
+    dataQuality: {
+      uptNoDataKpiCount: upt.data ? calculateAchievedPercentage(upt.data.overall).noDataCount : 0,
+      dataHealthChecks,
+    },
+    todayISO,
   });
 
   const generatedAt = new Intl.DateTimeFormat("id-ID", {
@@ -145,6 +197,42 @@ export default async function LaporanEksekutifPage() {
                     {p}
                   </p>
                 ))}
+                {section.table ? (
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+                          {section.table.headers.map((h) => (
+                            <th key={h} className="px-3 py-2 font-bold">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {section.table.rows.map((row, i) => (
+                          <tr key={i} className="border-b last:border-0">
+                            {row.map((cell, j) => (
+                              <td key={j} className={`px-3 py-2 ${j === 0 ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+                {section.items && section.items.length > 0 ? (
+                  <ol className="flex flex-col gap-1.5 text-sm text-foreground">
+                    {section.items.map((item, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="shrink-0 font-bold text-muted-foreground">{i + 1}.</span>
+                        <span className="leading-relaxed">{item}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
               </div>
             ))
           )}
