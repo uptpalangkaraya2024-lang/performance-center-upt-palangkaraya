@@ -26,16 +26,25 @@ export interface BayMatchCandidate {
 // user: RENUS and AHI use outright different vocabulary for the same
 // physical thing in these cases:
 //  - "COUPLE"/"KOPEL" for the bus-coupler bay kind.
-//  - "PAMBUANG" a confirmed misspelling of "PEMBUANG" (already flagged on
-//    the Kesehatan Data page).
+//  - "PEMBUANG" a confirmed misspelling of "PAMBUANG" — checked directly
+//    against the DATA GARDU INDUK registry sheet (the asset team's own
+//    source of truth, see src/lib/gi-name.ts), which spells it "Kuala
+//    PAMBUANG". AHI's own sheet is the one that drifted, not RENUS; this
+//    folds AHI's spelling toward RENUS's (and the registry's) rather than
+//    the other way around, matching the direction gi-name.ts uses
+//    everywhere else a whole-GI comparison happens.
 //  - "SKS"/"SLK" — confirmed with the user these name the SAME GI
 //    (PLTU Sampit), just two different short forms, not a typo. Mapped to
 //    one canonical form ("SLK") so either spelling resolves the same way.
-// Keyed by the word AS WRITTEN in RENUS's own sheet; expand this table as
-// new mismatches are found, never by relaxing the matcher.
+// Applied to BOTH sides of the comparison (the RENUS bay string and each
+// AHI candidate's own bay string, see applyWordAliases's two call sites
+// below) — so it doesn't matter which sheet actually wrote the
+// non-canonical word, only that both land on the same word afterward.
+// Expand this table as new mismatches are found, never by relaxing the
+// matcher.
 const WORD_ALIASES: Record<string, string> = {
   COUPLE: "KOPEL",
-  PAMBUANG: "PEMBUANG",
+  PEMBUANG: "PAMBUANG",
   SKS: "SLK",
 };
 

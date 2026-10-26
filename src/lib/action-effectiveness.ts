@@ -6,7 +6,7 @@
 // comparison around the completion date — never a causal claim (other
 // factors can move AHI/gangguan too), but a concrete, traceable answer to
 // "did this actually help," which this app didn't have anywhere before.
-import { normalizeGiName } from "@/lib/asset-correlation";
+import { canonicalGiKey } from "@/lib/gi-name";
 import type { BayLineReport, CeItem, DisturbanceBayEventRecord, RenusRow } from "@/types";
 
 export type EffectivenessVerdict = "membaik" | "tetap" | "memburuk" | "belum_cukup_data";
@@ -38,7 +38,7 @@ const GANGGUAN_WINDOW_DAYS = 90;
 
 function giMatches(a: string | null, b: string | null): boolean {
   if (!a || !b) return false;
-  return normalizeGiName(a).trim().toUpperCase() === normalizeGiName(b).trim().toUpperCase();
+  return canonicalGiKey(a) === canonicalGiKey(b);
 }
 
 function daysBetween(fromISO: string, toISO: string): number {

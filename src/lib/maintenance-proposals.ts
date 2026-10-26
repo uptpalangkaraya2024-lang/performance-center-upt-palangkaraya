@@ -10,8 +10,8 @@
 // Deliberately framed as a SUGGESTION for engineering review, never an
 // automated decision — the UI layer carries that framing explicitly, this
 // module only computes what the data actually shows.
-import { normalizeGiName } from "@/lib/asset-correlation";
 import type { GiCorrelationRow } from "@/lib/asset-correlation";
+import { canonicalGiKey } from "@/lib/gi-name";
 import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import type { AhiDegradationAlert } from "@/lib/ahi-degradation";
 import type { AhiTrendProjection } from "@/lib/ahi-trend-projection";
@@ -55,7 +55,7 @@ export interface MaintenanceProposal {
 }
 
 function giMatches(a: string, b: string): boolean {
-  return normalizeGiName(a).trim().toUpperCase() === normalizeGiName(b).trim().toUpperCase();
+  return canonicalGiKey(a) === canonicalGiKey(b);
 }
 
 /** One proposal per GI with a non-zero risk score (a clean GI has nothing

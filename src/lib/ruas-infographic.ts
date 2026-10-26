@@ -4,7 +4,7 @@
 // endpoint GI, plus a rule-based readiness checklist for "what to do when
 // this ruas is next padam." Pure, server-safe — every input is data a page
 // already loads elsewhere in this app; this only re-groups it by ruas.
-import { normalizeGiName } from "@/lib/asset-correlation";
+import { canonicalGiKey, correctGiSpelling, giTowerKey } from "@/lib/gi-name";
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
 import type { OutageImpactResult } from "@/lib/outage-impact";
 import type {
@@ -42,36 +42,23 @@ const KATEGORI_TO_KLASIFIKASI: Record<number, AhiKlasifikasi> = {
   5: "CRITICAL",
 };
 
-// "KUALA PAMBUANG" (SUTT asset / RENUS's own spelling) vs "KUALA PEMBUANG"
-// (AHI's own spelling) name the SAME GI — confirmed live, same word-level
-// mismatch already documented/fixed for RENUS<->AHI matching in
-// renus-ahi-bay-match.ts's own WORD_ALIASES. That module's alias table is
-// RENUS-vocabulary-specific so isn't reused directly here, but this one
-// word mismatch is a general SUTT-asset-vs-AHI spelling difference, not a
-// RENUS-only one, so it's canonicalized here too — without it, every
-// "BAY LINE ... KUALA PEMBUANG" AHI entry silently fails to match this
-// ruas's own "KUALA PAMBUANG" endpoint label.
-function applyGiWordAlias(word: string): string {
-  return word === "PAMBUANG" ? "PEMBUANG" : word;
-}
-
-// Same GI-name-pair matching idiom already proven in
-// renus-ahi-bay-match.ts, kept as its own small local copy rather than
-// imported — that module's own matching is RENUS-vocabulary-specific
-// (word aliases, 8 bay kinds), while AHI's own "BAY LINE ..." string
-// already uses AHI-native naming on both sides of this match, so the
-// RENUS-specific alias table doesn't apply here.
+// "KUALA PAMBUANG" (the DATA GARDU INDUK registry's own spelling, also
+// what SUTT asset/RENUS/CE/Gangguan all use) vs "KUALA PEMBUANG" (AHI's
+// own sheet, the sole outlier) name the SAME GI — correctGiSpelling (src/
+// lib/gi-name.ts) folds AHI's spelling toward the registry's before
+// tokenizing, so every "BAY LINE ... KUALA PEMBUANG" AHI entry still
+// matches this ruas's own "KUALA PAMBUANG" endpoint label even though the
+// two sheets spell it differently.
 function giTokenSet(s: string): string {
   return [
     ...new Set(
-      s
+      correctGiSpelling(s)
         .toUpperCase()
         .replace(/\b\d+(\s*\/\s*\d+)?\s*KV\b/g, " ")
         .replace(/\bGIS?\b/g, " ")
         .replace(/\bPLTU\b/g, " ")
         .split(/[^A-Z]+/)
-        .filter((t) => t.length > 1)
-        .map(applyGiWordAlias),
+        .filter((t) => t.length > 1),
     ),
   ]
     .sort()
@@ -84,19 +71,6 @@ function lineGiPairKey(raw: string): string | null {
   const sides = withoutNumber.split(/\s*-\s*/).map(giTokenSet);
   if (sides.length !== 2 || sides.some((s) => !s)) return null;
   return [...sides].sort().join("||");
-}
-
-// gangguan-history.ts's own matchKey/normalizeGiName, duplicated locally —
-// same "small per-file normalizer, not worth importing" convention that
-// module itself already uses (see its own comment).
-function normalizeGiNameUpper(raw: string): string {
-  return raw
-    .replace(/^GIS?\s*\d+\s*KV\s*/i, "")
-    .trim()
-    .toUpperCase();
-}
-function gangguanMatchKey(gi: string, towerNo: string): string {
-  return `${normalizeGiNameUpper(gi)}::${towerNo}`;
 }
 
 export interface RuasInfographicSummary {
@@ -174,7 +148,11 @@ export function buildRuasInfographic(params: {
   const originGi = ruas.originLabel.toUpperCase();
   const farEndGi = ruas.farEndLabel.toUpperCase();
   const ruasGiKey = [giTokenSet(originGi), giTokenSet(farEndGi)].sort().join("||");
-  const endpointGis = new Set([originGi, farEndGi]);
+  // Canonicalized (spelling-corrected) endpoint set for matching against
+  // other modules' own GI fields — kept separate from originGi/farEndGi
+  // above (which only feed giTokenSet, itself already spelling-correcting)
+  // so this Set agrees with canonicalGiKey(...) on the comparison side.
+  const endpointGis = new Set([canonicalGiKey(ruas.originLabel), canonicalGiKey(ruas.farEndLabel)]);
 
   // --- AHI: match "BAY LINE <GI1> - <GI2>" entries to this ruas's own GI
   // pair (exact line match), falling back to "touches either endpoint GI"
@@ -183,7 +161,7 @@ export function buildRuasInfographic(params: {
   const ahiBayLineReportsMatched = ahiBayLineReports.filter((r) => lineGiPairKey(r.bay) === ruasGiKey);
   const anomaliesByLine = ahiAnomalies.filter((a) => lineGiPairKey(a.bay) === ruasGiKey);
   const anomaliesByGiFallback =
-    anomaliesByLine.length > 0 ? [] : ahiAnomalies.filter((a) => endpointGis.has(normalizeGiNameUpper(a.gi)));
+    anomaliesByLine.length > 0 ? [] : ahiAnomalies.filter((a) => endpointGis.has(canonicalGiKey(a.gi)));
   // Worst-first — the whole point of a one-glance infographic is surfacing
   // what needs attention, not whatever order the sheet happened to list it.
   const ahiAnomaliesMatched = [...(anomaliesByLine.length > 0 ? anomaliesByLine : anomaliesByGiFallback)].sort(
@@ -203,7 +181,7 @@ export function buildRuasInfographic(params: {
   }
   // Bay Line report matching needs an exact GI-pair match and can miss a
   // real line (new/renamed bay, a spelling variant not yet in
-  // applyGiWordAlias) even when the anomaly rekap itself still lists
+  // gi-name.ts's own alias list) even when the anomaly rekap itself still lists
   // findings for this ruas — fold the anomaly list's own kategoriAhi in as
   // a second signal so the headline badge is never blank while findings
   // are visibly listed right below it.
@@ -220,7 +198,7 @@ export function buildRuasInfographic(params: {
   // OPEN items first — the actionable ones — so a short preview list never
   // happens to show only already-CLOSE items while OPEN ones scroll off.
   const ceItemsMatched = ceItems
-    .filter((item) => item.gardu && endpointGis.has(normalizeGiName(item.gardu).toUpperCase()))
+    .filter((item) => item.gardu && endpointGis.has(canonicalGiKey(item.gardu)))
     .sort((a, b) => Number(a.done) - Number(b.done));
   const ceOpenCount = ceItemsMatched.filter((item) => !item.done).length;
 
@@ -230,7 +208,7 @@ export function buildRuasInfographic(params: {
   // happened at this GI."
   const gangguanEntries: GangguanHistoryEntry[] = [];
   for (const tower of ruas.towers) {
-    const key = gangguanMatchKey(tower.gi, tower.towerNo);
+    const key = giTowerKey(tower.gi, tower.towerNo);
     const entries = gangguanByTowerGi[key];
     if (entries) gangguanEntries.push(...entries);
   }
@@ -252,7 +230,7 @@ export function buildRuasInfographic(params: {
 
   // --- RENUS: outage rows at either endpoint GI.
   const outageRows = renusRows
-    .filter((r) => !isRenusCancelled(r) && endpointGis.has(normalizeGiName(r.gi).toUpperCase()))
+    .filter((r) => !isRenusCancelled(r) && endpointGis.has(canonicalGiKey(r.gi)))
     .sort((a, b) => a.rencanaDate.localeCompare(b.rencanaDate));
   const nextOutage =
     outageRows.find((r) => !isRenusDone(r) && r.rencanaDate >= todayISO) ??

@@ -6,6 +6,7 @@
 // in the browser against that already-loaded list, the same "load once,
 // derive many" shape used by every other module's own compute lib
 // (ce-compute.ts, four-dx-compute.ts, ...).
+import { giTowerKey } from "@/lib/gi-name";
 import type { GangguanHistoryEntry, SuttRuas, SuttTower } from "@/types";
 import type { SigapTowerInsight } from "@/services/sigap";
 
@@ -823,21 +824,17 @@ export function formatUnbalanceLine(tower: SuttTower): string | null {
     : `Unbalance isolator: ${tower.unbalance}`;
 }
 
-// Same GI-name prefix stripping as src/services/gangguan-history.ts's own
-// copy (which is what actually built the lookup keys) — must match
-// exactly for the lookup below to hit.
-function normalizeGiNameForLookup(raw: string): string {
-  return raw.replace(/^GIS?\s*\d+\s*KV\s*/i, "").trim().toUpperCase();
-}
-
 /** This tower's own past gangguan events from the UPT's REKAP GANGGUAN —
  *  see src/services/gangguan-history.ts for how TEMUAN LAPANGAN gets
- *  parsed into (GI, tower number) matches. Sorted oldest first. */
+ *  parsed into (GI, tower number) matches, and src/lib/gi-name.ts for the
+ *  shared key both sides must agree on (same GI spelling fold, same
+ *  tower-number padding normalization) for this lookup to hit. Sorted
+ *  oldest first. */
 export function findGangguanHistory(
   tower: SuttTower,
   historyByGiTower: Record<string, GangguanHistoryEntry[]>,
 ): GangguanHistoryEntry[] {
-  const key = `${normalizeGiNameForLookup(tower.gi)}::${tower.towerNo}`;
+  const key = giTowerKey(tower.gi, tower.towerNo);
   return historyByGiTower[key] ?? [];
 }
 

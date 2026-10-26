@@ -2,6 +2,7 @@ import "server-only";
 
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSource } from "@/lib/data-connector";
+import { canonicalGiKey, giTowerKey } from "@/lib/gi-name";
 import type { GangguanHistoryEntry } from "@/types";
 
 // Per-tower gangguan history for the "Cari Titik Gangguan" fault locator —
@@ -16,15 +17,6 @@ import type { GangguanHistoryEntry } from "@/types";
 const SOURCE = dataSources.disturbances;
 const EXPECTED_FILE = SOURCE.sources[0].file;
 const EXPECTED_SHEET = SOURCE.sources[0].sheets[0].name;
-
-// Same GI-name prefix stripping every other service applies to GARDU
-// INDUK/GARDU_INDUK ("GI 150 KV X" / "GIS 150 KV X" -> "X") — duplicated
-// locally rather than imported, matching this codebase's own established
-// per-file convention for this one-line helper (see disturbances.ts,
-// sutt-asset.ts).
-function normalizeGiName(raw: string): string {
-  return raw.replace(/^GIS?\s*\d+\s*KV\s*/i, "").trim().toUpperCase();
-}
 
 function extractYear(tahun: string, tgl: string): string {
   const t = tahun.trim();
@@ -105,13 +97,9 @@ function parseEvents(records: Record<string, string>[]): ParsedEvent[] {
     const tgl = (r["TGL"] ?? "").trim();
     const year = extractYear(r["TAHUN"] ?? "", tgl);
     if (!year) continue;
-    events.push({ towerNumbers, gi: normalizeGiName(gardu), year, tgl, penyebab: (r["PENYEBAB"] ?? "").trim() });
+    events.push({ towerNumbers, gi: canonicalGiKey(gardu), year, tgl, penyebab: (r["PENYEBAB"] ?? "").trim() });
   }
   return events;
-}
-
-function matchKey(gi: string, towerNo: string): string {
-  return `${normalizeGiName(gi)}::${towerNo}`;
 }
 
 /** funcLoc isn't available on this sheet, so matching falls back to
@@ -122,7 +110,13 @@ function matchKey(gi: string, towerNo: string): string {
  *  1-236ish — see data-sources.ts's own comment on `suttAsset`). In that
  *  narrow overlap window a match could in principle attribute an event to
  *  the wrong one of the two lines; accepted as a known limitation rather
- *  than over-engineering a disambiguator for a handful of towers. */
+ *  than over-engineering a disambiguator for a handful of towers. Tower
+ *  number uses the same shared giTowerKey() every consumer of this map
+ *  uses (src/lib/gi-name.ts) — this free-text narrative sometimes
+ *  preserves a leading zero ("T.093") that the SUTT asset registry's own
+ *  "NO TOWER" column never carries ("93"); without normalizing both sides
+ *  to the same (unpadded) form, a real repeat-offender tower would never
+ *  resolve a ruas/unit on the pages that join against it. */
 export async function getGangguanHistoryByTowerGi(): Promise<Record<string, GangguanHistoryEntry[]>> {
   const results = await readConfiguredSource(SOURCE);
   const sheet = results.find((r) => r.file === EXPECTED_FILE && r.sheet === EXPECTED_SHEET);
@@ -132,7 +126,7 @@ export async function getGangguanHistoryByTowerGi(): Promise<Record<string, Gang
   const byKey: Record<string, GangguanHistoryEntry[]> = {};
   for (const ev of events) {
     for (const towerNo of ev.towerNumbers) {
-      const k = matchKey(ev.gi, towerNo);
+      const k = giTowerKey(ev.gi, towerNo);
       const list = byKey[k] ?? [];
       list.push({ year: ev.year, tgl: ev.tgl, penyebab: ev.penyebab });
       byKey[k] = list;

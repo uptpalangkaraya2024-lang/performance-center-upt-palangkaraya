@@ -1,4 +1,5 @@
-import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
+import { canonicalGiKey, correctGiSpelling } from "@/lib/gi-name";
+import { isRenusOverdue } from "@/lib/renus-helpers";
 import type { AhiAnomalyRecord, CeItem, DisturbanceGiCount, RenusRow } from "@/types";
 
 export interface GiCorrelationRow {
@@ -40,17 +41,6 @@ export function normalizeGiName(raw: string): string {
   return raw.replace(/^GIS?\s*(\d+\s*KV\s*)?/i, "").trim();
 }
 
-// "KUALA PEMBUANG" (AHI's own sheet spelling) vs "KUALA PAMBUANG" (DATA
-// GARDU INDUK's own registered spelling, also what CE/RENUS/SUTT asset
-// all use) name the SAME GI — confirmed live, the same mismatch already
-// fixed for RENUS<->AHI bay matching in renus-ahi-bay-match.ts's own
-// WORD_ALIASES. Applied here too, to every source's own GI key, so this
-// join never fractures one real GI into two separate (and individually
-// weaker) rows just because one sheet misspells it.
-function canonicalGiKey(gi: string): string {
-  return gi.replace(/\bPEMBUANG\b/gi, "PAMBUANG");
-}
-
 /**
  * Joins Gangguan (per-GI disturbance counts), AHI (per-GI anomaly records),
  * CE (per-GI Common Enemy findings), and RENUS (per-GI maintenance work
@@ -76,11 +66,18 @@ export function buildGiCorrelation(params: {
   const rows = new Map<string, GiCorrelationRow>();
 
   function ensure(giRaw: string): GiCorrelationRow {
-    const gi = canonicalGiKey(giRaw);
-    let row = rows.get(gi);
+    // The Map key folds case and known spelling drift away entirely (see
+    // src/lib/gi-name.ts) so this join never fractures one real GI into
+    // two separate, individually-weaker rows just because one sheet
+    // spells or cases it differently. The displayed `gi` field only gets
+    // the case-preserving spelling correction, kept from whichever source
+    // first introduced this GI, so the UI doesn't suddenly show ALL CAPS
+    // names it didn't before.
+    const key = canonicalGiKey(giRaw);
+    let row = rows.get(key);
     if (!row) {
       row = {
-        gi,
+        gi: correctGiSpelling(giRaw),
         gangguanTrafo: 0,
         gangguanTransmisi: 0,
         gangguanTotal: 0,
@@ -93,7 +90,7 @@ export function buildGiCorrelation(params: {
         renusTotal: 0,
         riskScore: 0,
       };
-      rows.set(gi, row);
+      rows.set(key, row);
     }
     return row;
   }
@@ -129,7 +126,7 @@ export function buildGiCorrelation(params: {
     if (!r.gi) continue;
     const row = ensure(normalizeGiName(r.gi));
     row.renusTotal += 1;
-    if (!isRenusDone(r) && !isRenusCancelled(r) && r.rencanaDate < today) row.renusOverdue += 1;
+    if (isRenusOverdue(r, today)) row.renusOverdue += 1;
   }
 
   const result = [...rows.values()];

@@ -5,6 +5,7 @@
 // locator already uses (gangguan-history.ts) into a ranked hotspot list,
 // so a tower/span that's been struck repeatedly surfaces on its own
 // instead of being buried inside a cause-only breakdown.
+import { giTowerKey } from "@/lib/gi-name";
 import type { GangguanHistoryEntry, SuttRuas } from "@/types";
 
 export interface GangguanHotspot {
@@ -18,13 +19,6 @@ export interface GangguanHotspot {
   causeBreakdown: { cause: string; count: number }[];
 }
 
-// Same normalizer gangguan-history.ts's own matchKey uses — duplicated
-// locally rather than imported, matching that module's own stated
-// convention for this one-line helper.
-function normalizeGiNameUpper(raw: string): string {
-  return raw.replace(/^GIS?\s*\d+\s*KV\s*/i, "").trim().toUpperCase();
-}
-
 /** Builds a GI+towerNo -> {ruas, unit} lookup once over the whole ruas
  *  list, so every tower's own ruas/unit can be resolved in O(1) instead of
  *  re-scanning the ruas list per hotspot. */
@@ -33,7 +27,7 @@ function buildTowerLookup(ruasList: SuttRuas[]): Map<string, { ruasSection: stri
   for (const ruas of ruasList) {
     for (const tower of ruas.towers) {
       if (!tower.gi) continue;
-      const key = `${normalizeGiNameUpper(tower.gi)}::${tower.towerNo}`;
+      const key = giTowerKey(tower.gi, tower.towerNo);
       // A tower number can legitimately repeat across two different lines
       // sharing one hub GI (see sutt-asset.ts's own comment on this same
       // limitation) — first match wins rather than guessing which line is

@@ -6,7 +6,7 @@
 // time-window join, not a causal claim — every link is presented as
 // "worth checking," never as a confirmed cause, since nothing in these
 // sheets records an actual causal chain.
-import { normalizeGiName } from "@/lib/asset-correlation";
+import { canonicalGiKey } from "@/lib/gi-name";
 import type { AhiAnomalyRecord, CeItem, DisturbanceBayEventRecord } from "@/types";
 
 export interface RootCauseLink {
@@ -22,7 +22,7 @@ const LOOKBACK_DAYS = 90;
 
 function giMatches(a: string | null, b: string | null): boolean {
   if (!a || !b) return false;
-  return normalizeGiName(a).trim().toUpperCase() === normalizeGiName(b).trim().toUpperCase();
+  return canonicalGiKey(a) === canonicalGiKey(b);
 }
 
 function daysBetween(fromISO: string, toISO: string): number {
