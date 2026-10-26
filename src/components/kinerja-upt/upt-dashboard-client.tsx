@@ -15,6 +15,7 @@ import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
+import { KpiPrognosisSection } from "@/components/dashboard/kpi-prognosis-section";
 import type { UptKpiCategory, UptPerformanceSnapshot } from "@/types";
 import { UptCategorySection } from "./upt-category-section";
 import { UptOverallPerformanceSummary } from "./upt-overall-performance";
@@ -147,6 +148,8 @@ export function UptDashboardClient({ snapshot }: { snapshot: UptPerformanceSnaps
               <UptTrendChart kpis={snapshot.kpis} />
             </CardContent>
           </Card>
+
+          <KpiPrognosisSection kpis={snapshot.kpis} label="UPT Palangkaraya" year={snapshot.period.slice(0, 4)} />
         </>
       )}
     </div>

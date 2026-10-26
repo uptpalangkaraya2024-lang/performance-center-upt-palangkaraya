@@ -15,6 +15,7 @@ import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
+import { KpiPrognosisSection } from "@/components/dashboard/kpi-prognosis-section";
 import { UptOverallPerformanceSummary } from "@/components/kinerja-upt/upt-overall-performance";
 import type { UltgPerformanceSnapshot } from "@/types";
 import { CATEGORY_ORDER, UltgCategorySection } from "./ultg-category-section";
@@ -164,6 +165,8 @@ export function UltgDashboardClient({ snapshots }: { snapshots: UltgPerformanceS
               <UltgTrendChart key={selected.ultgSlug} kpis={selected.kpis} />
             </CardContent>
           </Card>
+
+          <KpiPrognosisSection key={selected.ultgSlug} kpis={selected.kpis} label={selected.ultg} year={selected.period.slice(0, 4)} />
         </>
       )}
     </div>
