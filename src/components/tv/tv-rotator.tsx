@@ -8,6 +8,8 @@
 // front of the screen adjusting it.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { X } from "lucide-react";
 
 export interface TvPanel {
   title: string;
@@ -74,11 +76,17 @@ export function TvRotator({ panels }: { panels: TvPanel[] }) {
       } else if (e.key === "ArrowLeft") {
         setIndex((i) => (i - 1 + panels.length) % panels.length);
         setSecondsLeft(ROTATE_SECONDS);
+      } else if (e.key === "Escape") {
+        // Same exit convention already used by the Presentasi slide deck
+        // (ArrowLeft/ArrowRight/Space/Escape) — this page has no sidebar/
+        // header of its own to click back to, so an explicit way out
+        // matters more here, not less.
+        router.push("/dashboard");
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panels.length]);
+  }, [panels.length, router]);
 
   const panel = panels[index];
   if (!panel) return null;
@@ -90,13 +98,23 @@ export function TvRotator({ panels }: { panels: TvPanel[] }) {
           <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">Performance Center — UPT Palangkaraya</p>
           <h1 className="text-2xl font-extrabold text-foreground">{panel.title}</h1>
         </div>
-        <div className="text-right">
-          <p className="text-2xl font-extrabold tabular-nums text-foreground">
-            {now ? now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--:--:--"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {now ? now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : ""}
-          </p>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-2xl font-extrabold tabular-nums text-foreground">
+              {now ? now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--:--:--"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {now ? now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : ""}
+            </p>
+          </div>
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+            title="Keluar dari Mode TV (atau tekan Esc)"
+          >
+            <X className="size-3.5" />
+            Keluar
+          </Link>
         </div>
       </div>
 
