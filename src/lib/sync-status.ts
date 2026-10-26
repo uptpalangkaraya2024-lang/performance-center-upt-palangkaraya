@@ -94,6 +94,37 @@ export function listSyncStatus(): SyncStatusEntry[] {
   return [...registry.values()];
 }
 
+/** "Data per 12 Okt 2026, 14.30 WIB" for one module's most recent sync
+ *  across however many files/sheets it reads — the LATEST of them, since
+ *  a page showing combined data is only as current as its stalest input.
+ *  Null when nothing has synced yet this server run (never fabricated as
+ *  "just now"). Every module-page caption that says "data per [tanggal
+ *  sinkron]" should go through this one function so the wording and
+ *  freshness-source stay consistent. */
+export function formatDataAsOf(module: string): string | null {
+  const entries = listSyncStatus().filter((e) => e.module === module && e.lastSync !== null);
+  if (entries.length === 0) return null;
+  const latest = entries.reduce((a, b) => (a.lastSync! > b.lastSync! ? a : b));
+  return formatSyncDate(latest.lastSync!);
+}
+
+/** Same idea as formatDataAsOf, but across SEVERAL modules at once (for a
+ *  page like Kesehatan Data that reads 9 different modules) — takes the
+ *  OLDEST sync among them, not the newest, since a combined view is only
+ *  as current as its stalest input. */
+export function formatDataAsOfOldest(modules: string[]): string | null {
+  const entries = listSyncStatus().filter((e) => modules.includes(e.module) && e.lastSync !== null);
+  if (entries.length === 0) return null;
+  const oldest = entries.reduce((a, b) => (a.lastSync! < b.lastSync! ? a : b));
+  return formatSyncDate(oldest.lastSync!);
+}
+
+function formatSyncDate(date: Date): string {
+  const d = date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  const t = date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  return `Data per ${d}, ${t} WIB`;
+}
+
 /** Most-recent-first history for one entry's key — see SyncStatusEntry.key. */
 export function listSyncHistory(key: string): SyncHistoryEvent[] {
   return [...(history.get(key) ?? [])].reverse();

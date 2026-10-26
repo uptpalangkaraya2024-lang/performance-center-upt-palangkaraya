@@ -136,20 +136,50 @@ function overRealisasiCheck(lms: { code: string; description: string; percentRea
   };
 }
 
-/** A realization date earlier than its own planned/target date — can't
- *  realize something before it was planned, so this is always a data
- *  entry mistake (wrong date typed, or the two columns swapped), never a
- *  legitimate state. */
-function backwardDateCheck(module: string, pairs: { label: string; plannedDate: string; actualDate: string | null }[]): DataHealthCheck | null {
-  const bad = pairs.filter((p) => p.actualDate !== null && p.actualDate < p.plannedDate);
+const DEFAULT_EXTREME_GAP_DAYS = 180;
+
+function daysBetween(fromISO: string, toISO: string): number {
+  return Math.round((Date.parse(toISO) - Date.parse(fromISO)) / 86400000);
+}
+
+/**
+ * A realization date EARLIER than its own planned/target date is normal —
+ * finishing ahead of schedule is a good outcome, not a data-entry mistake
+ * — so this no longer flags every realisasi < rencana pair (the earlier
+ * version did, and would have flagged every early completion as an
+ * "anomaly"). Only three cases are actually implausible:
+ *  1. realisasi is in the FUTURE relative to today — can't have happened
+ *     yet.
+ *  2. realisasi predates the row's own discovery/creation date, when that
+ *     date is known (currently only CE's own Tanggal_Temuan — RENUS has
+ *     no equivalent "created" field, so this leg never applies to RENUS
+ *     rows) — can't complete a fix before the finding that prompted it
+ *     existed.
+ *  3. the gap between realisasi and rencana (either direction) exceeds a
+ *     configurable threshold — not impossible on its own, but unusual
+ *     enough to be worth a human glance rather than asserted as a firm
+ *     rule.
+ */
+function implausibleDateCheck(
+  module: string,
+  rows: { label: string; plannedDate: string; actualDate: string | null; createdDate?: string | null }[],
+  todayISO: string,
+  extremeGapDays = DEFAULT_EXTREME_GAP_DAYS,
+): DataHealthCheck | null {
+  const bad = rows.filter((r) => {
+    if (r.actualDate === null) return false;
+    if (r.actualDate > todayISO) return true;
+    if (r.createdDate && r.actualDate < r.createdDate) return true;
+    return Math.abs(daysBetween(r.plannedDate, r.actualDate)) > extremeGapDays;
+  });
   if (bad.length === 0) return null;
   return {
-    id: `backward-date-${module}`,
+    id: `implausible-date-${module}`,
     module,
-    title: "Tanggal realisasi mendahului tanggal rencana",
+    title: "Tanggal realisasi tidak masuk akal",
     severity: "warning",
-    detail: `${bad.length} baris dengan tanggal realisasi LEBIH AWAL dari tanggal rencana/target — kemungkinan salah ketik tanggal atau kolom rencana/realisasi tertukar.`,
-    samples: bad.slice(0, 5).map((p) => `${p.label} (rencana ${p.plannedDate}, realisasi ${p.actualDate})`),
+    detail: `${bad.length} baris dengan tanggal realisasi di masa depan, sebelum tanggal temuan/dibuat, atau berselisih lebih dari ${extremeGapDays} hari dari tanggal rencana — kemungkinan salah ketik tanggal. Menyelesaikan lebih awal dari rencana TIDAK dianggap anomali.`,
+    samples: bad.slice(0, 5).map((r) => `${r.label} (rencana ${r.plannedDate}, realisasi ${r.actualDate})`),
     count: bad.length,
   };
 }
@@ -241,6 +271,9 @@ export function buildDataHealthReport(params: {
   ultgKpis: UltgKpi[];
   suttRuasList: SuttRuas[];
   giRegistryDropped: string[];
+  /** "yyyy-MM-dd", same Asia/Jakarta "today" every other service in this
+   *  app computes — needed for the future-date leg of implausibleDateCheck. */
+  todayISO: string;
 }): { checks: DataHealthCheck[]; giNamePairs: GiNamePair[] } {
   const checks: DataHealthCheck[] = [];
 
@@ -274,19 +307,26 @@ export function buildDataHealthReport(params: {
   const overRealisasi = overRealisasiCheck(params.fourDxLms);
   if (overRealisasi) checks.push(overRealisasi);
 
-  const renusBackwardDates = backwardDateCheck(
+  const renusImplausibleDates = implausibleDateCheck(
     "RENUS",
     params.renusRows.map((r) => ({ label: `${r.gi} — ${r.workDetail}`, plannedDate: r.rencanaDate, actualDate: r.realisasiDate })),
+    params.todayISO,
   );
-  if (renusBackwardDates) checks.push(renusBackwardDates);
+  if (renusImplausibleDates) checks.push(renusImplausibleDates);
 
-  const ceBackwardDates = backwardDateCheck(
+  const ceImplausibleDates = implausibleDateCheck(
     "CE",
     params.ceItems
       .filter((i) => i.tanggalTarget !== null)
-      .map((i) => ({ label: `${i.gardu} — ${i.namaProgram}`, plannedDate: i.tanggalTarget as string, actualDate: i.tanggalRealisasi })),
+      .map((i) => ({
+        label: `${i.gardu} — ${i.namaProgram}`,
+        plannedDate: i.tanggalTarget as string,
+        actualDate: i.tanggalRealisasi,
+        createdDate: i.tanggalTemuan,
+      })),
+    params.todayISO,
   );
-  if (ceBackwardDates) checks.push(ceBackwardDates);
+  if (ceImplausibleDates) checks.push(ceImplausibleDates);
 
   const uptAllZero = allZeroMonthsCheck("Kinerja UPT", params.uptKpis);
   if (uptAllZero) checks.push(uptAllZero);

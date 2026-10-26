@@ -1042,6 +1042,13 @@ export interface CeItem {
   indikator: string;
   phasa: string;
   namaProgram: string;
+  /** "yyyy-MM-dd" or null — when the finding was first discovered,
+   *  extracted from the raw Tanggal_Temuan column. Used only for sanity
+   *  checks on this item's own realisasi date (can't realize a fix before
+   *  the finding that prompted it existed) — never required for any
+   *  completion/overdue logic, which stays on tanggalTarget/
+   *  tanggalRealisasi as before. */
+  tanggalTemuan: string | null;
   anomaliPemicu: string;
   /** Critical / Poor / Fair (or blank) — the AHI-style condition scale. */
   kriteriaBefore: string;

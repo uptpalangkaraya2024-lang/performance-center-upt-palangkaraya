@@ -20,6 +20,8 @@ import { getAboProteksiSnapshot } from "@/services/abo-proteksi";
 import { getAboHargiSnapshot } from "@/services/abo-hargi";
 import { getFourDxSnapshot } from "@/services/four-dx";
 import { getCeSnapshot } from "@/services/ce-proteksi";
+import { isRenusOverdue } from "@/lib/renus-helpers";
+import { formatDataAsOfOldest } from "@/lib/sync-status";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -82,9 +84,15 @@ export default async function LaporanEksekutifPage() {
     renusRows: renus.error ? [] : renus.rows,
   });
 
-  const renusOverdueCount = renus.error
-    ? 0
-    : renus.rows.filter((r) => !r.realisasiDate && r.status !== "BATAL" && r.sapWoStatus !== "CANC" && r.rencanaDate < renus.today).length;
+  // Previously re-derived "overdue" inline here (`!realisasiDate && ...`),
+  // which missed the TECO/COMPLETED completion signal every other RENUS
+  // overdue count in this app already checks (see isRenusOverdue's own
+  // comment in src/lib/renus-helpers.ts) — that over-counted overdue work
+  // by treating already-finished-but-blank-REALISASI rows as still
+  // outstanding (211 vs the correct 48, confirmed against live data). Now
+  // uses the same shared predicate as the RENUS page, the homepage
+  // reminder, and the sidebar badge.
+  const renusOverdueCount = renus.error ? 0 : renus.rows.filter((r) => isRenusOverdue(r, renus.today)).length;
 
   const sections = buildNarrativeReport({
     periodLabel: upt.data?.periodLabel ?? new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
@@ -104,6 +112,11 @@ export default async function LaporanEksekutifPage() {
     dateStyle: "long",
     timeStyle: "short",
   }).format(new Date());
+  // Oldest sync among the modules this report draws numbers from — distinct
+  // from `generatedAt` above (that's when this PAGE was rendered; this is
+  // when the underlying sheet data was last actually pulled, which can be
+  // hours earlier).
+  const dataAsOf = formatDataAsOfOldest(["Kinerja UPT", "Kinerja ULTG", "RENUS", "Gangguan", "CE Proteksi", "AHI UPT"]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -117,7 +130,9 @@ export default async function LaporanEksekutifPage() {
         <CardContent className="flex flex-col gap-6 py-6">
           <div className="border-b pb-3">
             <h1 className="text-xl font-extrabold text-foreground">Laporan Eksekutif — UPT Palangkaraya</h1>
-            <p className="text-xs text-muted-foreground">Disusun otomatis pada {generatedAt} WIB.</p>
+            <p className="text-xs text-muted-foreground">
+              Disusun otomatis pada {generatedAt} WIB.{dataAsOf ? ` ${dataAsOf} (modul paling lama belum sinkron ulang).` : ""}
+            </p>
           </div>
           {sections.length === 0 ? (
             <p className="text-sm text-muted-foreground">Data belum cukup untuk menyusun laporan.</p>
