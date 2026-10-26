@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { RuasInfografisClient } from "@/components/assets/ruas-infografis-client";
-import { buildRuasInfographic } from "@/lib/ruas-infographic";
+import { buildRuasInfographic, detectRuasCircuits } from "@/lib/ruas-infographic";
 import { buildOutageImpact } from "@/lib/outage-impact";
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getAhiPerformance } from "@/services/ahi-performance";
@@ -48,18 +48,30 @@ export default async function RuasInfografisPage() {
   const aboRuasItems = [...aboProteksi.programs, ...aboHargi.programs].flatMap((p) => p.ruasItems);
   const outageImpactBySection = new Map(buildOutageImpact(sutt.ruasList).map((r) => [r.section, r]));
 
-  const summaries = sutt.ruasList.map((ruas) =>
-    buildRuasInfographic({
-      ruas,
-      ahiAnomalies: ahi.data ? ahi.data.anomalies : [],
-      ahiBayLineReports: bayLineReports,
-      ceItems: ce.error ? [] : ce.items,
-      aboRuasItems,
-      renusRows: renus.error ? [] : renus.rows,
-      gangguanByTowerGi,
-      todayISO: renus.today,
-      outageImpactBySection,
-    }),
+  const ahiAnomalies = ahi.data ? ahi.data.anomalies : [];
+  const ceItems = ce.error ? [] : ce.items;
+  const renusRows = renus.error ? [] : renus.rows;
+
+  // Most SUTT corridors carry 2 physical circuits on shared towers — see
+  // detectRuasCircuits's own comment. Each detected circuit gets its own
+  // card (one ruas can now produce 1 or 2 summaries, not always exactly
+  // 1), since AHI condition is tracked independently per circuit even
+  // though the towers/route/outage risk underneath are identical.
+  const summaries = sutt.ruasList.flatMap((ruas) =>
+    detectRuasCircuits(ruas, bayLineReports, ahiAnomalies).map((circuit) =>
+      buildRuasInfographic({
+        ruas,
+        circuit,
+        ahiAnomalies,
+        ahiBayLineReports: bayLineReports,
+        ceItems,
+        aboRuasItems,
+        renusRows,
+        gangguanByTowerGi,
+        todayISO: renus.today,
+        outageImpactBySection,
+      }),
+    ),
   );
 
   return (

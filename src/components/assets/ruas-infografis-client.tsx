@@ -67,21 +67,36 @@ function StatTile({
   );
 }
 
+// A section alone no longer uniquely identifies a card — most corridors
+// now produce 2 summaries (one per circuit, see detectRuasCircuits in
+// ruas-infographic.ts), so every lookup/selection below keys on
+// section+circuit together, never section alone (that would make circuit
+// 2 permanently unreachable, always resolving back to circuit 1).
+function summaryKey(s: RuasInfographicSummary): string {
+  return `${s.section}::${s.circuit ?? "-"}`;
+}
+function ruasLabel(s: RuasInfographicSummary): string {
+  return s.circuit ? `${s.section} — Sirkit ${s.circuit}` : s.section;
+}
+
 export function RuasInfografisClient({ summaries }: { summaries: RuasInfographicSummary[] }) {
   const units = useMemo(() => [...new Set(summaries.map((s) => s.unit))].sort(), [summaries]);
   const [unit, setUnit] = useState(ALL);
   const ruasOptions = useMemo(
-    () => summaries.filter((s) => unit === ALL || s.unit === unit).sort((a, b) => a.section.localeCompare(b.section)),
+    () =>
+      summaries
+        .filter((s) => unit === ALL || s.unit === unit)
+        .sort((a, b) => a.section.localeCompare(b.section) || (a.circuit ?? "").localeCompare(b.circuit ?? "")),
     [summaries, unit],
   );
-  const [section, setSection] = useState(summaries[0]?.section ?? "");
+  const [key, setKey] = useState(summaries[0] ? summaryKey(summaries[0]) : "");
 
-  const selected = summaries.find((s) => s.section === section) ?? ruasOptions[0] ?? null;
+  const selected = summaries.find((s) => summaryKey(s) === key) ?? ruasOptions[0] ?? null;
 
   function onUnitChange(v: string) {
     setUnit(v);
     const firstInUnit = summaries.find((s) => v === ALL || s.unit === v);
-    if (firstInUnit) setSection(firstInUnit.section);
+    if (firstInUnit) setKey(summaryKey(firstInUnit));
   }
 
   if (!selected) {
@@ -106,14 +121,14 @@ export function RuasInfografisClient({ summaries }: { summaries: RuasInfographic
             ))}
           </SelectContent>
         </Select>
-        <Select value={selected.section} onValueChange={(v) => v && setSection(v)}>
+        <Select value={summaryKey(selected)} onValueChange={(v) => v && setKey(v)}>
           <SelectTrigger size="sm" className="w-[280px]">
-            <SelectValue placeholder="Ruas">{selected.section}</SelectValue>
+            <SelectValue placeholder="Ruas">{ruasLabel(selected)}</SelectValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false} className="!w-[min(92vw,480px)]">
             {ruasOptions.map((s) => (
-              <SelectItem key={s.section} value={s.section}>
-                {s.section}
+              <SelectItem key={summaryKey(s)} value={summaryKey(s)}>
+                {ruasLabel(s)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -124,12 +139,18 @@ export function RuasInfografisClient({ summaries }: { summaries: RuasInfographic
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <CardTitle className="text-xl font-extrabold">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-xl font-extrabold">
                 {selected.originGi} <span className="text-muted-foreground">→</span> {selected.farEndGi}
+                {selected.circuit ? (
+                  <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                    Sirkit {selected.circuit}
+                  </span>
+                ) : null}
               </CardTitle>
               <p className="text-xs text-muted-foreground">
                 {selected.unit} · {selected.lengthKm.toLocaleString("id-ID", { maximumFractionDigits: 2 })} km ·{" "}
-                {selected.towerCount} tower
+                {selected.towerCount} tower (dipakai bersama kedua sirkit)
+                {selected.circuit ? " · AHI khusus sirkit ini; CE/ABO/RENUS tampil di kedua sirkit (sumbernya tidak membedakan sirkit)" : ""}
               </p>
             </div>
             {!hasAnyIssue ? (
@@ -273,10 +294,61 @@ export function RuasInfografisClient({ summaries }: { summaries: RuasInfographic
         </CardContent>
       </Card>
 
+      {selected.ahiBayLineReports.flatMap((r) => r.units).length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-extrabold">Kondisi Peralatan per Unit (AHI)</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Rincian tiap unit peralatan pada bay line ruas ini{selected.circuit ? ` sirkit ${selected.circuit}` : ""} —
+              bukan hanya skor ringkasan, tapi peralatan mana yang bermasalah.
+            </p>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
+                  <th className="px-2 py-2 font-bold">Peralatan</th>
+                  <th className="px-2 py-2 font-bold">Merk/Tipe</th>
+                  <th className="px-2 py-2 font-bold">Skor AHI</th>
+                  <th className="px-2 py-2 font-bold">Klasifikasi</th>
+                  <th className="px-2 py-2 font-bold">Uji Terakhir</th>
+                  <th className="px-2 py-2 font-bold">Tindak Lanjut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selected.ahiBayLineReports
+                  .flatMap((r) => r.units)
+                  .sort((a, b) => (klasifikasiClass(b.klasifikasi) === klasifikasiClass(a.klasifikasi) ? 0 : (b.skorAhi ?? 0) - (a.skorAhi ?? 0)))
+                  .slice(0, 15)
+                  .map((u, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="px-2 py-2 font-medium text-foreground">
+                        {u.role}
+                        {u.techident ? <span className="block text-[11px] text-muted-foreground">{u.techident}</span> : null}
+                      </td>
+                      <td className="px-2 py-2 text-muted-foreground">{[u.merk, u.type].filter(Boolean).join(" / ") || "—"}</td>
+                      <td className="px-2 py-2 tabular-nums text-muted-foreground">{u.skorAhi ?? "—"}</td>
+                      <td className="px-2 py-2">
+                        <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-bold", klasifikasiClass(u.klasifikasi))}>
+                          {u.klasifikasi}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">{u.tanggalPemeliharaanTerakhir ?? "—"}</td>
+                      <td className="max-w-[200px] truncate px-2 py-2 text-muted-foreground" title={u.tindakLanjut ?? undefined}>
+                        {u.tindakLanjut || "—"}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {selected.ahiAnomalies.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-extrabold">Temuan AHI</CardTitle>
+            <CardTitle className="text-base font-extrabold">Temuan AHI (Rekap Anomali)</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-2">
@@ -308,7 +380,7 @@ export function RuasInfografisClient({ summaries }: { summaries: RuasInfographic
                   <div className="min-w-0">
                     <p className="truncate font-medium text-foreground">{item.namaProgram || item.anomaliPemicu}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {item.kriteriaBefore || "—"} → {item.kriteriaAfter || "—"}
+                      {item.gardu} · {item.bay || item.jenisAsset} · {item.kriteriaBefore || "—"} → {item.kriteriaAfter || "—"}
                     </p>
                   </div>
                   <span
@@ -353,9 +425,19 @@ export function RuasInfografisClient({ summaries }: { summaries: RuasInfographic
             <ul className="flex flex-col gap-2">
               {selected.aboItems.slice(0, 8).map((item, i) => (
                 <li key={i} className="flex items-start justify-between gap-3 border-b pb-2 text-sm last:border-0">
-                  <span className="truncate text-foreground" title={item.asset}>
-                    {item.asset}
-                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-foreground" title={item.asset}>
+                      {item.asset}
+                    </p>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {item.ultg}
+                      {item.done && item.realisasiWeekLabel
+                        ? ` · Terealisasi ${item.realisasiWeekLabel}`
+                        : item.targetWeekLabel
+                          ? ` · Target ${item.targetWeekLabel}`
+                          : ""}
+                    </p>
+                  </div>
                   <span
                     className={cn(
                       "shrink-0 rounded-full border px-2 py-0.5 text-xs font-bold",

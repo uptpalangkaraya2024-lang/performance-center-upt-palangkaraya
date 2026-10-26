@@ -73,8 +73,62 @@ function lineGiPairKey(raw: string): string | null {
   return [...sides].sort().join("||");
 }
 
+// Most SUTT corridors are built as double-circuit lines sharing the same
+// towers — confirmed live AHI's own "BAY LINE" naming distinguishes the
+// two circuits almost everywhere ("BAY LINE BAGENDANG - KUALA PEMBUANG#1"
+// / "#2", "BAY LINE BUNTOK - MUARA TEWEH 1" / "2" — both a "#N" and a
+// plain " N" suffix style appear in the live sheet). lineGiPairKey() above
+// deliberately STRIPS this suffix to confirm the corridor; this extracts
+// the same suffix instead, so AHI condition for circuit 1 and circuit 2
+// — which fail/get tested independently — never get merged into one
+// ruas card the way they used to. Null means no circuit suffix at all
+// (a genuine single-circuit corridor, e.g. "BAY LINE MINTIN - PULANG
+// PISAU" — confirmed live some corridors have only one circuit).
+function extractCircuitSuffix(raw: string): string | null {
+  const afterPrefix = raw.replace(/^BAY\s+LINE\s+/i, "");
+  const m = /[\s#](\d+)\s*$/.exec(afterPrefix);
+  return m ? m[1] : null;
+}
+
+/** Every distinct circuit AHI's own data references for this ruas's GI
+ *  pair, sorted — [null] when nothing references a circuit number at all
+ *  (single-circuit corridor, or simply no AHI data yet for it), so the
+ *  caller always gets at least one card instead of silently dropping the
+ *  ruas. The SUTT tower/asset data itself has no circuit concept (towers
+ *  are physically shared by both circuits), so AHI's own naming is the
+ *  only available source of truth for how many circuits a corridor has. */
+export function detectRuasCircuits(
+  ruas: SuttRuas,
+  ahiBayLineReports: BayLineReport[],
+  ahiAnomalies: AhiAnomalyRecord[],
+): (string | null)[] {
+  const ruasGiKey = [giTokenSet(ruas.originLabel.toUpperCase()), giTokenSet(ruas.farEndLabel.toUpperCase())].sort().join("||");
+  const circuits = new Set<string>();
+  for (const r of ahiBayLineReports) {
+    if (lineGiPairKey(r.bay) !== ruasGiKey) continue;
+    const c = extractCircuitSuffix(r.bay);
+    if (c) circuits.add(c);
+  }
+  for (const a of ahiAnomalies) {
+    if (lineGiPairKey(a.bay) !== ruasGiKey) continue;
+    const c = extractCircuitSuffix(a.bay);
+    if (c) circuits.add(c);
+  }
+  if (circuits.size === 0) return [null];
+  return [...circuits].sort((a, b) => Number(a) - Number(b));
+}
+
 export interface RuasInfographicSummary {
   section: string;
+  /** Which physical circuit this card covers — "1", "2", or null when the
+   *  corridor has no circuit distinction in AHI's own data at all (a
+   *  genuine single-circuit line). Towers/route/outage data is identical
+   *  across every circuit card of the same section (physically shared
+   *  structure); only AHI condition is actually circuit-specific — CE,
+   *  ABO, and RENUS don't carry a circuit reference in their own source
+   *  sheets, so the same CE/ABO/RENUS items appear on every circuit card
+   *  of a section rather than being arbitrarily split. */
+  circuit: string | null;
   unit: string;
   originGi: string;
   farEndGi: string;
@@ -121,6 +175,11 @@ function daysBetween(fromISO: string, toISO: string): number {
 
 export function buildRuasInfographic(params: {
   ruas: SuttRuas;
+  /** null = build the "no specific circuit" card (every AHI entry with no
+   *  circuit suffix at all, i.e. a single-circuit corridor); "1"/"2"/... =
+   *  scope AHI matching to only that circuit's own entries. Always pass
+   *  one of detectRuasCircuits()'s own results, never guessed. */
+  circuit: string | null;
   ahiAnomalies: AhiAnomalyRecord[];
   ahiBayLineReports: BayLineReport[];
   ceItems: CeItem[];
@@ -135,6 +194,7 @@ export function buildRuasInfographic(params: {
 }): RuasInfographicSummary {
   const {
     ruas,
+    circuit,
     ahiAnomalies,
     ahiBayLineReports,
     ceItems,
@@ -155,11 +215,19 @@ export function buildRuasInfographic(params: {
   const endpointGis = new Set([canonicalGiKey(ruas.originLabel), canonicalGiKey(ruas.farEndLabel)]);
 
   // --- AHI: match "BAY LINE <GI1> - <GI2>" entries to this ruas's own GI
-  // pair (exact line match), falling back to "touches either endpoint GI"
-  // for anomalies whose bay isn't a Bay Line string at all (other
-  // equipment kinds still worth surfacing against the nearer GI).
-  const ahiBayLineReportsMatched = ahiBayLineReports.filter((r) => lineGiPairKey(r.bay) === ruasGiKey);
-  const anomaliesByLine = ahiAnomalies.filter((a) => lineGiPairKey(a.bay) === ruasGiKey);
+  // pair (exact line match) AND this card's own circuit (see
+  // extractCircuitSuffix's own comment — most corridors run 2 circuits on
+  // shared towers, each with independent AHI condition), falling back to
+  // "touches either endpoint GI" for anomalies whose bay isn't a Bay Line
+  // string at all (other equipment kinds, not circuit-specific — shown on
+  // every circuit card of this section, not just one, since there's no
+  // signal to pick a single one).
+  const ahiBayLineReportsMatched = ahiBayLineReports.filter(
+    (r) => lineGiPairKey(r.bay) === ruasGiKey && extractCircuitSuffix(r.bay) === circuit,
+  );
+  const anomaliesByLine = ahiAnomalies.filter(
+    (a) => lineGiPairKey(a.bay) === ruasGiKey && extractCircuitSuffix(a.bay) === circuit,
+  );
   const anomaliesByGiFallback =
     anomaliesByLine.length > 0 ? [] : ahiAnomalies.filter((a) => endpointGis.has(canonicalGiKey(a.gi)));
   // Worst-first — the whole point of a one-glance infographic is surfacing
@@ -281,6 +349,7 @@ export function buildRuasInfographic(params: {
 
   return {
     section: ruas.section,
+    circuit,
     unit: ruas.unit,
     originGi: ruas.originLabel,
     farEndGi: ruas.farEndLabel,
