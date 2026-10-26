@@ -26,8 +26,24 @@ export interface GiCorrelationRow {
    *  in the same spirit as the one this replaces (same weights the
    *  AHI+Gangguan-only version already used, extended rather than
    *  redesigned), so a GI's position in the ranking is always traceable
-   *  back to its own raw counts. */
+   *  back to its own raw counts. Unbounded — two different runs of this
+   *  dataset can produce very different maximums, so this number alone
+   *  isn't meaningful out of context (see riskScore100). */
   riskScore: number;
+  /** Each component's own weighted contribution to `riskScore` above
+   *  (ahi = ahiCritical×100 + ahiPoor×10, ce = ceOpen×10, gangguan =
+   *  gangguanTotal×1, renus = renusOverdue×10) — they sum to exactly
+   *  `riskScore`. Lets a caller say WHICH signal is actually driving a
+   *  GI's risk, not just that it's high. */
+  riskComponents: { ahi: number; ce: number; gangguan: number; renus: number };
+  /** riskScore rescaled 0-100 relative to the HIGHEST riskScore in this
+   *  same result set (set once buildGiCorrelation finishes scoring every
+   *  row) — a relative ranking aid for display, not an absolute severity
+   *  scale: 100 always means "the riskiest GI in this run," never a fixed
+   *  "this many problems" threshold, and the same raw riskScore can map
+   *  to a different riskScore100 next time the underlying data changes
+   *  the maximum. Still fully traceable back to riskScore/riskComponents. */
+  riskScore100: number;
 }
 
 // CE's own "gardu" column reads e.g. "GI BAGENDANG" / "GIS MINTIN" (no
@@ -89,6 +105,8 @@ export function buildGiCorrelation(params: {
         renusOverdue: 0,
         renusTotal: 0,
         riskScore: 0,
+        riskComponents: { ahi: 0, ce: 0, gangguan: 0, renus: 0 },
+        riskScore100: 0,
       };
       rows.set(key, row);
     }
@@ -131,7 +149,16 @@ export function buildGiCorrelation(params: {
 
   const result = [...rows.values()];
   for (const row of result) {
-    row.riskScore = row.ahiCritical * 100 + (row.ahiPoor + row.ceOpen + row.renusOverdue) * 10 + row.gangguanTotal;
+    const ahi = row.ahiCritical * 100 + row.ahiPoor * 10;
+    const ce = row.ceOpen * 10;
+    const renus = row.renusOverdue * 10;
+    const gangguan = row.gangguanTotal;
+    row.riskComponents = { ahi, ce, gangguan, renus };
+    row.riskScore = ahi + ce + gangguan + renus;
+  }
+  const maxScore = Math.max(0, ...result.map((r) => r.riskScore));
+  for (const row of result) {
+    row.riskScore100 = maxScore > 0 ? Math.round((row.riskScore / maxScore) * 1000) / 10 : 0;
   }
   return result.sort((a, b) => b.riskScore - a.riskScore);
 }

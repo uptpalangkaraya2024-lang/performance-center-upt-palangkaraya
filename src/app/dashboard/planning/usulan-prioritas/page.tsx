@@ -58,6 +58,7 @@ export default async function UsulanPrioritasPage() {
     degradationAlerts,
     trendProjections,
     renusRows: renus.error ? [] : renus.rows,
+    disturbanceEvents: [...disturbances.transmisi.bayEvents, ...disturbances.trafoHv.bayEvents, ...disturbances.trafoLv.bayEvents],
   });
 
   return (

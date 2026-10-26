@@ -15,7 +15,7 @@ import { canonicalGiKey } from "@/lib/gi-name";
 import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import type { AhiDegradationAlert } from "@/lib/ahi-degradation";
 import type { AhiTrendProjection } from "@/lib/ahi-trend-projection";
-import type { BayLineReport, RenusRow } from "@/types";
+import type { BayLineReport, DisturbanceBayEventRecord, RenusRow } from "@/types";
 
 // A projection landing within this window is worth calling out as its own
 // proposal reason (and worth bumping the action to Penggantian) — beyond
@@ -24,6 +24,23 @@ import type { BayLineReport, RenusRow } from "@/types";
 const NEAR_TERM_PROJECTION_DAYS = 365;
 
 export type ProposalAction = "Penggantian" | "Pemeliharaan Prioritas" | "Monitor";
+
+/** A specific, actionable next step — distinct from `action` above (which
+ *  is only a coarse 3-level urgency bucket kept for existing callers/UI).
+ *  Derived from whichever risk component actually dominates this GI's own
+ *  score (see GiCorrelationRow.riskComponents), so two GIs both flagged
+ *  "Penggantian" at the action level can still get different, specific
+ *  recommendations here — one driven by AHI Critical really does need
+ *  equipment replaced, one driven mostly by vegetation-caused gangguan
+ *  needs ROW handling instead, even if their coarse urgency matches. */
+export type ProposalRecommendation =
+  | "Penggantian Peralatan"
+  | "Pengujian Ulang"
+  | "Perbaikan Temuan CE"
+  | "Penanganan ROW/Vegetasi"
+  | "Investigasi Penyebab Gangguan"
+  | "Percepat RENUS Tertunda"
+  | "Monitor";
 
 export interface EquipmentFlag {
   role: string;
@@ -36,13 +53,26 @@ export interface EquipmentFlag {
 export interface MaintenanceProposal {
   gi: string;
   riskScore: number;
+  /** 0-100, relative to the highest riskScore in this same result set —
+   *  see GiCorrelationRow.riskScore100 for what this scale does and
+   *  doesn't mean. */
+  riskScore100: number;
+  riskComponents: { ahi: number; ce: number; gangguan: number; renus: number };
   action: ProposalAction;
+  recommendation: ProposalRecommendation;
   reasons: string[];
   equipmentFlags: EquipmentFlag[];
   ahiCritical: number;
   ahiPoor: number;
   ceOpen: number;
   gangguanTotal: number;
+  /** Of gangguanTotal, how many were vegetation-caused ("Tegakan / Pohon")
+   *  — only populated when disturbanceEvents is passed to
+   *  buildMaintenanceProposals; 0 otherwise, same as any other count would
+   *  be for data that wasn't supplied. Drives the "Penanganan ROW/
+   *  Vegetasi" recommendation specifically, rather than a generic
+   *  "something's causing gangguan here." */
+  gangguanVegetasi: number;
   renusOverdue: number;
   degradingCount: number;
   nearTermProjections: AhiTrendProjection[];
@@ -68,8 +98,14 @@ export function buildMaintenanceProposals(params: {
   degradationAlerts: AhiDegradationAlert[];
   trendProjections: AhiTrendProjection[];
   renusRows: RenusRow[];
+  /** Optional — when supplied, enables the vegetation-specific
+   *  "Penanganan ROW/Vegetasi" recommendation (see gangguanVegetasi on
+   *  MaintenanceProposal). Every existing caller still works without it,
+   *  just with a coarser "Investigasi Penyebab Gangguan" recommendation
+   *  wherever gangguan happens to be the dominant risk component. */
+  disturbanceEvents?: DisturbanceBayEventRecord[];
 }): MaintenanceProposal[] {
-  const { giCorrelation, bayLineReports, degradationAlerts, trendProjections, renusRows } = params;
+  const { giCorrelation, bayLineReports, degradationAlerts, trendProjections, renusRows, disturbanceEvents } = params;
 
   const proposals: MaintenanceProposal[] = [];
   for (const row of giCorrelation) {
@@ -118,16 +154,46 @@ export function buildMaintenanceProposals(params: {
           ? "Pemeliharaan Prioritas"
           : "Monitor";
 
+    const gangguanVegetasi = disturbanceEvents
+      ? disturbanceEvents.filter((e) => giMatches(e.gi ?? "", row.gi) && e.cause === "Tegakan / Pohon").length
+      : 0;
+
+    // Which risk component actually dominates THIS GI's own score (see
+    // GiCorrelationRow.riskComponents) — picks a specific recommendation
+    // instead of the same generic "do maintenance" text for every
+    // proposal, per the user's own request (ganti/perbaiki/uji ulang/
+    // penanganan ROW, not one uniform label). Ties resolve in this fixed
+    // order (ahi > ce > gangguan > renus), the same priority the urgency
+    // levels above already imply.
+    const { ahi, ce, gangguan, renus } = row.riskComponents;
+    const dominant = Math.max(ahi, ce, gangguan, renus);
+    let recommendation: ProposalRecommendation = "Monitor";
+    if (dominant > 0) {
+      if (ahi === dominant) {
+        recommendation = row.ahiCritical > 0 || hasCriticalDegradation || nearTermProjections.length > 0 ? "Penggantian Peralatan" : "Pengujian Ulang";
+      } else if (ce === dominant) {
+        recommendation = "Perbaikan Temuan CE";
+      } else if (gangguan === dominant) {
+        recommendation = gangguanVegetasi > 0 && gangguanVegetasi >= row.gangguanTotal / 2 ? "Penanganan ROW/Vegetasi" : "Investigasi Penyebab Gangguan";
+      } else if (renus === dominant) {
+        recommendation = "Percepat RENUS Tertunda";
+      }
+    }
+
     proposals.push({
       gi: row.gi,
       riskScore: row.riskScore,
+      riskScore100: row.riskScore100,
+      riskComponents: row.riskComponents,
       action,
+      recommendation,
       reasons,
       equipmentFlags,
       ahiCritical: row.ahiCritical,
       ahiPoor: row.ahiPoor,
       ceOpen: row.ceOpen,
       gangguanTotal: row.gangguanTotal,
+      gangguanVegetasi,
       renusOverdue: row.renusOverdue,
       degradingCount: degrading.length,
       nearTermProjections,
