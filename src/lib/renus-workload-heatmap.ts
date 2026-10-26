@@ -38,6 +38,19 @@ export interface MonthWorkload {
    *  this month's own typical weekly load — a glance-able "this week needs
    *  rebalancing" signal, not a hard science. */
   overloadWeekIndexes: number[];
+  /** One entry per calendar week row in `weeks` (same index), so a reader
+   *  can see which week carries the most load without counting cells by
+   *  eye — added alongside the grid itself, not a replacement for it. */
+  weekSummaries: WeekSummary[];
+}
+
+export interface WeekSummary {
+  weekIndex: number;
+  /** "5–11" (no month name — the card already shows which month this is). */
+  label: string;
+  count: number;
+  highRiskCount: number;
+  isOverload: boolean;
 }
 
 // A fixed job-count threshold can't work across 3 ULTGs with very
@@ -115,6 +128,18 @@ export function buildMonthlyWorkloadHeatmap(rows: RenusRow[], year: number, mont
     .map((count, idx) => (count > overloadThreshold ? idx : -1))
     .filter((idx) => idx !== -1);
 
+  const weekSummaries: WeekSummary[] = weeks.map((week, idx) => {
+    const firstDay = week.find((d) => d !== null)?.day;
+    const lastDay = [...week].reverse().find((d) => d !== null)?.day;
+    return {
+      weekIndex: idx,
+      label: firstDay && lastDay ? (firstDay === lastDay ? `${firstDay}` : `${firstDay}–${lastDay}`) : "—",
+      count: weekCounts[idx],
+      highRiskCount: week.reduce((s, d) => s + (d?.highRiskCount ?? 0), 0),
+      isOverload: overloadWeekIndexes.includes(idx),
+    };
+  });
+
   return {
     year,
     monthIndex,
@@ -124,5 +149,6 @@ export function buildMonthlyWorkloadHeatmap(rows: RenusRow[], year: number, mont
     highRiskCount,
     busiestDay,
     overloadWeekIndexes,
+    weekSummaries,
   };
 }

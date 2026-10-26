@@ -184,12 +184,33 @@ export function VerifikasiEfektivitasClient({ checks }: { checks: ActionEffectiv
         </Card>
       )}
 
-      <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+      <div className="flex items-start gap-1.5 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
         <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
-        Perbandingan langsung sebelum vs sesudah tanggal realisasi — bukan bukti sebab-akibat (faktor lain bisa ikut
-        memengaruhi AHI/gangguan di periode yang sama). &ldquo;Belum cukup data&rdquo; berarti belum ada hasil uji
-        AHI setelahnya atau belum 90 hari berjalan sejak pekerjaan selesai.
-      </p>
+        <div className="flex flex-col gap-1">
+          <p>
+            Perbandingan langsung sebelum vs sesudah tanggal realisasi — bukan bukti sebab-akibat (faktor lain bisa
+            ikut memengaruhi AHI/gangguan di periode yang sama).
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">AHI:</span> dibandingkan dengan hasil uji{" "}
+            <span className="font-semibold text-foreground">terdekat sebelum</span> dan{" "}
+            <span className="font-semibold text-foreground">terdekat sesudah</span> tanggal realisasi — tidak
+            dibatasi jumlah hari, jadi hasil uji berikutnya tetap dipakai meski baru dilakukan beberapa bulan
+            kemudian.
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">Gangguan:</span> dibandingkan jumlah kejadian dalam{" "}
+            <span className="font-semibold text-foreground">90 hari sebelum</span> vs{" "}
+            <span className="font-semibold text-foreground">90 hari sesudah</span> tanggal realisasi. &ldquo;Belum
+            cukup data&rdquo; untuk gangguan berarti belum genap 90 hari berjalan sejak pekerjaan selesai; untuk AHI
+            berarti belum ada hasil uji setelahnya.
+          </p>
+          <p>
+            Hanya pekerjaan yang selesai dalam <span className="font-semibold text-foreground">1 tahun terakhir</span>{" "}
+            yang ikut diverifikasi — yang lebih lama dianggap sudah terlalu lama untuk relevan dicek ulang.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

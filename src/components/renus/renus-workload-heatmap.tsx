@@ -7,12 +7,12 @@
 // counts, a red flag wherever high-risk work lands, and a plain-language
 // callout for any week that's crossed the overload threshold.
 import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarRange, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { AlertTriangle, CalendarRange, ChevronLeft, ChevronRight, Flame, RotateCcw } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { buildMonthlyWorkloadHeatmap, WORKLOAD_WEEKDAY_LABEL, type WorkloadDay } from "@/lib/renus-workload-heatmap";
+import { buildMonthlyWorkloadHeatmap, WORKLOAD_WEEKDAY_LABEL, type WorkloadDay, type WeekSummary } from "@/lib/renus-workload-heatmap";
 import type { RenusRow } from "@/types";
 
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -75,6 +75,51 @@ function DayCell({
         </span>
       ) : null}
     </button>
+  );
+}
+
+/** Per-week job totals alongside the calendar grid — per user request, so
+ *  the busiest week period is readable at a glance instead of needing to
+ *  scan and sum the grid's own day cells by eye. Busiest non-zero week
+ *  gets a flame marker (independent of the overload flag, which is a
+ *  stricter "needs rebalancing" threshold — a month can have a clear
+ *  busiest week without that week crossing into actual overload). */
+function WeekSummaryPanel({ summaries }: { summaries: WeekSummary[] }) {
+  const maxCount = Math.max(0, ...summaries.map((w) => w.count));
+  return (
+    <div className="flex flex-row gap-1.5 overflow-x-auto sm:w-44 sm:shrink-0 sm:flex-col sm:overflow-visible">
+      <p className="hidden text-[10px] font-bold tracking-wide text-muted-foreground uppercase sm:block">
+        Beban per Minggu
+      </p>
+      {summaries.map((w) => {
+        const isBusiest = w.count > 0 && w.count === maxCount;
+        return (
+          <div
+            key={w.weekIndex}
+            className={cn(
+              "flex min-w-[88px] shrink-0 items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-xs sm:min-w-0",
+              w.isOverload ? "border-critical/40 bg-critical/10" : isBusiest ? "border-primary/40 bg-primary/10" : "bg-muted/30",
+            )}
+          >
+            <div className="min-w-0">
+              <p className="flex items-center gap-1 font-semibold text-foreground">
+                {w.label}
+                {isBusiest ? <Flame className="size-3 shrink-0 text-primary" /> : null}
+              </p>
+              {w.highRiskCount > 0 ? (
+                <p className="flex items-center gap-0.5 text-[10px] text-critical">
+                  <AlertTriangle className="size-2.5 shrink-0" />
+                  {w.highRiskCount} tinggi
+                </p>
+              ) : null}
+            </div>
+            <span className={cn("shrink-0 text-base font-extrabold tabular-nums", w.isOverload ? "text-critical" : "text-foreground")}>
+              {w.count}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -165,30 +210,36 @@ export function RenusWorkloadHeatmap({ rows, todayISO }: { rows: RenusRow[]; tod
           </div>
         ) : null}
 
-        <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
-          {WORKLOAD_WEEKDAY_LABEL.map((w) => (
-            <span key={w}>{w}</span>
-          ))}
-        </div>
-        <div className="flex flex-col gap-1">
-          {month.weeks.map((week, weekIdx) => (
-            <div key={weekIdx} className="grid grid-cols-7 gap-1">
-              {week.map((day, cellIdx) =>
-                day ? (
-                  <DayCell
-                    key={day.dateISO}
-                    day={day}
-                    maxCount={maxCount}
-                    isToday={day.dateISO === todayISO}
-                    isSelected={day.dateISO === selectedDay}
-                    onSelect={() => setSelectedDay((prev) => (prev === day.dateISO ? null : day.dateISO))}
-                  />
-                ) : (
-                  <span key={cellIdx} />
-                ),
-              )}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="min-w-0 flex-1">
+            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
+              {WORKLOAD_WEEKDAY_LABEL.map((w) => (
+                <span key={w}>{w}</span>
+              ))}
             </div>
-          ))}
+            <div className="mt-1 flex flex-col gap-1">
+              {month.weeks.map((week, weekIdx) => (
+                <div key={weekIdx} className="grid grid-cols-7 gap-1">
+                  {week.map((day, cellIdx) =>
+                    day ? (
+                      <DayCell
+                        key={day.dateISO}
+                        day={day}
+                        maxCount={maxCount}
+                        isToday={day.dateISO === todayISO}
+                        isSelected={day.dateISO === selectedDay}
+                        onSelect={() => setSelectedDay((prev) => (prev === day.dateISO ? null : day.dateISO))}
+                      />
+                    ) : (
+                      <span key={cellIdx} />
+                    ),
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <WeekSummaryPanel summaries={month.weekSummaries} />
         </div>
 
         {selectedDay ? (
