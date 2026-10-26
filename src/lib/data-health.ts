@@ -170,7 +170,16 @@ function implausibleDateCheck(
     if (r.actualDate === null) return false;
     if (r.actualDate > todayISO) return true;
     if (r.createdDate && r.actualDate < r.createdDate) return true;
-    return Math.abs(daysBetween(r.plannedDate, r.actualDate)) > extremeGapDays;
+    // Only the LATE direction counts as "extreme" — realisasi arriving
+    // well AFTER rencana is worth a glance (could be a wrong year typed
+    // in either field), but realisasi arriving well BEFORE rencana is
+    // just early completion, no matter how early. Confirmed live this
+    // mattered in practice: an unsigned Math.abs() here flagged 80 CE
+    // rows that were simply finished many months ahead of a far-future
+    // target date — exactly the "don't flag early completion" case FASE
+    // 1 was supposed to have already fixed, just reintroduced via this
+    // leg instead of the plain realisasi<rencana comparison.
+    return daysBetween(r.plannedDate, r.actualDate) > extremeGapDays;
   });
   if (bad.length === 0) return null;
   return {
@@ -178,7 +187,7 @@ function implausibleDateCheck(
     module,
     title: "Tanggal realisasi tidak masuk akal",
     severity: "warning",
-    detail: `${bad.length} baris dengan tanggal realisasi di masa depan, sebelum tanggal temuan/dibuat, atau berselisih lebih dari ${extremeGapDays} hari dari tanggal rencana — kemungkinan salah ketik tanggal. Menyelesaikan lebih awal dari rencana TIDAK dianggap anomali.`,
+    detail: `${bad.length} baris dengan tanggal realisasi di masa depan, sebelum tanggal temuan/dibuat, atau terlambat lebih dari ${extremeGapDays} hari dari tanggal rencana — kemungkinan salah ketik tanggal. Menyelesaikan lebih awal dari rencana, termasuk jauh lebih awal, TIDAK dianggap anomali.`,
     samples: bad.slice(0, 5).map((r) => `${r.label} (rencana ${r.plannedDate}, realisasi ${r.actualDate})`),
     count: bad.length,
   };
