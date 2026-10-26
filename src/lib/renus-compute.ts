@@ -2,7 +2,7 @@
 // plain per-row predicates (isRenusDone/isRenusCancelled/isRenusHighRisk) —
 // same "load once, derive many things" shape as the other modules'
 // *-compute.ts files.
-import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
+import { isRenusCancelled, isRenusDone, isRenusHighRisk, isRenusOverdue } from "@/lib/renus-helpers";
 import type { RenusRow } from "@/types";
 
 export interface RenusUltgResumeEntry {
@@ -39,7 +39,7 @@ export function buildRenusUltgResume(rows: RenusRow[], todayISO: string): RenusU
     return {
       ultg,
       total: group.length,
-      overdue: group.filter((r) => !isRenusDone(r) && r.rencanaDate < todayISO).length,
+      overdue: group.filter((r) => isRenusOverdue(r, todayISO)).length,
       highRisk: group.filter((r) => isRenusHighRisk(r)).length,
       done: group.filter((r) => isRenusDone(r)).length,
     };

@@ -26,7 +26,7 @@ import { buildAboSnapshotComputed, collectAboAttentionItems, defaultAboWeekLabel
 import { buildCeSummary, buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 import { buildFourDxAchievementSummaries, resolvePeriodRange } from "@/lib/four-dx-compute";
 import { buildChartSpec, buildParetoChart } from "@/lib/presentation-chart-compute";
-import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
+import { isRenusOverdue } from "@/lib/renus-helpers";
 import type {
   AboProgramComputed,
   DisturbanceCategoryResult,
@@ -439,9 +439,7 @@ async function buildRenusMateri(): Promise<PresentationMateriOption> {
   const data = await getRenusData();
   const slides: PresentationSlide[] = [];
   if (!data.error) {
-    const overdueCount = data.rows.filter(
-      (r) => !isRenusCancelled(r) && !isRenusDone(r) && r.rencanaDate < data.today,
-    ).length;
+    const overdueCount = data.rows.filter((r) => isRenusOverdue(r, data.today)).length;
     slides.push(
       slide({
         title: "RENUS — Rencana Pemeliharaan & Pekerjaan",

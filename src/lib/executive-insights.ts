@@ -2,7 +2,7 @@
 // if/else over already-computed service data, no AI/LLM call of any kind.
 // See AGENTS.md "AI ASSISTANT" section: rule-based insight is explicitly
 // permitted, an AI backend is not.
-import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
+import { isRenusCancelled, isRenusHighRisk, isRenusOverdue } from "@/lib/renus-helpers";
 import { collectAboAttentionItems } from "@/lib/abo-proteksi-compute";
 import { buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
 import type {
@@ -334,7 +334,7 @@ export function buildRenusReminders(data: RenusData, todayISO: string): AiInsigh
   const { rows, weekPeriod } = data;
   const isActive = (r: RenusData["rows"][number]) => !isRenusCancelled(r);
 
-  const overdue = rows.filter((r) => isActive(r) && !isRenusDone(r) && r.rencanaDate < todayISO);
+  const overdue = rows.filter((r) => isRenusOverdue(r, todayISO));
   if (overdue.length > 0) {
     push(
       "critical",

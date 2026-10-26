@@ -12,7 +12,7 @@ import { getDisturbances } from "@/services/disturbances";
 import { buildAboSnapshotComputed, defaultAboWeekLabel } from "@/lib/abo-proteksi-compute";
 import { buildFourDxWigs, resolvePeriodRange } from "@/lib/four-dx-compute";
 import { buildCeAttentionItems, defaultCeWeekLabel } from "@/lib/ce-compute";
-import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
+import { isRenusOverdue } from "@/lib/renus-helpers";
 import { findAhiDegradationAlerts } from "@/lib/ahi-degradation";
 import { buildAhiTrendProjections } from "@/lib/ahi-trend-projection";
 
@@ -93,13 +93,12 @@ export async function getNavBadges(): Promise<Record<string, number>> {
     // ditto
   }
 
-  // Same "overdue" definition already used for the homepage's RENUS
-  // reminder — not done, not cancelled, past its own rencana date.
+  // Same shared isRenusOverdue() every other RENUS overdue count in this
+  // app now uses (src/lib/renus-helpers.ts) — not done, not cancelled,
+  // past its own rencana date.
   try {
     const data = await getRenusData();
-    const overdueCount = data.rows.filter(
-      (r) => !isRenusCancelled(r) && !isRenusDone(r) && r.rencanaDate < data.today,
-    ).length;
+    const overdueCount = data.rows.filter((r) => isRenusOverdue(r, data.today)).length;
     if (overdueCount > 0) badges["/dashboard/renus"] = overdueCount;
   } catch {
     // ditto

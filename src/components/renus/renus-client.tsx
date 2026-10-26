@@ -26,7 +26,7 @@ import {
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
-import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
+import { isRenusCancelled, isRenusDone, isRenusHighRisk, isRenusOverdue } from "@/lib/renus-helpers";
 import { buildRenusUltgResume, type RenusUltgResumeEntry } from "@/lib/renus-compute";
 import { RenusWorkTable } from "./renus-work-table";
 import { RenusWorkloadHeatmap } from "./renus-workload-heatmap";
@@ -133,14 +133,18 @@ function StatTile({
   label,
   className,
   barClassName = "bg-primary",
+  hint,
 }: {
   value: string;
   label: string;
   className?: string;
   barClassName?: string;
+  /** Native title-attribute tooltip — for a number whose exact scope
+   *  (what's included/excluded) isn't obvious from the label alone. */
+  hint?: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-muted">
+    <div className="overflow-hidden rounded-lg border bg-muted" title={hint}>
       <div className={`h-1.5 w-full ${barClassName}`} />
       <div className="p-3">
         <div className={`text-xl font-extrabold tabular-nums sm:text-2xl ${className ?? "text-foreground"}`}>{value}</div>
@@ -223,10 +227,7 @@ export function RenusClient({ data }: { data: RenusData }) {
     () => data.rows.filter((r) => r.rencanaDate >= data.weekPeriod.start && r.rencanaDate <= data.weekPeriod.end),
     [data],
   );
-  const overdueRows = useMemo(
-    () => data.rows.filter((r) => isActiveRow(r) && !isRenusDone(r) && r.rencanaDate < data.today),
-    [data],
-  );
+  const overdueRows = useMemo(() => data.rows.filter((r) => isRenusOverdue(r, data.today)), [data]);
   const todayRows = useMemo(() => data.rows.filter((r) => r.rencanaDate === data.today), [data]);
 
   const scoped = useMemo(() => {
@@ -326,7 +327,12 @@ export function RenusClient({ data }: { data: RenusData }) {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile value={summary.total.toLocaleString("id-ID")} label="Total Pekerjaan" barClassName="bg-primary" />
+        <StatTile
+          value={summary.total.toLocaleString("id-ID")}
+          label="Total Pekerjaan"
+          barClassName="bg-primary"
+          hint="Tidak termasuk pekerjaan berstatus Batal — lihat daftar lengkap di bawah untuk jumlah termasuk yang dibatalkan."
+        />
         <StatTile value={summary.thisWeek.toLocaleString("id-ID")} label="Minggu Ini" barClassName="bg-info" />
         <StatTile value={summary.highRisk.toLocaleString("id-ID")} label="High Risk (Semua Periode)" className="text-critical" barClassName="bg-critical" />
         <StatTile value={summary.upcoming.toLocaleString("id-ID")} label="Upcoming" barClassName="bg-brand" />
@@ -363,7 +369,10 @@ export function RenusClient({ data }: { data: RenusData }) {
             <WorkListPreview rows={weekRows} />
             {weekRows.length > 0 ? (
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <span className="flex items-center gap-1.5 rounded-lg border border-critical/40 bg-critical/10 p-2 font-semibold text-critical">
+                <span
+                  className="flex items-center gap-1.5 rounded-lg border border-critical/40 bg-critical/10 p-2 font-semibold text-critical"
+                  title="Belum ada realisasi (dan belum TECO/COMPLETED di SAP) dengan tanggal rencana yang sudah lewat — definisi yang sama dipakai di seluruh dashboard ini, termasuk Laporan Eksekutif."
+                >
                   <XCircle className="size-4 shrink-0" /> {overdueInWeek} Overdue
                 </span>
                 <span className="flex items-center gap-1.5 rounded-lg border border-warning/50 bg-warning/10 p-2 font-semibold text-warning-foreground">
@@ -461,7 +470,10 @@ export function RenusClient({ data }: { data: RenusData }) {
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="text-lg font-extrabold">Daftar Pekerjaan</CardTitle>
-            <p className="text-xs text-muted-foreground">{filtered.length} dari {data.rows.length} pekerjaan ditampilkan.</p>
+            <p className="text-xs text-muted-foreground">
+              {filtered.length} dari {data.rows.length} pekerjaan ditampilkan (termasuk yang berstatus Batal — beda
+              dengan &ldquo;Total Pekerjaan&rdquo; di atas yang mengecualikannya).
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <ExportPdfButton />
