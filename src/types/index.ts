@@ -1379,25 +1379,37 @@ export interface SuttSnapshot {
   error: string | null;
 }
 
-// Jadwal Rapat Rutin (feature #3) — the user will send a Google Sheet with
-// the actual recurring-meeting schedule later; this shape is the agreed
-// menu ("jadwal, link ROM, hasil pembahasan, dll" — user's own words) so
-// the page/service stay ready to wire in that sheet as a data-source +
-// parser change only, not a new feature build. See
-// src/services/meeting-schedule.ts for the current stub.
-export interface MeetingScheduleRow {
-  id: string;
-  tanggal: string; // yyyy-MM-dd
-  waktu: string | null; // HH:mm
-  topik: string;
-  penyelenggara: string | null;
-  linkRom: string | null;
-  hasilPembahasan: string | null;
-  tindakLanjut: string | null;
-  status: string | null;
+// Jadwal Rapat Rutin (feature #3) — confirmed live against the real sheet
+// ("AGENDA CEKPOIN RUTIN UPT") this is a recurring CHECKPOINT AGENDA
+// template, not a dated meeting log: no date column at all, `jadwal` holds
+// a recurring cadence ("Jumat", "Tentative", "M2 bulan berjalan"). The
+// sheet stacks 7 named blocks (mingguan/bulanan x ULTG/Kantor Induk/UPT/
+// Eksternal/Pusat), each with its own repeated header row — this shape
+// replaces an earlier, wrong guess (a flat dated list with ROM
+// links/hasil pembahasan) made before the real sheet was available.
+export interface MeetingAgendaItem {
+  /** Null for a sub-item continuation row (e.g. "- Cleansing data aset
+   *  EAM" nested under a numbered agenda item, no number of its own). */
+  no: number | null;
+  agenda: string;
+  /** Recurring cadence as written in the sheet — "Jumat", "Tentative",
+   *  "M2 bulan berjalan" (2nd week of the current month), "M1 bulan
+   *  selanjutnya" (1st week of next month), etc. Never a specific date. */
+  jadwal: string | null;
+  metode: string | null;
+  /** Free-text status — "on going", "not started", or blank. Shown
+   *  as-is, not mapped to a fixed enum (the sheet doesn't define one). */
+  keterangan: string | null;
+  pic: string | null;
+}
+
+export interface MeetingAgendaBlock {
+  /** e.g. "CHECK POINT MINGGUAN UPT DENGAN ULTG". */
+  title: string;
+  items: MeetingAgendaItem[];
 }
 
 export interface MeetingScheduleData {
-  rows: MeetingScheduleRow[];
+  blocks: MeetingAgendaBlock[];
   error: string | null;
 }

@@ -449,4 +449,26 @@ export const dataSources = {
       },
     ],
   },
+  // Jadwal Rapat Rutin (feature #3) — a recurring CHECKPOINT AGENDA
+  // template, not a dated meeting log: confirmed live this is one sheet
+  // with 7 stacked blocks (e.g. "CHECK POINT MINGGUAN UPT DENGAN ULTG",
+  // "CHECK POINT BULANAN UPT DENGAN KANTOR INDUK"), each with its own
+  // repeated header row (NO/AGENDA/JADWAL/METODE/KETERANGAN/PIC) — no
+  // single header row works for the whole sheet, so this is read raw
+  // (readConfiguredSourceRaw), block boundaries found by content match
+  // (a row whose own column B reads "NO"), same convention already used
+  // for asset-scanning.ts's ANOMALI sheet. JADWAL holds a recurring
+  // cadence ("Jumat", "Tentative", "M2 bulan berjalan"), never a specific
+  // calendar date — there is no date column in this sheet at all. See
+  // src/services/meeting-schedule.ts.
+  meetingSchedule: {
+    id: "meeting-schedule",
+    label: "Agenda Checkpoint UPT",
+    sources: [
+      {
+        file: "AGENDA CEKPOIN RUTIN UPT",
+        sheets: [{ name: "Sheet1", required: false, purpose: "Agenda checkpoint rutin UPT — 7 blok (mingguan/bulanan x ULTG/Kantor Induk/UPT/Eksternal/Pusat), setiap blok punya header sendiri." }],
+      },
+    ],
+  },
 } satisfies Record<string, DataSourceConfig>;
