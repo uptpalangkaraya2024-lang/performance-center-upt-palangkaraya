@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { calculateAchievedPercentage, formatAchievedPercentage } from "@/lib/kpi-engine";
 import { cn } from "@/lib/utils";
 import type { StatusLevel, UptOverallPerformance } from "@/types";
 
@@ -73,8 +74,7 @@ export function UptPerformanceStatus({
    *  other. */
   overallWeightedScore?: number | null;
 }) {
-  const scored = overall.achieved + overall.warning + overall.critical;
-  const score = scored > 0 ? Math.round((overall.achieved / scored) * 100) : null;
+  const { pct: score, scoredCount, noDataCount } = calculateAchievedPercentage(overall);
   const meta = STATUS_META[status];
   const Icon = meta.icon;
 
@@ -92,11 +92,18 @@ export function UptPerformanceStatus({
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-4">
-          <div className="flex shrink-0 items-end gap-2">
-            <span className={cn("text-4xl font-extrabold tabular-nums sm:text-5xl", meta.scoreClassName)}>
-              {score === null ? "-" : `${score}%`}
-            </span>
-            <span className="mb-1.5 text-sm font-medium text-muted-foreground whitespace-nowrap">KPI tercapai target</span>
+          <div className="flex shrink-0 flex-col gap-0.5">
+            <div className="flex items-end gap-2">
+              <span className={cn("text-4xl font-extrabold tabular-nums sm:text-5xl", meta.scoreClassName)}>
+                {formatAchievedPercentage(score)}
+              </span>
+              <span className="mb-1.5 text-sm font-medium text-muted-foreground whitespace-nowrap">KPI tercapai target</span>
+            </div>
+            {noDataCount > 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                {noDataCount} KPI belum terisi, dihitung dari {scoredCount} KPI
+              </p>
+            ) : null}
           </div>
           <div className="hidden min-w-24 flex-1 sm:block">{score !== null ? <Progress value={score} /> : null}</div>
         </div>

@@ -1,7 +1,7 @@
 // Centralized KPI calculation — the one place formulas live, so every page
 // that shows achievement/status/trend agrees with every other. See AGENTS.md
 // section 43 ("KPI Engine"): formulas must not be scattered across components.
-import type { StatusLevel } from "@/types";
+import type { StatusLevel, UptOverallPerformance } from "@/types";
 
 export function calculateAchievement(target: number, actual: number): number {
   if (target === 0) return 0;
@@ -14,6 +14,71 @@ export function calculateStatus(achievement: number): StatusLevel {
   if (achievement >= STATUS_THRESHOLDS.good) return "good";
   if (achievement >= STATUS_THRESHOLDS.warning) return "warning";
   return "critical";
+}
+
+export interface AchievedPercentage {
+  /** null when there's nothing scoreable at all this period (every KPI is
+   *  "none"/no-data) — never silently shown as 0%, which would read as
+   *  "achieved nothing" rather than "nothing to score yet". */
+  pct: number | null;
+  /** KPIs actually counted in the percentage (achieved+warning+critical). */
+  scoredCount: number;
+  /** Every KPI in the config, including ones with no data this period. */
+  totalCount: number;
+  noDataCount: number;
+}
+
+/**
+ * The ONE place "% KPI tercapai" gets computed from a status breakdown —
+ * before this, the homepage, Laporan Eksekutif, and (implicitly, by never
+ * showing it) Kinerja ULTG each had their own idea of the denominator.
+ * Confirmed live: the homepage divided by (achieved+warning+critical),
+ * excluding no-data KPIs, while Laporan Eksekutif divided by the full KPI
+ * count including no-data ones — same underlying achieved/warning/critical
+ * counts, two different percentages, shown side by side as if they were
+ * the same number (e.g. "72%" vs "69,7%"). A KPI with no data this period
+ * genuinely has nothing to score yet, so it's excluded from BOTH the
+ * numerator and denominator here — same rule FASE 1.1 applies to the
+ * no-data status itself, kept consistent in one place rather than redone
+ * ad hoc wherever a percentage is shown.
+ */
+export function calculateAchievedPercentage(overall: UptOverallPerformance): AchievedPercentage {
+  const scoredCount = overall.achieved + overall.warning + overall.critical;
+  return {
+    pct: scoredCount > 0 ? Math.round((overall.achieved / scoredCount) * 1000) / 10 : null,
+    scoredCount,
+    totalCount: overall.total,
+    noDataCount: overall.noData,
+  };
+}
+
+/** Indonesian-locale percentage string, one decimal place, the single
+ *  formatting convention every achieved-% display in this app now shares
+ *  ("72,4%", never "72%" in one place and "72,4%" in another). */
+export function formatAchievedPercentage(pct: number | null): string {
+  return pct === null ? "-" : `${pct.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+/**
+ * Status "none" (NO_DATA) already applied when the sheet's own Pencapaian
+ * cell is blank (achievement === null) — this extends it to one more
+ * concrete, unambiguous case: BOTH Target and Realisasi are blank too,
+ * which some rows reach with a non-null achievement of exactly 0 (a
+ * spreadsheet formula default, not a real figure) rather than a blank
+ * Pencapaian cell. Deliberately narrow — does NOT reclassify a KPI with a
+ * real target and a real (possibly zero) actual value as "none", since a
+ * literal 0 actual is a legitimate, sometimes the BEST possible, result
+ * for a LOWER_IS_BETTER KPI (e.g. zero gangguan) and misreading it as
+ * "no data" would hide a genuine achievement, not just a genuine problem.
+ */
+export function deriveKpiStatus(
+  achievement: number | null,
+  actualValue: number | null,
+  targetValue: number | null,
+): StatusLevel {
+  if (achievement === null) return "none";
+  if (actualValue === null && targetValue === null) return "none";
+  return calculateStatus(achievement);
 }
 
 export function calculateTrend(current: number, previous: number | null): "up" | "down" | "flat" {

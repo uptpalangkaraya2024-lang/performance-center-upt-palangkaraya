@@ -1,6 +1,7 @@
 import { Medal, Trophy } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { calculateAchievedPercentage, formatAchievedPercentage } from "@/lib/kpi-engine";
 import { cn } from "@/lib/utils";
 import type { UltgPerformanceSnapshot } from "@/types";
 
@@ -90,8 +91,15 @@ export function UltgRankingTable({
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2.5">
+        {new Set(ranking.map((r) => r.snapshot.period)).size > 1 ? (
+          <p className="rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-[11px] text-warning-foreground">
+            Periode data tidak seragam antar ULTG — peringkat ini membandingkan periode yang berbeda-beda, lihat
+            label periode di tiap baris.
+          </p>
+        ) : null}
         {ranking.map((row) => {
           const isSelected = row.snapshot.ultgSlug === selectedSlug;
+          const { pct, noDataCount } = calculateAchievedPercentage(row.snapshot.overall);
           return (
             <button
               key={row.snapshot.ultgSlug}
@@ -107,9 +115,11 @@ export function UltgRankingTable({
               <span className="flex-1">
                 <span className="block text-sm font-bold text-foreground">{row.snapshot.ultg}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {row.snapshot.overall.achieved} achieved · {row.snapshot.overall.warning} warning ·{" "}
-                  {row.snapshot.overall.critical} critical
+                  {formatAchievedPercentage(pct)} KPI tercapai · {row.snapshot.overall.achieved} achieved ·{" "}
+                  {row.snapshot.overall.warning} warning · {row.snapshot.overall.critical} critical
+                  {noDataCount > 0 ? ` · ${noDataCount} belum terisi` : ""}
                 </span>
+                <span className="block text-[11px] text-muted-foreground">Data s.d. {row.snapshot.periodLabel}</span>
               </span>
               <span className="text-right">
                 <span className="block text-lg font-extrabold tabular-nums text-foreground">

@@ -8,6 +8,7 @@
 // already shown elsewhere on the dashboard; nothing here is invented.
 import type { AiInsight, RenusSummary, UltgPerformanceSnapshot, UptPerformanceSnapshot } from "@/types";
 import type { MaintenanceProposal } from "@/lib/maintenance-proposals";
+import { calculateAchievedPercentage } from "@/lib/kpi-engine";
 
 export interface NarrativeReportParams {
   periodLabel: string;
@@ -49,12 +50,17 @@ export function buildNarrativeReport(params: NarrativeReportParams): NarrativeSe
 
   // --- Kinerja UPT ---
   if (upt) {
-    const achievementPct = upt.overall.total > 0 ? (upt.overall.achieved / upt.overall.total) * 100 : null;
+    // Same calculateAchievedPercentage() every other achieved-% display in
+    // this app uses (src/lib/kpi-engine.ts) — this section used to divide
+    // by the full KPI count (including no-data KPIs), which read as a
+    // different number than the homepage's own banner for the same period.
+    const { pct: achievementPct, noDataCount } = calculateAchievedPercentage(upt.overall);
     const scoreText = upt.overallWeightedScore !== null ? `${upt.overallWeightedScore.toFixed(2)}%` : "belum tersedia";
+    const noDataNote = noDataCount > 0 ? ` (${noDataCount} KPI belum terisi, tidak dihitung dalam persentase ini)` : "";
     sections.push({
       heading: "Kinerja UPT Palangkaraya",
       paragraphs: [
-        `Kinerja UPT Palangkaraya periode ${upt.periodLabel} mencatat ${upt.overall.achieved} dari ${upt.overall.total} KPI tercapai target (${pct(achievementPct)}), dengan ${upt.overall.warning} KPI berstatus warning dan ${upt.overall.critical} KPI berstatus critical. Skor Kontrak (Bobot Resmi) tercatat sebesar ${scoreText}.`,
+        `Kinerja UPT Palangkaraya periode ${upt.periodLabel} mencatat ${upt.overall.achieved} dari ${upt.overall.total} KPI tercapai target (${pct(achievementPct)})${noDataNote}, dengan ${upt.overall.warning} KPI berstatus warning dan ${upt.overall.critical} KPI berstatus critical. Skor Kontrak (Bobot Resmi) tercatat sebesar ${scoreText}.`,
         upt.overall.critical > 0
           ? `Sebanyak ${upt.overall.critical} KPI dalam kondisi critical perlu mendapat perhatian khusus pada rapat evaluasi berikutnya.`
           : `Tidak ada KPI dalam kondisi critical pada periode ini — kinerja UPT secara umum dalam kondisi terkendali.`,
@@ -66,12 +72,18 @@ export function buildNarrativeReport(params: NarrativeReportParams): NarrativeSe
   if (ultgRanking.length > 0) {
     const best = ultgRanking[0];
     const worst = ultgRanking[ultgRanking.length - 1];
-    const bestPct = best.snapshot.overall.total > 0 ? (best.snapshot.overall.achieved / best.snapshot.overall.total) * 100 : null;
-    const worstPct = worst.snapshot.overall.total > 0 ? (worst.snapshot.overall.achieved / worst.snapshot.overall.total) * 100 : null;
+    const bestPct = calculateAchievedPercentage(best.snapshot.overall).pct;
+    const worstPct = calculateAchievedPercentage(worst.snapshot.overall).pct;
+    const periodMismatch = new Set(ultgRanking.map((r) => r.snapshot.period)).size > 1;
     sections.push({
       heading: "Kinerja ULTG",
       paragraphs: [
         `Dari ${ultgRanking.length} ULTG, ${best.snapshot.ultg} menempati peringkat #1 dengan ${pct(bestPct)} KPI tercapai, sementara ${worst.snapshot.ultg} berada di peringkat terakhir dengan ${pct(worstPct)} dan ${worst.snapshot.overall.critical} KPI critical.`,
+        ...(periodMismatch
+          ? [
+              `Catatan: periode data tidak seragam antar ULTG (${ultgRanking.map((r) => `${r.snapshot.ultg} — ${r.snapshot.periodLabel}`).join(", ")}) — peringkat di atas membandingkan periode yang berbeda, bukan periode yang sama.`,
+            ]
+          : []),
       ],
     });
   }

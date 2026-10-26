@@ -3,7 +3,7 @@ import "server-only";
 import { dataSources } from "@/config/data-sources";
 import { UPT_KPI_CONFIG } from "@/config/upt-kpi";
 import { hasAllRequiredSheets, readConfiguredSource, readConfiguredSourceRaw } from "@/lib/data-connector";
-import { calculateStatus } from "@/lib/kpi-engine";
+import { deriveKpiStatus } from "@/lib/kpi-engine";
 import { parseNumber, requireText } from "@/lib/parse";
 import { listSyncStatus } from "@/lib/sync-status";
 import type {
@@ -336,6 +336,8 @@ function normalizeKpi(
     const achievement = parseNumber(getField(row, "Pencapaian") ?? undefined);
     const targetLabel = getField(row, "Target s/d");
     const actualLabel = getField(row, "Realisasi s/d");
+    const targetValue = parseNumber(targetLabel ?? undefined);
+    const actualValue = parseNumber(actualLabel ?? undefined);
 
     return {
       key: config.key,
@@ -346,13 +348,17 @@ function normalizeKpi(
       directionConflict: direction !== null && direction !== config.expectedDirection,
       unit: getField(row, "SATUAN"),
       targetLabel,
-      targetValue: parseNumber(targetLabel ?? undefined),
+      targetValue,
       actualLabel,
-      actualValue: parseNumber(actualLabel ?? undefined),
+      actualValue,
       achievement,
-      // The sheet's Pencapaian already IS the achievement percentage — calculateStatus's
-      // >=100/>=90 thresholds apply directly, no target/actual division needed here.
-      status: achievement === null ? "none" : calculateStatus(achievement),
+      // The sheet's Pencapaian already IS the achievement percentage —
+      // deriveKpiStatus's >=100/>=90 thresholds apply directly, no target/
+      // actual division needed here. Also catches the case where
+      // Pencapaian itself isn't blank (often a stray 0 from a spreadsheet
+      // formula) but both Target and Realisasi are — see deriveKpiStatus's
+      // own comment for why this is narrower than "any 0 means no data".
+      status: deriveKpiStatus(achievement, actualValue, targetValue),
       monthlyTrend: trends.get(config.key) ?? null,
       weightInfo: weightInfo.get(config.key) ?? null,
     };

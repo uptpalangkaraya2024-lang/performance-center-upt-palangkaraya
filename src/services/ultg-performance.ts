@@ -8,7 +8,7 @@ import {
   type RawSheetReadResult,
   type SheetReadResult,
 } from "@/lib/data-connector";
-import { calculateStatus } from "@/lib/kpi-engine";
+import { deriveKpiStatus } from "@/lib/kpi-engine";
 import { parseNumber, requireText } from "@/lib/parse";
 import { listSyncStatus } from "@/lib/sync-status";
 import type {
@@ -292,6 +292,8 @@ function normalizeKpi(
     const achievement = parseNumber(getField(row, "Pencapaian") ?? undefined);
     const targetLabel = getField(row, "Target s/d");
     const actualLabel = getField(row, "Realisasi s/d");
+    const targetValue = parseNumber(targetLabel ?? undefined);
+    const actualValue = parseNumber(actualLabel ?? undefined);
 
     return {
       key: config.key,
@@ -301,11 +303,16 @@ function normalizeKpi(
       direction,
       unit: getField(row, "SATUAN"),
       targetLabel,
-      targetValue: parseNumber(targetLabel ?? undefined),
+      targetValue,
       actualLabel,
-      actualValue: parseNumber(actualLabel ?? undefined),
+      actualValue,
       achievement,
-      status: achievement === null ? "none" : calculateStatus(achievement),
+      // Also treats "achievement isn't blank but both Target and Realisasi
+      // are" as no-data (see deriveKpiStatus's own comment, src/lib/kpi-
+      // engine.ts) — deliberately narrower than flagging every literal 0,
+      // since 0 is a legitimate (sometimes the BEST) result for a LOWER_IS_
+      // BETTER KPI with a real target.
+      status: deriveKpiStatus(achievement, actualValue, targetValue),
       monthlyTrend: trends.get(config.key) ?? null,
       weightInfo: weightInfo.get(config.key) ?? null,
     };
