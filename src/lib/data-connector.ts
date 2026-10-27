@@ -261,7 +261,31 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
                 error: outcome?.message ?? "Sheet tidak ada pada hasil batch.",
               });
               const stale = await rawCache.get(key);
-              return stale ? [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.value }] : [];
+              if (stale) return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.value }];
+              // Never successfully fetched before (a misconfigured/renamed
+              // sheet, e.g. a config entry whose name no longer matches any
+              // tab in the live file) AND explicitly optional (required:
+              // false) — cache the empty result too, so a PERMANENTLY-
+              // failing optional sheet costs one live Apps Script attempt
+              // per TTL window instead of one on every single request
+              // forever. Confirmed live: without this, one bad optional
+              // sheet name cost ~7-12s on EVERY call to its source,
+              // including ones triggered on every single page load
+              // (getNavBadges). Self-heals via the same stale-while-
+              // revalidate background refresh every other cache entry
+              // already uses — a since-corrected sheet name picks up again
+              // within one DATA_CACHE_TTL_MS window, never blocking a
+              // request. A REQUIRED sheet is deliberately NOT given this
+              // treatment — hasAllRequiredSheets() below only checks sheet
+              // PRESENCE in the results, so caching a required sheet's
+              // absence as "present with 0 rows" would silently turn a
+              // genuine "data unavailable" outage into a falsely-reported
+              // "available" one.
+              if (sheetRef.required === false) {
+                await rawCache.set(key, []);
+                return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: [] }];
+              }
+              return [];
             }),
           )
         ).flat();
@@ -295,7 +319,18 @@ export async function readConfiguredSource(source: DataSourceConfig): Promise<Sh
               // if one exists, even though the sync status above already recorded
               // this as an error so an admin still sees it's failing.
               const stale = await rawCache.get(key);
-              return stale ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.value } : null;
+              if (stale) return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: stale.value };
+              // Never successfully fetched before, and optional — see the
+              // matching comment in the batch branch above for why this
+              // gets negative-cached instead of retried live on every
+              // single call forever (required sheets keep the old
+              // behavior, returning null here, so hasAllRequiredSheets()
+              // still correctly reports a genuine outage as unavailable).
+              if (sheetRef.required === false) {
+                await rawCache.set(key, []);
+                return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, records: [] };
+              }
+              return null;
             }
           }),
         );
@@ -407,7 +442,16 @@ export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise
                 error: outcome?.message ?? "Sheet tidak ada pada hasil batch.",
               });
               const stale = await rawRowsCache.get(key);
-              return stale ? [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.value }] : [];
+              if (stale) return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.value }];
+              // Never successfully fetched before, and optional — see the
+              // matching comment in readConfiguredSource's own batch branch
+              // for why this gets negative-cached instead of retried live
+              // on every single call forever.
+              if (sheetRef.required === false) {
+                await rawRowsCache.set(key, []);
+                return [{ file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: [] }];
+              }
+              return [];
             }),
           )
         ).flat();
@@ -437,7 +481,21 @@ export async function readConfiguredSourceRaw(source: DataSourceConfig): Promise
                 error: message,
               });
               const stale = await rawRowsCache.get(key);
-              return stale ? { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.value } : null;
+              if (stale) return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: stale.value };
+              // Never successfully fetched before, and optional — same
+              // negative-caching fix as above (confirmed live: this is
+              // exactly the case asset-scanning.ts's own "ANOMALI" sheet
+              // hit — a config entry whose name never matched any tab in
+              // the live file, costing ~7-12s on every single call forever
+              // before this fix, since every call unconditionally retried
+              // it live). Required sheets keep the old behavior (null),
+              // so hasAllRequiredSheets() still correctly reports a
+              // genuine outage as unavailable.
+              if (sheetRef.required === false) {
+                await rawRowsCache.set(key, []);
+                return { file: fileSource.file, sheet: sheetRef.name, purpose: sheetRef.purpose, rows: [] };
+              }
+              return null;
             }
           }),
         );
