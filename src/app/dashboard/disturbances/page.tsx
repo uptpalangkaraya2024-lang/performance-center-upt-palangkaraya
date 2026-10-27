@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { CheckCircle2, CircleDashed, Link2, MapPinned, MonitorPlay, TrendingUp, XCircle, Zap } from "lucide-react";
 
@@ -10,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { buttonVariants } from "@/components/ui/button";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
@@ -493,12 +495,55 @@ function CategorySection({
   );
 }
 
-export default async function DisturbancesPage() {
-  const [result, sutt, gangguanByTowerGi] = await Promise.all([
-    getDisturbances(),
-    getSuttSnapshot(),
-    getGangguanHistoryByTowerGi(),
-  ]);
+// Same streaming fix as the homepage/Laporan Eksekutif/AHI: all 3 fetches
+// are kicked off here (not awaited) so the page shell streams immediately
+// instead of blocking on all 3 before any html goes out — this page's own
+// response time was observed live ranging 3-33s depending on cache state.
+export default function DisturbancesPage() {
+  const resultPromise = getDisturbances();
+  const suttPromise = getSuttSnapshot();
+  const gangguanByTowerGiPromise = getGangguanHistoryByTowerGi();
+
+  return (
+    <Suspense fallback={<DisturbancesFallback />}>
+      <DisturbancesBody resultPromise={resultPromise} suttPromise={suttPromise} gangguanByTowerGiPromise={gangguanByTowerGiPromise} />
+    </Suspense>
+  );
+}
+
+function DisturbancesFallback() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-80" />
+        <Skeleton className="h-4 w-full max-w-2xl" />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="flex flex-col gap-2 py-6">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-7 w-16" />
+              <Skeleton className="h-3 w-32" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
+}
+
+async function DisturbancesBody({
+  resultPromise,
+  suttPromise,
+  gangguanByTowerGiPromise,
+}: {
+  resultPromise: ReturnType<typeof getDisturbances>;
+  suttPromise: ReturnType<typeof getSuttSnapshot>;
+  gangguanByTowerGiPromise: ReturnType<typeof getGangguanHistoryByTowerGi>;
+}) {
+  const [result, sutt, gangguanByTowerGi] = await Promise.all([resultPromise, suttPromise, gangguanByTowerGiPromise]);
   const syncEntry = listSyncStatus().find((entry) => entry.module === "Gangguan");
   const lastUpdate = formatTime(syncEntry?.lastSync ?? null);
   // Asia/Jakarta, same convention every other "today" in this app uses

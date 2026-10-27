@@ -1,8 +1,11 @@
+import { Suspense } from "react";
+
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { PresentationBuilderView } from "@/components/presentation/presentation-builder-view";
 import { getPresentationMateriCatalog } from "@/services/presentation-materi";
 import { listSavedPresentations } from "@/services/saved-presentations";
-import type { SavedPresentationSummary } from "@/types";
+import type { PresentationMateriCatalog, SavedPresentationSummary } from "@/types";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why — this page fans out to nearly
@@ -22,8 +25,14 @@ async function loadSavedList(): Promise<{ list: SavedPresentationSummary[]; erro
   }
 }
 
-export default async function PresentasiPage() {
-  const [catalog, saved] = await Promise.all([getPresentationMateriCatalog(), loadSavedList()]);
+// Same streaming fix as the homepage/Laporan Eksekutif/4DX/ABO: both
+// fetches kicked off here (not awaited) so the page shell (PageHero)
+// streams immediately instead of blocking on getPresentationMateriCatalog
+// (already internally parallel across ~9 modules, but still gated on the
+// single slowest one) before any html goes out.
+export default function PresentasiPage() {
+  const catalogPromise = getPresentationMateriCatalog();
+  const savedPromise = loadSavedList();
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,13 +43,35 @@ export default async function PresentasiPage() {
         />
       </div>
 
-      {catalog.error ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          Gagal memuat materi presentasi: {catalog.error}
-        </p>
-      ) : (
-        <PresentationBuilderView catalog={catalog.options} initialSavedList={saved.list} savedListError={saved.error} />
-      )}
+      <Suspense fallback={<PresentasiFallback />}>
+        <PresentasiBody catalogPromise={catalogPromise} savedPromise={savedPromise} />
+      </Suspense>
     </div>
+  );
+}
+
+function PresentasiFallback() {
+  return (
+    <div className="flex flex-col gap-3">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Skeleton key={i} className="h-16 w-full" />
+      ))}
+    </div>
+  );
+}
+
+async function PresentasiBody({
+  catalogPromise,
+  savedPromise,
+}: {
+  catalogPromise: Promise<PresentationMateriCatalog>;
+  savedPromise: Promise<{ list: SavedPresentationSummary[]; error: string | null }>;
+}) {
+  const [catalog, saved] = await Promise.all([catalogPromise, savedPromise]);
+
+  return catalog.error ? (
+    <p className="py-8 text-center text-sm text-muted-foreground">Gagal memuat materi presentasi: {catalog.error}</p>
+  ) : (
+    <PresentationBuilderView catalog={catalog.options} initialSavedList={saved.list} savedListError={saved.error} />
   );
 }

@@ -1,4 +1,7 @@
+import { Suspense } from "react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
@@ -23,6 +26,7 @@ import { getAllBayKapasitorReportsWithHistory } from "@/services/ahi-bay-kapasit
 import { getAllBayGtReportsWithHistory } from "@/services/ahi-bay-gt-report";
 import { getAllBayBusReportsWithHistory } from "@/services/ahi-bay-bus-report";
 import { getAllBayDiameterReportsWithHistory } from "@/services/ahi-bay-diameter-report";
+import type { BayLineReport, RenusData } from "@/types";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why — AHI is the module with the
@@ -43,7 +47,26 @@ export default async function AhiPage({
   const initialTab = params.tab === "bay-line" ? "bay-line" : "overview";
   const initialWeek = params.week === "next" ? "next" : "this";
 
+  // Only getAhiPerformance() is awaited up front — it gates the page's own
+  // structure (the error branch below, the PageHero's export buttons) and
+  // feeds the Overview tab, which is the DEFAULT tab most visits land on.
+  // The 8 separate "bay report" sources (Line/Trafo/Kopel/Reaktor/
+  // Kapasitor/GT/Bus/Diameter, each its own Apps Script round trip) plus
+  // RENUS are only needed by the Report tab's own AhiBayReportPanel — these
+  // are kicked off here (not awaited) and streamed in via Suspense below,
+  // so a visitor who only ever looks at Overview (the common case) never
+  // waits on 9 extra heavy fetches that tab doesn't use at all.
   const result = await getAhiPerformance();
+
+  const bayLineReportsPromise = getAllBayLineReportsWithHistory();
+  const bayTrafoReportsPromise = getAllBayTrafoReportsWithHistory();
+  const bayKopelReportsPromise = getAllBayKopelReportsWithHistory();
+  const bayReaktorReportsPromise = getAllBayReaktorReportsWithHistory();
+  const bayKapasitorReportsPromise = getAllBayKapasitorReportsWithHistory();
+  const bayGtReportsPromise = getAllBayGtReportsWithHistory();
+  const bayBusReportsPromise = getAllBayBusReportsWithHistory();
+  const bayDiameterReportsPromise = getAllBayDiameterReportsWithHistory();
+  const renusPromise = getRenusData();
 
   if (result.error || !result.data) {
     return (
@@ -62,63 +85,8 @@ export default async function AhiPage({
   }
 
   const { sections, anomalies, lastUpdate } = result.data;
-  const [
-    bayLineReports,
-    bayTrafoReports,
-    bayKopelReports,
-    bayReaktorReports,
-    bayKapasitorReports,
-    bayGtReports,
-    bayBusReports,
-    bayDiameterReports,
-    renus,
-  ] = await Promise.all([
-    getAllBayLineReportsWithHistory(),
-    getAllBayTrafoReportsWithHistory(),
-    getAllBayKopelReportsWithHistory(),
-    getAllBayReaktorReportsWithHistory(),
-    getAllBayKapasitorReportsWithHistory(),
-    getAllBayGtReportsWithHistory(),
-    getAllBayBusReportsWithHistory(),
-    getAllBayDiameterReportsWithHistory(),
-    getRenusData(),
-  ]);
   const ultgResume = buildAhiUltgResume(anomalies);
   const ultgEquipmentMatrix = buildAhiUltgEquipmentMatrix(anomalies);
-
-  const reportsByKind = {
-    "bay-line": bayLineReports,
-    "bay-trafo": bayTrafoReports,
-    "bay-kopel": bayKopelReports,
-    "bay-reaktor": bayReaktorReports,
-    "bay-kapasitor": bayKapasitorReports,
-    "bay-gt": bayGtReports,
-    "bay-bus": bayBusReports,
-    "bay-diameter": bayDiameterReports,
-  } as const;
-
-  // RENUS's own "minggu padam" sync — see src/lib/renus-outage-sync.ts.
-  // Options derived from the reports already fetched above (just gi/bay/
-  // ultg), never a separate getXOptions() call — a promise/array already
-  // in memory costs nothing more to re-map, unlike a fresh gateway round
-  // trip. Null (not an empty result) when RENUS itself failed to sync, so
-  // the panel can tell "no outages this week" apart from "RENUS is down".
-  const renusSync = renus.error
-    ? null
-    : buildRenusOutageSync({
-        rows: renus.rows,
-        todayISO: renus.today,
-        ahiOptionsByKind: {
-          "bay-line": bayLineReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
-          "bay-trafo": bayTrafoReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
-          "bay-kopel": bayKopelReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
-          "bay-reaktor": bayReaktorReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
-          "bay-kapasitor": bayKapasitorReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
-          "bay-gt": bayGtReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
-          "bay-bus": bayBusReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
-          "bay-diameter": bayDiameterReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
-        },
-      });
 
   return (
     <div className="flex flex-col gap-6">
@@ -249,7 +217,20 @@ export default async function AhiPage({
               </p>
             </CardHeader>
             <CardContent>
-              <AhiBayReportPanel reportsByKind={reportsByKind} renusSync={renusSync} initialWeek={initialWeek} />
+              <Suspense fallback={<BayReportFallback />}>
+                <BayReportBody
+                  bayLineReportsPromise={bayLineReportsPromise}
+                  bayTrafoReportsPromise={bayTrafoReportsPromise}
+                  bayKopelReportsPromise={bayKopelReportsPromise}
+                  bayReaktorReportsPromise={bayReaktorReportsPromise}
+                  bayKapasitorReportsPromise={bayKapasitorReportsPromise}
+                  bayGtReportsPromise={bayGtReportsPromise}
+                  bayBusReportsPromise={bayBusReportsPromise}
+                  bayDiameterReportsPromise={bayDiameterReportsPromise}
+                  renusPromise={renusPromise}
+                  initialWeek={initialWeek}
+                />
+              </Suspense>
             </CardContent>
           </Card>
           <p className="text-[11px] text-muted-foreground print:hidden">
@@ -260,4 +241,96 @@ export default async function AhiPage({
       </Tabs>
     </div>
   );
+}
+
+function BayReportFallback() {
+  return (
+    <div className="flex flex-col gap-3 py-8">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Skeleton key={i} className="h-5 w-full" />
+      ))}
+    </div>
+  );
+}
+
+async function BayReportBody({
+  bayLineReportsPromise,
+  bayTrafoReportsPromise,
+  bayKopelReportsPromise,
+  bayReaktorReportsPromise,
+  bayKapasitorReportsPromise,
+  bayGtReportsPromise,
+  bayBusReportsPromise,
+  bayDiameterReportsPromise,
+  renusPromise,
+  initialWeek,
+}: {
+  bayLineReportsPromise: Promise<BayLineReport[]>;
+  bayTrafoReportsPromise: ReturnType<typeof getAllBayTrafoReportsWithHistory>;
+  bayKopelReportsPromise: ReturnType<typeof getAllBayKopelReportsWithHistory>;
+  bayReaktorReportsPromise: ReturnType<typeof getAllBayReaktorReportsWithHistory>;
+  bayKapasitorReportsPromise: ReturnType<typeof getAllBayKapasitorReportsWithHistory>;
+  bayGtReportsPromise: ReturnType<typeof getAllBayGtReportsWithHistory>;
+  bayBusReportsPromise: ReturnType<typeof getAllBayBusReportsWithHistory>;
+  bayDiameterReportsPromise: ReturnType<typeof getAllBayDiameterReportsWithHistory>;
+  renusPromise: Promise<RenusData>;
+  initialWeek: "this" | "next";
+}) {
+  const [
+    bayLineReports,
+    bayTrafoReports,
+    bayKopelReports,
+    bayReaktorReports,
+    bayKapasitorReports,
+    bayGtReports,
+    bayBusReports,
+    bayDiameterReports,
+    renus,
+  ] = await Promise.all([
+    bayLineReportsPromise,
+    bayTrafoReportsPromise,
+    bayKopelReportsPromise,
+    bayReaktorReportsPromise,
+    bayKapasitorReportsPromise,
+    bayGtReportsPromise,
+    bayBusReportsPromise,
+    bayDiameterReportsPromise,
+    renusPromise,
+  ]);
+
+  const reportsByKind = {
+    "bay-line": bayLineReports,
+    "bay-trafo": bayTrafoReports,
+    "bay-kopel": bayKopelReports,
+    "bay-reaktor": bayReaktorReports,
+    "bay-kapasitor": bayKapasitorReports,
+    "bay-gt": bayGtReports,
+    "bay-bus": bayBusReports,
+    "bay-diameter": bayDiameterReports,
+  } as const;
+
+  // RENUS's own "minggu padam" sync — see src/lib/renus-outage-sync.ts.
+  // Options derived from the reports already fetched above (just gi/bay/
+  // ultg), never a separate getXOptions() call — a promise/array already
+  // in memory costs nothing more to re-map, unlike a fresh gateway round
+  // trip. Null (not an empty result) when RENUS itself failed to sync, so
+  // the panel can tell "no outages this week" apart from "RENUS is down".
+  const renusSync = renus.error
+    ? null
+    : buildRenusOutageSync({
+        rows: renus.rows,
+        todayISO: renus.today,
+        ahiOptionsByKind: {
+          "bay-line": bayLineReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-trafo": bayTrafoReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-kopel": bayKopelReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-reaktor": bayReaktorReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-kapasitor": bayKapasitorReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-gt": bayGtReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-bus": bayBusReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+          "bay-diameter": bayDiameterReports.map((r) => ({ gi: r.gi, bay: r.bay, ultg: r.ultg })),
+        },
+      });
+
+  return <AhiBayReportPanel reportsByKind={reportsByKind} renusSync={renusSync} initialWeek={initialWeek} />;
 }

@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { CheckCircle2, Server, XCircle } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DataSyncTable } from "@/components/dashboard/data-sync-table";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { getDataProvider } from "@/lib/data-provider-registry";
@@ -23,18 +25,75 @@ export const dynamic = "force-dynamic";
 // several sources too.
 export const maxDuration = 60;
 
-export default async function DataSyncPage() {
+// Same streaming fix as the homepage/Laporan Eksekutif/AHI/Disturbances/
+// Kesehatan Data: all 5 calls kicked off here (not awaited) so the page
+// shell streams immediately instead of blocking on all 5 before any html
+// goes out.
+export default function DataSyncPage() {
   const provider = getDataProvider();
-
   // Triggers (or reuses the cached result of) the one real sync so its
   // status below reflects this page load, not whatever the Overview page
   // happened to leave in the registry earlier.
+  const ultgPromise = getUltgPerformance();
+  const disturbancesPromise = getDisturbances();
+  const uptPromise = getUptPerformance();
+  const ahiPromise = getAhiPerformance();
+  const gatewayHealthPromise = provider.health();
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHero title="Data Health" description="Status sinkronisasi tiap file + sheet yang menjadi input dashboard." />
+
+      <Suspense fallback={<DataSyncFallback />}>
+        <DataSyncBody
+          provider={provider}
+          ultgPromise={ultgPromise}
+          disturbancesPromise={disturbancesPromise}
+          uptPromise={uptPromise}
+          ahiPromise={ahiPromise}
+          gatewayHealthPromise={gatewayHealthPromise}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+function DataSyncFallback() {
+  return (
+    <>
+      <Skeleton className="h-24 w-full rounded-xl" />
+      <Card>
+        <CardContent className="flex flex-col gap-3 py-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-5 w-full" />
+          ))}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+async function DataSyncBody({
+  provider,
+  ultgPromise,
+  disturbancesPromise,
+  uptPromise,
+  ahiPromise,
+  gatewayHealthPromise,
+}: {
+  provider: ReturnType<typeof getDataProvider>;
+  ultgPromise: ReturnType<typeof getUltgPerformance>;
+  disturbancesPromise: ReturnType<typeof getDisturbances>;
+  uptPromise: ReturnType<typeof getUptPerformance>;
+  ahiPromise: ReturnType<typeof getAhiPerformance>;
+  gatewayHealthPromise: ReturnType<typeof provider.health>;
+}) {
   const [, , , , gatewayHealth] = await Promise.all([
-    getUltgPerformance(),
-    getDisturbances(),
-    getUptPerformance(),
-    getAhiPerformance(),
-    provider.health(),
+    ultgPromise,
+    disturbancesPromise,
+    uptPromise,
+    ahiPromise,
+    gatewayHealthPromise,
   ]);
   const liveStatus = listSyncStatus();
   const lastSyncOverall = liveStatus.reduce<Date | null>(
@@ -74,12 +133,7 @@ export default async function DataSyncPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHero
-        title="Data Health"
-        description="Status sinkronisasi tiap file + sheet yang menjadi input dashboard."
-      />
-
+    <>
       <Card className="overflow-hidden py-0">
         <div className="flex items-center gap-4 p-5" style={{ backgroundImage: "var(--gradient-hero)" }}>
           <span
@@ -117,6 +171,6 @@ export default async function DataSyncPage() {
           <DataSyncTable rows={rows} />
         </CardContent>
       </Card>
-    </div>
+    </>
   );
 }
