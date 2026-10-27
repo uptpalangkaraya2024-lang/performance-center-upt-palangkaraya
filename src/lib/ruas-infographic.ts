@@ -4,7 +4,7 @@
 // endpoint GI, plus a rule-based readiness checklist for "what to do when
 // this ruas is next padam." Pure, server-safe — every input is data a page
 // already loads elsewhere in this app; this only re-groups it by ruas.
-import { canonicalGiKey, correctGiSpelling, giTowerKey } from "@/lib/gi-name";
+import { canonicalGiKey, extractCircuitSuffix, giTokenSet, giTowerKey, lineGiPairKey } from "@/lib/gi-name";
 import { isRenusCancelled, isRenusDone, isRenusHighRisk } from "@/lib/renus-helpers";
 import type { OutageImpactResult } from "@/lib/outage-impact";
 import type {
@@ -44,51 +44,14 @@ const KATEGORI_TO_KLASIFIKASI: Record<number, AhiKlasifikasi> = {
 
 // "KUALA PAMBUANG" (the DATA GARDU INDUK registry's own spelling, also
 // what SUTT asset/RENUS/CE/Gangguan all use) vs "KUALA PEMBUANG" (AHI's
-// own sheet, the sole outlier) name the SAME GI — correctGiSpelling (src/
-// lib/gi-name.ts) folds AHI's spelling toward the registry's before
+// own sheet, the sole outlier) name the SAME GI — giTokenSet (src/lib/
+// gi-name.ts) folds AHI's spelling toward the registry's before
 // tokenizing, so every "BAY LINE ... KUALA PEMBUANG" AHI entry still
 // matches this ruas's own "KUALA PAMBUANG" endpoint label even though the
-// two sheets spell it differently.
-function giTokenSet(s: string): string {
-  return [
-    ...new Set(
-      correctGiSpelling(s)
-        .toUpperCase()
-        .replace(/\b\d+(\s*\/\s*\d+)?\s*KV\b/g, " ")
-        .replace(/\bGIS?\b/g, " ")
-        .replace(/\bPLTU\b/g, " ")
-        .split(/[^A-Z]+/)
-        .filter((t) => t.length > 1),
-    ),
-  ]
-    .sort()
-    .join("|");
-}
-
-function lineGiPairKey(raw: string): string | null {
-  const afterPrefix = raw.replace(/^BAY\s+LINE\s+/i, "");
-  const withoutNumber = afterPrefix.replace(/[\s#]\d+\s*$/, "");
-  const sides = withoutNumber.split(/\s*-\s*/).map(giTokenSet);
-  if (sides.length !== 2 || sides.some((s) => !s)) return null;
-  return [...sides].sort().join("||");
-}
-
-// Most SUTT corridors are built as double-circuit lines sharing the same
-// towers — confirmed live AHI's own "BAY LINE" naming distinguishes the
-// two circuits almost everywhere ("BAY LINE BAGENDANG - KUALA PEMBUANG#1"
-// / "#2", "BAY LINE BUNTOK - MUARA TEWEH 1" / "2" — both a "#N" and a
-// plain " N" suffix style appear in the live sheet). lineGiPairKey() above
-// deliberately STRIPS this suffix to confirm the corridor; this extracts
-// the same suffix instead, so AHI condition for circuit 1 and circuit 2
-// — which fail/get tested independently — never get merged into one
-// ruas card the way they used to. Null means no circuit suffix at all
-// (a genuine single-circuit corridor, e.g. "BAY LINE MINTIN - PULANG
-// PISAU" — confirmed live some corridors have only one circuit).
-function extractCircuitSuffix(raw: string): string | null {
-  const afterPrefix = raw.replace(/^BAY\s+LINE\s+/i, "");
-  const m = /[\s#](\d+)\s*$/.exec(afterPrefix);
-  return m ? m[1] : null;
-}
+// two sheets spell it differently. giTokenSet/lineGiPairKey/
+// extractCircuitSuffix now live in gi-name.ts (shared with ruas-
+// correlation.ts and ruas-maintenance-proposals.ts, since CE's own "PHT
+// <n>KV X-Y#N" bay naming needs the exact same matching).
 
 /** Every distinct circuit AHI's own data references for this ruas's GI
  *  pair, sorted — [null] when nothing references a circuit number at all

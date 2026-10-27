@@ -231,10 +231,14 @@ export function UsulanPrioritasClient({ proposals }: { proposals: RuasMaintenanc
         <p>
           Usulan ini dihasilkan otomatis dari data historis (AHI, Common Enemy, Gangguan, RENUS) per{" "}
           <span className="font-semibold text-foreground">ruas/sirkit</span>, bukan per GI — satu GI bisa menyambung
-          beberapa ruas, dan anomali di satu ruas tidak berarti seluruh GI perlu diganti. Temuan Common Enemy hanya
-          tersedia di level GI pada sumber datanya sendiri (tidak menyebut ruas), jadi tetap ditampilkan sebagai
-          konteks GI, bukan dihitung sebagai milik satu ruas tertentu. Bukan keputusan otomatis — setiap alasan dapat
-          ditelusuri kembali ke data aslinya; tinjau kembali sebelum dimasukkan ke perencanaan anggaran tahun depan.
+          beberapa ruas, dan anomali di satu ruas tidak berarti seluruh GI perlu diganti. Daftar{" "}
+          <span className="font-semibold text-foreground">&ldquo;Peralatan yang perlu diganti/diperiksa&rdquo;</span>{" "}
+          di tiap kartu diambil dari AHI (hasil uji per unit) dan Common Enemy (temuan terbuka yang bay-nya cocok
+          dengan ruas/sirkit ini) — hanya peralatan yang benar-benar diflag, bukan seluruh peralatan di ruas tersebut.
+          Temuan Common Enemy pada trafo/fasilitas (atap gedung, AC, pondasi, pagar) tidak menyebut bay/ruas pada
+          sumber datanya sendiri, jadi tetap ditampilkan sebagai konteks GI terpisah, bukan dihitung sebagai milik
+          satu ruas tertentu. Bukan keputusan otomatis — setiap alasan dapat ditelusuri kembali ke data aslinya;
+          tinjau kembali sebelum dimasukkan ke perencanaan anggaran tahun depan.
         </p>
       </div>
 
@@ -298,7 +302,9 @@ export function UsulanPrioritasClient({ proposals }: { proposals: RuasMaintenanc
                 "Skor Risiko (0-100)": p.riskScore100,
                 "AHI Critical": p.ahiCritical,
                 "AHI Poor": p.ahiPoor,
+                "CE Open (ruas ini)": p.ceOpenOnThisRuas,
                 "CE Open (level GI)": p.ceOpenAtEndpointGis,
+                "Peralatan Diflag": p.equipmentFlags.map((e) => `${e.source}: ${e.role}${e.techident ? ` (${e.techident})` : ""}${e.towerNo ? ` Tower ${e.towerNo}` : ""} - ${e.klasifikasi}`).join(" | "),
                 Gangguan: p.gangguanTotal,
                 "RENUS Overdue": p.renusOverdue,
                 "Tren Memburuk": p.degradingCount,
@@ -355,17 +361,24 @@ export function UsulanPrioritasClient({ proposals }: { proposals: RuasMaintenanc
                     ))}
                   </ul>
                   {p.equipmentFlags.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5 border-t pt-2.5">
-                      {p.equipmentFlags.map((e, i) => (
-                        <span
-                          key={i}
-                          className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold", klasifikasiPillClass(e.klasifikasi))}
-                          title={`${e.bay}${e.merk ? ` · ${e.merk}` : ""}`}
-                        >
-                          {e.role}
-                          {e.techident ? ` (${e.techident})` : ""} — {e.klasifikasi}
-                        </span>
-                      ))}
+                    <div className="flex flex-col gap-1.5 border-t pt-2.5">
+                      <p className="text-xs font-semibold text-muted-foreground">Peralatan yang perlu diganti/diperiksa:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {p.equipmentFlags.map((e, i) => (
+                          <span
+                            key={i}
+                            className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold", klasifikasiPillClass(e.klasifikasi))}
+                            title={[e.bay, e.merk ? `Merk: ${e.merk}` : null, e.towerNo ? `Tower: ${e.towerNo}` : null, e.detail]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          >
+                            <span className="rounded border border-current/30 px-1 text-[10px] font-bold opacity-70">{e.source}</span>
+                            {e.role}
+                            {e.techident ? ` (${e.techident})` : ""}
+                            {e.towerNo ? ` — Tower ${e.towerNo}` : ""} — {e.klasifikasi}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   ) : null}
                 </CardContent>

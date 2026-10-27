@@ -7,12 +7,12 @@
 // just built on RuasCorrelationRow instead of GiCorrelationRow, and
 // matching AHI degradation/projection data by BAY LINE (circuit-aware)
 // instead of by GI.
-import { renusGiPairKey, type RuasCorrelationRow } from "@/lib/ruas-correlation";
-import { giTowerKey } from "@/lib/gi-name";
+import { extractRenusTowerNumbers, renusGiPairKey, type RuasCorrelationRow } from "@/lib/ruas-correlation";
+import { extractCircuitSuffix, giTokenSet, giTowerKey, lineGiPairKey } from "@/lib/gi-name";
 import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import type { AhiDegradationAlert } from "@/lib/ahi-degradation";
 import type { AhiTrendProjection } from "@/lib/ahi-trend-projection";
-import type { BayLineReport, GangguanHistoryEntry, RenusRow, SuttRuas } from "@/types";
+import type { BayLineReport, CeItem, GangguanHistoryEntry, RenusRow, SuttRuas } from "@/types";
 
 const NEAR_TERM_PROJECTION_DAYS = 365;
 
@@ -26,12 +26,26 @@ export type RuasProposalRecommendation =
   | "Percepat RENUS Tertunda"
   | "Monitor";
 
+/** One specific piece of equipment flagged bad on this ruas+circuit —
+ *  this is the "which equipment" answer the user asked for, so a proposal
+ *  never reads as "replace the whole ruas," only ever the units actually
+ *  flagged. Two sources, unified into one list sorted worst-first:
+ *   - AHI: a per-unit test result (role/techident/merk from the bay line
+ *     report, klasifikasi POOR/CRITICAL) — towerNo/detail null, AHI's own
+ *     report has no tower-level location for a unit.
+ *   - CE: an open finding on this ruas's own bay (role = jenisAsset,
+ *     klasifikasi = kriteriaBefore Critical/Poor), with towerNo from CE's
+ *     own `span` field when the finding names one, and `detail` carrying
+ *     CE's own anomaliPemicu text for context AHI alone can't give. */
 export interface RuasEquipmentFlag {
+  source: "AHI" | "CE";
   role: string;
   techident: string | null;
   merk: string | null;
   klasifikasi: string;
   bay: string;
+  towerNo: string | null;
+  detail: string | null;
 }
 
 export interface RuasMaintenanceProposal {
@@ -49,9 +63,13 @@ export interface RuasMaintenanceProposal {
   equipmentFlags: RuasEquipmentFlag[];
   ahiCritical: number;
   ahiPoor: number;
-  /** GI-level context (see ruas-correlation.ts's own header comment on
-   *  why CE can't be attributed to one ruas) — shown, never folded
-   *  silently as if it were ruas-specific. */
+  /** CE line findings matched to THIS ruas+circuit by bay text — feeds
+   *  riskComponents.ce, genuinely ruas-specific (see ruas-correlation.ts's
+   *  own header comment on how). */
+  ceOpenOnThisRuas: number;
+  /** GI-level context only — facility/trafo CE findings at either endpoint
+   *  GI with no bay/line reference, so genuinely can't be attributed to
+   *  one ruas. Shown, never folded silently as if it were ruas-specific. */
   ceOpenAtEndpointGis: number;
   gangguanTotal: number;
   gangguanVegetasi: number;
@@ -68,33 +86,12 @@ export interface RuasMaintenanceProposal {
   hasActiveRenusPlan: boolean;
 }
 
-function giTokenSet(s: string): string {
-  return [
-    ...new Set(
-      s
-        .toUpperCase()
-        .replace(/\b\d+(\s*\/\s*\d+)?\s*KV\b/g, " ")
-        .replace(/\bGIS?\b/g, " ")
-        .replace(/\bPLTU\b/g, " ")
-        .split(/[^A-Z]+/)
-        .filter((t) => t.length > 1),
-    ),
-  ]
-    .sort()
-    .join("|");
-}
-function lineGiPairKey(raw: string): string | null {
-  const afterPrefix = raw.replace(/^BAY\s+LINE\s+/i, "");
-  const withoutNumber = afterPrefix.replace(/[\s#]\d+\s*$/, "");
-  const sides = withoutNumber.split(/\s*-\s*/).map(giTokenSet);
-  if (sides.length !== 2 || sides.some((s) => !s)) return null;
-  return [...sides].sort().join("||");
-}
-function extractCircuitSuffix(raw: string): string | null {
-  const afterPrefix = raw.replace(/^BAY\s+LINE\s+/i, "");
-  const m = /[\s#](\d+)\s*$/.exec(afterPrefix);
-  return m ? m[1] : null;
-}
+// giTokenSet/lineGiPairKey/extractCircuitSuffix now live in gi-name.ts
+// (shared with ruas-infographic.ts and ruas-correlation.ts). Note this
+// file's own prior copy skipped correctGiSpelling — a latent bug (AHI's
+// "KUALA PEMBUANG" bay items could silently fail to match a ruas spelled
+// "KUALA PAMBUANG") now fixed by using the shared, spelling-corrected
+// version.
 
 /** One proposal per (ruas, circuit) with a non-zero risk score — sorted
  *  worst-first, matching buildRuasCorrelation's own ranking so a row's
@@ -113,9 +110,12 @@ export function buildRuasMaintenanceProposals(params: {
    *  fraction of, not a differently-scoped data source. */
   gangguanByTowerGi: Record<string, GangguanHistoryEntry[]>;
   renusRows: RenusRow[];
+  ceItems: CeItem[];
 }): RuasMaintenanceProposal[] {
-  const { ruasCorrelation, ruasList, bayLineReports, degradationAlerts, trendProjections, gangguanByTowerGi, renusRows } = params;
+  const { ruasCorrelation, ruasList, bayLineReports, degradationAlerts, trendProjections, gangguanByTowerGi, renusRows, ceItems } = params;
   const ruasBySection = new Map(ruasList.map((r) => [r.section, r]));
+
+  const EQUIPMENT_SEVERITY: Record<string, number> = { CRITICAL: 2, POOR: 1 };
 
   const proposals: RuasMaintenanceProposal[] = [];
   for (const row of ruasCorrelation) {
@@ -124,15 +124,52 @@ export function buildRuasMaintenanceProposals(params: {
     const ruasGiKey = [giTokenSet(row.originGi.toUpperCase()), giTokenSet(row.farEndGi.toUpperCase())].sort().join("||");
     const matchesThisCircuit = (bay: string) => lineGiPairKey(bay) === ruasGiKey && extractCircuitSuffix(bay) === row.circuit;
 
+    // Which SPECIFIC equipment needs replacing/checking — not "this ruas
+    // is risky," one row per flagged unit, from both sources available:
+    // AHI's own per-unit test result, and CE's own open findings whose
+    // bay text matches this ruas+circuit (per-tower via CE's `span` when
+    // it names one). Severity-sorted so the worst item leads.
     const equipmentFlags: RuasEquipmentFlag[] = [];
     for (const report of bayLineReports) {
       if (!matchesThisCircuit(report.bay)) continue;
       for (const unit of report.units) {
         if (unit.klasifikasi === "POOR" || unit.klasifikasi === "CRITICAL") {
-          equipmentFlags.push({ role: unit.role, techident: unit.techident, merk: unit.merk, klasifikasi: unit.klasifikasi, bay: report.bay });
+          equipmentFlags.push({
+            source: "AHI",
+            role: unit.role,
+            techident: unit.techident,
+            merk: unit.merk,
+            klasifikasi: unit.klasifikasi,
+            bay: report.bay,
+            towerNo: null,
+            detail: null,
+          });
         }
       }
     }
+    for (const item of ceItems) {
+      if (item.done || !matchesThisCircuit(item.bay)) continue;
+      const klas = item.kriteriaBefore.trim().toUpperCase();
+      if (klas !== "CRITICAL" && klas !== "POOR") continue;
+      // CE's own `span` column isn't consistently just "#293" — confirmed
+      // live it can also carry a full descriptive string like "SPAN SUTT
+      // 150 KV BNTOK - MRTWH #290-#291" (RENUS's own SPAN/TOWER
+      // convention). extractRenusTowerNumbers' "#digits" extraction
+      // handles either shape — reused here rather than dumping the raw
+      // span text as the displayed tower number.
+      const towerNos = extractRenusTowerNumbers(item.span);
+      equipmentFlags.push({
+        source: "CE",
+        role: item.jenisAsset || "Peralatan",
+        techident: null,
+        merk: null,
+        klasifikasi: klas,
+        bay: item.bay,
+        towerNo: towerNos.length > 0 ? towerNos.join("-") : null,
+        detail: item.anomaliPemicu.trim() || null,
+      });
+    }
+    equipmentFlags.sort((a, b) => (EQUIPMENT_SEVERITY[b.klasifikasi] ?? 0) - (EQUIPMENT_SEVERITY[a.klasifikasi] ?? 0));
 
     const degrading = degradationAlerts.filter((a) => matchesThisCircuit(a.bay));
     const nearTermProjections = trendProjections.filter((p) => matchesThisCircuit(p.bay) && p.daysUntilCritical <= NEAR_TERM_PROJECTION_DAYS);
@@ -140,8 +177,11 @@ export function buildRuasMaintenanceProposals(params: {
     const reasons: string[] = [];
     if (row.ahiCritical > 0) reasons.push(`${row.ahiCritical} temuan AHI berklasifikasi Critical.`);
     if (row.ahiPoor > 0) reasons.push(`${row.ahiPoor} temuan AHI berklasifikasi Poor.`);
+    if (row.ceOpenOnThisRuas > 0) {
+      reasons.push(`${row.ceOpenOnThisRuas} temuan Common Enemy masih OPEN di ruas ini (dicocokkan lewat bay, khusus sirkit ini).`);
+    }
     if (row.ceOpenAtEndpointGis > 0) {
-      reasons.push(`${row.ceOpenAtEndpointGis} temuan Common Enemy masih OPEN di GI ${row.originGi}/${row.farEndGi} (level GI, bukan khusus ruas ini).`);
+      reasons.push(`${row.ceOpenAtEndpointGis} temuan Common Enemy lain (trafo/fasilitas) masih OPEN di GI ${row.originGi}/${row.farEndGi} (level GI, bukan khusus ruas ini).`);
     }
     if (row.renusOverdue > 0) reasons.push(`${row.renusOverdue} pekerjaan RENUS di ruas ini melewati tanggal rencana.`);
     if (row.gangguanTotal > 0) reasons.push(`${row.gangguanTotal} kejadian gangguan tercatat di tower-tower ruas ini.`);
@@ -158,7 +198,7 @@ export function buildRuasMaintenanceProposals(params: {
     const action: RuasProposalAction =
       row.ahiCritical > 0 || hasCriticalDegradation || nearTermProjections.length > 0
         ? "Penggantian"
-        : row.ahiPoor > 0 || row.ceOpenAtEndpointGis > 0 || row.renusOverdue > 0 || degrading.length > 0
+        : row.ahiPoor > 0 || row.ceOpenOnThisRuas > 0 || row.renusOverdue > 0 || degrading.length > 0
           ? "Pemeliharaan Prioritas"
           : "Monitor";
 
@@ -209,6 +249,7 @@ export function buildRuasMaintenanceProposals(params: {
       equipmentFlags,
       ahiCritical: row.ahiCritical,
       ahiPoor: row.ahiPoor,
+      ceOpenOnThisRuas: row.ceOpenOnThisRuas,
       ceOpenAtEndpointGis: row.ceOpenAtEndpointGis,
       gangguanTotal: row.gangguanTotal,
       gangguanVegetasi,

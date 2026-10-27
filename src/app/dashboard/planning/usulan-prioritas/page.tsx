@@ -73,6 +73,7 @@ export default async function UsulanPrioritasPage() {
     trendProjections,
     gangguanByTowerGi,
     renusRows,
+    ceItems,
   });
 
   return (

@@ -23,11 +23,17 @@
 //    row where the field was simply left blank) are NOT attributed to any
 //    ruas — shown separately as "pekerjaan trafo/tidak teratribusi ke
 //    ruas" context, never guessed onto a ruas with no evidence for it.
-//  - CE: gardu is GI-only in its own source sheet, no ruas/bay reference
-//    at all — genuinely cannot be attributed to one ruas. Counted once per
-//    GI and surfaced on every ruas touching that GI, clearly labeled as
-//    GI-level context rather than folded into the ruas's own riskScore.
-import { canonicalGiKey, correctGiSpelling, giTowerKey } from "@/lib/gi-name";
+//  - CE: `gardu` alone is GI-only, but CE's own `bay` field for a line-
+//    related finding carries the SAME "X-Y#N" shape AHI's own BAY LINE
+//    naming does, just with a "PHT <n>KV" prefix instead of "BAY LINE"
+//    (confirmed live, e.g. "PHT 150KV BUNTOK-MUARA TEWEH#2") — matched
+//    ruas+circuit-precise via the same lineGiPairKey/extractCircuitSuffix
+//    AHI uses, NOT a GI-wide guess. A facility/trafo CE finding (atap
+//    gedung, AC, pondasi, pagar, a trafo-only anomaly) has no such bay
+//    text and genuinely cannot be attributed to one ruas — these stay
+//    counted at GI level only, shown as separate context, never folded
+//    into the ruas's own riskScore.
+import { canonicalGiKey, extractCircuitSuffix, giTokenSet, giTowerKey, lineGiPairKey } from "@/lib/gi-name";
 import { isRenusCancelled, isRenusDone } from "@/lib/renus-helpers";
 import type { AhiAnomalyRecord, BayLineReport, CeItem, GangguanHistoryEntry, RenusRow, SuttRuas } from "@/types";
 
@@ -42,10 +48,16 @@ export interface RuasCorrelationRow {
   ahiPoor: number;
   ahiTotal: number;
 
-  /** GI-level context only (see this file's own header comment on why CE
-   *  can't be attributed to one ruas) — included in riskComponents.ce for
-   *  visibility, but always the SAME number across every ruas sharing a
-   *  GI, never ruas-specific. */
+  /** CE line findings precisely matched to THIS ruas+circuit via its own
+   *  bay text (see header comment) — this is what feeds riskComponents.ce
+   *  now, genuinely ruas-specific, not diluted across every ruas sharing
+   *  a GI. */
+  ceOpenOnThisRuas: number;
+  /** GI-level context only — facility/trafo CE findings at either endpoint
+   *  GI that have no bay/line reference at all, so can't be attributed to
+   *  one ruas. Shown separately, NOT folded into riskScore.ce. Always the
+   *  same number across every ruas sharing a GI — a GI-wide count, not a
+   *  ruas one. */
   ceOpenAtEndpointGis: number;
 
   gangguanTotal: number;
@@ -60,34 +72,10 @@ export interface RuasCorrelationRow {
 const KLASIFIKASI_SEVERITY: Record<string, number> = { CRITICAL: 5, POOR: 4, FAIR: 3, GOOD: 2, BEST: 1, "NO DATA": 0 };
 const KATEGORI_TO_KLASIFIKASI: Record<number, string> = { 1: "BEST", 2: "GOOD", 3: "FAIR", 4: "POOR", 5: "CRITICAL" };
 
-function giTokenSet(s: string): string {
-  return [
-    ...new Set(
-      correctGiSpelling(s)
-        .toUpperCase()
-        .replace(/\b\d+(\s*\/\s*\d+)?\s*KV\b/g, " ")
-        .replace(/\bGIS?\b/g, " ")
-        .replace(/\bPLTU\b/g, " ")
-        .split(/[^A-Z]+/)
-        .filter((t) => t.length > 1),
-    ),
-  ]
-    .sort()
-    .join("|");
-}
-
-function lineGiPairKey(raw: string): string | null {
-  const afterPrefix = raw.replace(/^BAY\s+LINE\s+/i, "");
-  const withoutNumber = afterPrefix.replace(/[\s#]\d+\s*$/, "");
-  const sides = withoutNumber.split(/\s*-\s*/).map(giTokenSet);
-  if (sides.length !== 2 || sides.some((s) => !s)) return null;
-  return [...sides].sort().join("||");
-}
-function extractCircuitSuffix(raw: string): string | null {
-  const afterPrefix = raw.replace(/^BAY\s+LINE\s+/i, "");
-  const m = /[\s#](\d+)\s*$/.exec(afterPrefix);
-  return m ? m[1] : null;
-}
+// giTokenSet/lineGiPairKey/extractCircuitSuffix now live in gi-name.ts
+// (shared with ruas-infographic.ts and ruas-maintenance-proposals.ts),
+// since CE's own "PHT <n>KV X-Y#N" bay naming needs the exact same
+// AHI-style line/circuit matching.
 
 // Confirmed live against RENUS's own "SECTION TRANSMISI"/"SPAN/TOWER"
 // columns — a short-form convention distinct from every other GI-name
@@ -180,7 +168,15 @@ export function buildRuasCorrelation(params: {
 
     // Ruas-wide signals (not circuit-specific — computed once, reused for
     // every circuit card of this section).
-    const ceOpenAtEndpointGis = ceItems.filter((i) => i.gardu && endpointGis.has(canonicalGiKey(i.gardu)) && !i.done).length;
+    //
+    // CE line findings matched by bay text to this ruas (still ruas-wide
+    // here, split per circuit inside the loop below) vs GI-level-only
+    // findings that have no bay/line reference at all (facility/trafo —
+    // genuinely can't be narrowed past "somewhere at this GI").
+    const ceLineItemsOnThisRuas = ceItems.filter((i) => !i.done && lineGiPairKey(i.bay) === ruasGiKey);
+    const ceOpenAtEndpointGis = ceItems.filter(
+      (i) => !i.done && i.gardu && endpointGis.has(canonicalGiKey(i.gardu)) && lineGiPairKey(i.bay) === null,
+    ).length;
 
     const gangguanTotal = ruas.towers.reduce((sum, tower) => {
       const entries = gangguanByTowerGi[giTowerKey(tower.gi, tower.towerNo)];
@@ -198,9 +194,10 @@ export function buildRuasCorrelation(params: {
       const ahiCritical = ahiAnomaliesMatched.filter((a) => a.kategoriAhi === 5).length;
       const ahiPoor = ahiAnomaliesMatched.filter((a) => a.kategoriAhi === 4).length;
       const ahiTotal = ahiAnomaliesMatched.length;
+      const ceOpenOnThisRuas = ceLineItemsOnThisRuas.filter((i) => extractCircuitSuffix(i.bay) === circuit).length;
 
       const ahi = ahiCritical * 100 + ahiPoor * 10;
-      const ce = ceOpenAtEndpointGis * 10;
+      const ce = ceOpenOnThisRuas * 10;
       const renus = renusOverdue * 10;
       const gangguan = gangguanTotal;
       const riskScore = ahi + ce + gangguan + renus;
@@ -214,6 +211,7 @@ export function buildRuasCorrelation(params: {
         ahiCritical,
         ahiPoor,
         ahiTotal,
+        ceOpenOnThisRuas,
         ceOpenAtEndpointGis,
         gangguanTotal,
         renusOverdue,
