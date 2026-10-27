@@ -341,12 +341,12 @@ export function VerifikasiEfektivitasClient({ checks }: { checks: ActionEffectiv
                           {c.gangguanVerdict === "belum_cukup_data" && c.daysSinceAction < 90
                             ? `${c.daysSinceAction} hari berjalan`
                             : `${c.gangguanBefore} → ${c.gangguanAfter}`}
-                          {(c.category === "binatang" || c.category === "row") && c.gangguanScopedTo === "tower" ? (
+                          {(c.category === "binatang" || c.category === "row") && c.gangguanScopedTo === "ruas" ? (
                             <span
                               className="rounded-full border border-success/40 bg-success/10 px-1.5 py-0.5 text-[10px] font-bold text-success"
-                              title="Dibandingkan hanya gangguan di tower/span tempat pekerjaan ini dilakukan, bukan seluruh GI."
+                              title="Dibandingkan dengan gangguan di seluruh ruas/sirkit tempat tower pekerjaan ini berada, bukan satu tower saja atau seluruh GI."
                             >
-                              per tower
+                              per ruas
                             </span>
                           ) : (c.category === "binatang" || c.category === "row") && c.gangguanScopedTo === "gi" ? (
                             <span
@@ -410,12 +410,14 @@ export function VerifikasiEfektivitasClient({ checks }: { checks: ActionEffectiv
             gangguan yang relevan untuk jenis pekerjaan ini.
           </p>
           <p>
-            <span className="font-semibold text-foreground">Cakupan Anti Binatang/ROW ("per tower" vs "level GI"):</span>{" "}
-            kalau sumber datanya (kolom SPAN/TOWER di RENUS, atau span di CE) menyebut tower/span tertentu,
-            perbandingan gangguan dipersempit hanya ke tower itu — badge &ldquo;per tower&rdquo; menandai ini.
-            Pekerjaan trafo (tidak punya konsep tower) dan pekerjaan tanpa lokasi tower tercatat dibandingkan di
-            level GI — badge &ldquo;level GI&rdquo;, bukan kekurangan, memang begitu seharusnya untuk pekerjaan
-            trafo.
+            <span className="font-semibold text-foreground">Cakupan Anti Binatang/ROW (&ldquo;per ruas&rdquo; vs &ldquo;level GI&rdquo;):</span>{" "}
+            kalau sumber datanya (kolom SPAN/TOWER di RENUS, atau span di CE) menyebut tower tertentu dan tower itu
+            dikenali di data aset SUTT, perbandingan gangguan dipersempit ke seluruh ruas/sirkit tempat tower itu
+            berada (bukan satu tower saja — terlalu sedikit datanya untuk dibaca sebagai tren — dan bukan seluruh GI,
+            yang bisa mencampur beberapa ruas berbeda) — badge &ldquo;per ruas&rdquo; menandai ini. Pekerjaan trafo
+            (tidak punya konsep tower/ruas), pekerjaan tanpa lokasi tower tercatat, atau tower yang tidak dikenali di
+            data aset SUTT dibandingkan di level GI — badge &ldquo;level GI&rdquo;, bukan kekurangan, memang begitu
+            seharusnya untuk pekerjaan trafo.
           </p>
           <p>
             <span className="font-semibold text-foreground">Pembanding GI lain:</span> untuk hasil gangguan,

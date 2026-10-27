@@ -30,14 +30,14 @@ import {
   EFFECTIVENESS_CATEGORY_LABEL,
   type EffectivenessCategory,
 } from "@/config/effectiveness-indicator-map";
-import type { BayLineReport, CeItem, DisturbanceBayEventRecord, GangguanHistoryEntry, RenusRow } from "@/types";
+import type { BayLineReport, CeItem, DisturbanceBayEventRecord, GangguanHistoryEntry, RenusRow, SuttRuas } from "@/types";
 
 // The cause-filtered gangguan categories' RAW sheet value (gangguan-
 // history.ts reads PENYEBAB unmapped) — EFFECTIVENESS_CATEGORY_CAUSE
 // holds the user-facing MAPPED label ("Hewan"/"Tegakan / Pohon", for
-// disturbanceEvents.cause), this is its tower-level counterpart for
+// disturbanceEvents.cause), this is its ruas-level counterpart for
 // gangguanByTowerGi.penyebab, used only when a check can be scoped to a
-// specific tower (see extractInterventionTowers below).
+// specific ruas (see towerToRuasSection below).
 const RAW_CAUSE_FOR_CATEGORY: Partial<Record<EffectivenessCategory, string>> = {
   binatang: "HEWAN",
   row: "TEGAKAN",
@@ -96,15 +96,21 @@ export interface ActionEffectivenessCheck {
   gangguanAfter: number;
   gangguanVerdict: EffectivenessVerdict;
   gangguanBaseline: GangguanBaseline | null;
-  /** "tower" when this check's own source named a specific tower/span
-   *  (RENUS's SPAN/TOWER or CE's span column) and the gangguan count
-   *  above is scoped to exactly that tower; "gi" when it falls back to
-   *  every gangguan at the whole GI — the honest case for Trafo work
-   *  (no tower concept at all) and for any row that simply didn't name
-   *  one. Only meaningful for "binatang"/"row" categories; always "gi"
-   *  for "ahi" (GI-wide AHI condition is the actual point there) and
-   *  irrelevant for "tidak_relevan". */
-  gangguanScopedTo: "tower" | "gi";
+  /** "ruas" when this check's own source named a specific tower/span
+   *  (RENUS's SPAN/TOWER or CE's span column) that was matched to one of
+   *  SUTT's own physical ruas, and the gangguan count above is scoped to
+   *  every tower on THAT ruas (not the whole GI, which can span several
+   *  ruas, and not just the single named tower either — per the user's
+   *  own point: an Anti Binatang job anywhere on a ruas should be judged
+   *  against that ruas's own gangguan trend, since a single tower's count
+   *  is too sparse to read); "gi" when it falls back to every gangguan at
+   *  the whole GI — the honest case for Trafo work (no tower/ruas concept
+   *  at all), for a row that simply didn't name a tower, or for a named
+   *  tower that doesn't match any known SUTT ruas. Only meaningful for
+   *  "binatang"/"row" categories; always "gi" for "ahi" (GI-wide AHI
+   *  condition is the actual point there) and irrelevant for
+   *  "tidak_relevan". */
+  gangguanScopedTo: "ruas" | "gi";
 }
 
 // Only actions completed within this window are worth re-checking — a
@@ -191,15 +197,17 @@ function countGangguanInWindow(
   }).length;
 }
 
-/** Tower-precise counterpart of countGangguanInWindow, for the Anti
- *  Binatang/ROW checks that know exactly which tower(s) the work was
- *  done at (RENUS's own SPAN/TOWER column, or CE's own span column — see
- *  extractInterventionTowers) — scoped to those specific towers instead
- *  of every gangguan at the whole GI, per the user's own point: Anti
- *  Binatang work on one tower should be judged by whether gangguan at
- *  THAT tower went down, not by the GI's gangguan count overall. Uses
- *  `.tgl`/`.penyebab` (gangguan-history.ts's own raw-PENYEBAB shape),
- *  not `.dateISO`/`.cause` — a different data source than the GI-level
+/** Ruas-precise counterpart of countGangguanInWindow, for the Anti
+ *  Binatang/ROW checks that know exactly which tower(s) the work was done
+ *  at (RENUS's own SPAN/TOWER column, or CE's own span column) and had
+ *  that tower matched to a SUTT ruas (see towerToRuasSection) — `entries`
+ *  is the union of gangguan history across EVERY tower on that ruas, not
+ *  just the one named tower, per the user's own point: Anti Binatang work
+ *  anywhere on a ruas should be judged by whether gangguan on THAT ruas
+ *  went down, not the single tower (too sparse) or the whole GI (dilutes
+ *  across unrelated ruas sharing the same endpoint GI). Uses `.tgl`/
+ *  `.penyebab` (gangguan-history.ts's own raw-PENYEBAB shape), not
+ *  `.dateISO`/`.cause` — a different data source than the GI-level
  *  disturbanceEvents (see RAW_CAUSE_FOR_CATEGORY's own comment). */
 function countGangguanInWindowByTower(
   entries: GangguanHistoryEntry[],
@@ -390,9 +398,15 @@ function buildCheck(params: {
   allGiKeys: string[];
   interventionsByGi: Map<string, MergedIntervention[]>;
   eventsByGi: Map<string, DisturbanceBayEventRecord[]>;
-  gangguanByTowerGi: Record<string, GangguanHistoryEntry[]>;
+  /** giTowerKey(gi, towerNo) -> that tower's own SUTT ruas section — locates
+   *  which physical ruas an intervention's named tower(s) sit on. */
+  towerToRuasSection: Map<string, string>;
+  /** ruas section -> gangguan history across EVERY tower on that ruas,
+   *  pre-unioned once (see buildActionEffectivenessChecks) so a check only
+   *  needs a Map lookup, not a per-check flatMap over ruas.towers. */
+  gangguanByRuasSection: Map<string, GangguanHistoryEntry[]>;
 }): ActionEffectivenessCheck {
-  const { intervention, daysSinceAction, bayLineReportsByGi, allGiKeys, interventionsByGi, eventsByGi, gangguanByTowerGi } = params;
+  const { intervention, daysSinceAction, bayLineReportsByGi, allGiKeys, interventionsByGi, eventsByGi, towerToRuasSection, gangguanByRuasSection } = params;
   const { gi, giDisplay, category, description, mergedCount, realisasiDate, source, towerNumbers } = intervention;
 
   if (category === "tidak_relevan") {
@@ -436,19 +450,28 @@ function buildCheck(params: {
   const cause = EFFECTIVENESS_CATEGORY_CAUSE[category];
   const rawCause = RAW_CAUSE_FOR_CATEGORY[category];
 
-  // Tower-precise when this intervention's own source named one (and the
-  // category has a RAW cause to filter by — "ahi" doesn't, it's scored
-  // GI-wide on purpose) — otherwise the honest fallback is GI-wide, which
-  // is also simply CORRECT for Trafo work (no tower concept exists for a
-  // trafo at all, so GI-level is the right scope, not a compromise).
+  // Ruas-precise when this intervention's own source named a tower (and
+  // the category has a RAW cause to filter by — "ahi" doesn't, it's
+  // scored GI-wide on purpose) AND that tower matches a known SUTT ruas —
+  // otherwise the honest fallback is GI-wide, which is also simply
+  // CORRECT for Trafo work (no tower/ruas concept exists for a trafo at
+  // all, so GI-level is the right scope, not a compromise) and for a
+  // named tower this app's own SUTT asset data doesn't recognize.
   let gangguanBefore: number;
   let gangguanAfter: number;
-  let gangguanScopedTo: "tower" | "gi";
-  if (rawCause && towerNumbers.length > 0) {
-    const towerEntries = towerNumbers.flatMap((t) => gangguanByTowerGi[giTowerKey(giDisplay, t)] ?? []);
-    gangguanBefore = countGangguanInWindowByTower(towerEntries, realisasiDate, "before", rawCause);
-    gangguanAfter = countGangguanInWindowByTower(towerEntries, realisasiDate, "after", rawCause);
-    gangguanScopedTo = "tower";
+  let gangguanScopedTo: "ruas" | "gi";
+  const matchedSections = new Set<string>();
+  if (rawCause) {
+    for (const t of towerNumbers) {
+      const section = towerToRuasSection.get(giTowerKey(giDisplay, t));
+      if (section) matchedSections.add(section);
+    }
+  }
+  if (rawCause && matchedSections.size > 0) {
+    const ruasEntries = [...matchedSections].flatMap((s) => gangguanByRuasSection.get(s) ?? []);
+    gangguanBefore = countGangguanInWindowByTower(ruasEntries, realisasiDate, "before", rawCause);
+    gangguanAfter = countGangguanInWindowByTower(ruasEntries, realisasiDate, "after", rawCause);
+    gangguanScopedTo = "ruas";
   } else {
     const giEvents = eventsByGi.get(gi) ?? [];
     gangguanBefore = countGangguanInWindow(giEvents, realisasiDate, "before", cause);
@@ -501,12 +524,17 @@ export function buildActionEffectivenessChecks(params: {
   bayLineReports: BayLineReport[];
   disturbanceEvents: DisturbanceBayEventRecord[];
   /** Tower-precise gangguan history (same source Infografis Ruas/FASE 1's
-   *  Gangguan Hotspots use) — enables tower-scoped Anti Binatang/ROW
-   *  checks, see gangguanScopedTo. */
+   *  Gangguan Hotspots use) — used here only to build the ruas-wide union
+   *  below (gangguanByRuasSection), never queried per-tower directly. */
   gangguanByTowerGi: Record<string, GangguanHistoryEntry[]>;
+  /** SUTT's own ruas/tower structure — lets a check with a named tower
+   *  (RENUS SPAN/TOWER, CE span) find which physical ruas that tower sits
+   *  on, so Anti Binatang/ROW checks can be ruas-scoped (see
+   *  gangguanScopedTo). */
+  ruasList: SuttRuas[];
   todayISO: string;
 }): ActionEffectivenessCheck[] {
-  const { renusRows, ceItems, bayLineReports, disturbanceEvents, gangguanByTowerGi, todayISO } = params;
+  const { renusRows, ceItems, bayLineReports, disturbanceEvents, gangguanByTowerGi, ruasList, todayISO } = params;
 
   const raw = collectRawInterventions(renusRows, ceItems, todayISO);
   const merged = mergeInterventions(raw);
@@ -547,6 +575,26 @@ export function buildActionEffectivenessChecks(params: {
   // skip in buildGangguanBaseline).
   const allGiKeys = [...eventsByGi.keys()];
 
+  // towerToRuasSection: every tower SUTT's own asset data places on a ruas
+  // maps to that ruas's section name. gangguanByRuasSection: each ruas's
+  // own section pre-unioned with gangguan history across every tower it
+  // owns — built once here (not per-check) for the same reason
+  // eventsByGi/bayLineReportsByGi are: a per-check flatMap over
+  // ruas.towers would repeat the same work for every intervention sharing
+  // a ruas.
+  const towerToRuasSection = new Map<string, string>();
+  const gangguanByRuasSection = new Map<string, GangguanHistoryEntry[]>();
+  for (const ruas of ruasList) {
+    const entries: GangguanHistoryEntry[] = [];
+    for (const tower of ruas.towers) {
+      const key = giTowerKey(tower.gi, tower.towerNo);
+      towerToRuasSection.set(key, ruas.section);
+      const towerEntries = gangguanByTowerGi[key];
+      if (towerEntries) entries.push(...towerEntries);
+    }
+    gangguanByRuasSection.set(ruas.section, entries);
+  }
+
   const checks = merged.map((intervention) =>
     buildCheck({
       intervention,
@@ -555,7 +603,8 @@ export function buildActionEffectivenessChecks(params: {
       allGiKeys,
       interventionsByGi,
       eventsByGi,
-      gangguanByTowerGi,
+      towerToRuasSection,
+      gangguanByRuasSection,
     }),
   );
 
