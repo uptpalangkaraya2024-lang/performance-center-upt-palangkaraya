@@ -42,123 +42,150 @@ function formatRelativeTime(date: Date): string {
  *  its own Critical-classified anomalies; sync health reads the same
  *  registry the Data & Sync page renders) — replaces the 3 hardcoded
  *  example notifications that used to sit in the header's bell dropdown
- *  unconditionally, regardless of actual system state. Every source is
- *  wrapped in its own try/catch: one module failing to compute its
- *  notification must never take down the whole bell, same principle as
- *  getNavBadges(). */
+ *  unconditionally, regardless of actual system state.
+ *
+ *  All underlying fetches are kicked off together via Promise.allSettled
+ *  (not sequential `await`s in each try/catch, which this used to be) —
+ *  confirmed live this was costing multiple seconds to over a MINUTE on
+ *  every single page load (every page mounts the header bell), since 5-6
+ *  Apps-Script-backed sources awaited one after another sum their
+ *  latencies instead of overlapping them (same bug, same fix, as
+ *  src/lib/nav-badges.ts — see its own comment for the measured cost).
+ *  getAllBayLineReportsWithHistory is fetched ONCE and reused for both the
+ *  degradation and trend-projection checks below (used to be called
+ *  twice). allSettled (not plain Promise.all) keeps the "one module
+ *  failing never breaks the others" guarantee that every try/catch below
+ *  still enforces. */
 export async function getNotifications(): Promise<AppNotification[]> {
   const notifications: AppNotification[] = [];
 
-  try {
-    const weekLabel = defaultAboWeekLabel();
-    const [proteksi, hargi] = await Promise.all([getAboProteksiSnapshot(), getAboHargiSnapshot()]);
-    const belumCount =
-      buildAboSnapshotComputed(proteksi, weekLabel).filter((p) => p.status === "belum").length +
-      buildAboSnapshotComputed(hargi, weekLabel).filter((p) => p.status === "belum").length;
-    if (belumCount > 0) {
-      notifications.push({
-        id: "abo-belum",
-        text: `${belumCount} program ABO belum tercapai`,
-        detail: "Periode berjalan",
-        href: "/dashboard/abo",
-        severity: "warning",
-      });
-    }
-  } catch {
-    // Satu sumber gagal tidak boleh menjatuhkan notifikasi lainnya.
-  }
+  const [aboResult, fourDxResult, ceResult, ahiResult, bayLineReportsResult] = await Promise.allSettled([
+    Promise.all([getAboProteksiSnapshot(), getAboHargiSnapshot()]),
+    getFourDxSnapshot(),
+    getCeSnapshot(),
+    getAhiPerformance(),
+    getAllBayLineReportsWithHistory(),
+  ]);
 
-  try {
-    const snapshot = await getFourDxSnapshot();
-    const period = resolvePeriodRange(snapshot.currentPeriodLabel, snapshot.periodBoundaries, snapshot.currentYear);
-    const wigs = buildFourDxWigs(snapshot.wigs, period, snapshot.realizations, snapshot.monitoring);
-    const belumCount = wigs.flatMap((w) => w.lms).filter((lm) => lm.status === "belum").length;
-    if (belumCount > 0) {
-      notifications.push({
-        id: "4dx-belum",
-        text: `${belumCount} Lead Measure 4DX belum tercapai`,
-        detail: "Periode berjalan",
-        href: "/dashboard/4dx",
-        severity: "warning",
-      });
-    }
-  } catch {
-    // ditto
-  }
-
-  try {
-    const snapshot = await getCeSnapshot();
-    if (!snapshot.error) {
-      const weekLabel = defaultCeWeekLabel();
-      const attention = buildCeAttentionItems(snapshot.items, weekLabel);
-      const needsAttention = new Set(attention.map((a) => a.item.id)).size;
-      if (needsAttention > 0) {
+  if (aboResult.status === "fulfilled") {
+    try {
+      const weekLabel = defaultAboWeekLabel();
+      const [proteksi, hargi] = aboResult.value;
+      const belumCount =
+        buildAboSnapshotComputed(proteksi, weekLabel).filter((p) => p.status === "belum").length +
+        buildAboSnapshotComputed(hargi, weekLabel).filter((p) => p.status === "belum").length;
+      if (belumCount > 0) {
         notifications.push({
-          id: "ce-attention",
-          text: `${needsAttention} temuan CE perlu perhatian`,
-          detail: "Kritis, alert, atau terlambat",
-          href: "/dashboard/ce",
+          id: "abo-belum",
+          text: `${belumCount} program ABO belum tercapai`,
+          detail: "Periode berjalan",
+          href: "/dashboard/abo",
           severity: "warning",
         });
       }
+    } catch {
+      // Satu sumber gagal tidak boleh menjatuhkan notifikasi lainnya.
     }
-  } catch {
-    // ditto
   }
 
-  try {
-    const ahi = await getAhiPerformance();
-    if (ahi.data) {
-      // kategoriAhi: 4 = Poor, 5 = Critical (see AhiAnomalyRecord).
-      const criticalCount = ahi.data.anomalies.filter((a) => a.kategoriAhi === 5).length;
-      if (criticalCount > 0) {
+  if (fourDxResult.status === "fulfilled") {
+    try {
+      const snapshot = fourDxResult.value;
+      const period = resolvePeriodRange(snapshot.currentPeriodLabel, snapshot.periodBoundaries, snapshot.currentYear);
+      const wigs = buildFourDxWigs(snapshot.wigs, period, snapshot.realizations, snapshot.monitoring);
+      const belumCount = wigs.flatMap((w) => w.lms).filter((lm) => lm.status === "belum").length;
+      if (belumCount > 0) {
         notifications.push({
-          id: "ahi-critical",
-          text: `${criticalCount} temuan AHI kategori Critical`,
-          detail: "Rekap anomali AM:BA",
-          href: "/dashboard/ahi#ahi-anomaly",
-          severity: "critical",
+          id: "4dx-belum",
+          text: `${belumCount} Lead Measure 4DX belum tercapai`,
+          detail: "Periode berjalan",
+          href: "/dashboard/4dx",
+          severity: "warning",
         });
       }
+    } catch {
+      // ditto
     }
-  } catch {
-    // ditto
   }
 
-  try {
-    const reports = await getAllBayLineReportsWithHistory();
-    const degrading = findAhiDegradationAlerts(reports);
-    if (degrading.length > 0) {
-      notifications.push({
-        id: "ahi-degradation",
-        text: `${degrading.length} peralatan AHI hasil ujinya memburuk 2-3x terakhir`,
-        detail: "Tren skor AHI menurun berturut-turut",
-        href: "/dashboard/ahi",
-        severity: "warning",
-      });
+  if (ceResult.status === "fulfilled") {
+    try {
+      const snapshot = ceResult.value;
+      if (!snapshot.error) {
+        const weekLabel = defaultCeWeekLabel();
+        const attention = buildCeAttentionItems(snapshot.items, weekLabel);
+        const needsAttention = new Set(attention.map((a) => a.item.id)).size;
+        if (needsAttention > 0) {
+          notifications.push({
+            id: "ce-attention",
+            text: `${needsAttention} temuan CE perlu perhatian`,
+            detail: "Kritis, alert, atau terlambat",
+            href: "/dashboard/ce",
+            severity: "warning",
+          });
+        }
+      }
+    } catch {
+      // ditto
     }
-  } catch {
-    // ditto
   }
 
-  try {
-    const reports = await getAllBayLineReportsWithHistory();
-    // Only the near-term ones are worth a notification — the full 3-year
-    // cap on buildAhiTrendProjections itself is for planning pages (Usulan
-    // Prioritas), not an inbox alert someone has to act on this week.
-    const NEAR_TERM_DAYS = 180;
-    const nearTerm = buildAhiTrendProjections(reports).filter((p) => p.daysUntilCritical <= NEAR_TERM_DAYS);
-    if (nearTerm.length > 0) {
-      notifications.push({
-        id: "ahi-trend-projection",
-        text: `${nearTerm.length} peralatan AHI diproyeksikan Critical dalam ${NEAR_TERM_DAYS} hari`,
-        detail: "Proyeksi tren linear dari riwayat skor AHI",
-        href: "/dashboard/ahi",
-        severity: "warning",
-      });
+  if (ahiResult.status === "fulfilled") {
+    try {
+      const ahi = ahiResult.value;
+      if (ahi.data) {
+        // kategoriAhi: 4 = Poor, 5 = Critical (see AhiAnomalyRecord).
+        const criticalCount = ahi.data.anomalies.filter((a) => a.kategoriAhi === 5).length;
+        if (criticalCount > 0) {
+          notifications.push({
+            id: "ahi-critical",
+            text: `${criticalCount} temuan AHI kategori Critical`,
+            detail: "Rekap anomali AM:BA",
+            href: "/dashboard/ahi#ahi-anomaly",
+            severity: "critical",
+          });
+        }
+      }
+    } catch {
+      // ditto
     }
-  } catch {
-    // ditto
+  }
+
+  if (bayLineReportsResult.status === "fulfilled") {
+    const reports = bayLineReportsResult.value;
+    try {
+      const degrading = findAhiDegradationAlerts(reports);
+      if (degrading.length > 0) {
+        notifications.push({
+          id: "ahi-degradation",
+          text: `${degrading.length} peralatan AHI hasil ujinya memburuk 2-3x terakhir`,
+          detail: "Tren skor AHI menurun berturut-turut",
+          href: "/dashboard/ahi",
+          severity: "warning",
+        });
+      }
+    } catch {
+      // ditto
+    }
+
+    try {
+      // Only the near-term ones are worth a notification — the full 3-year
+      // cap on buildAhiTrendProjections itself is for planning pages (Usulan
+      // Prioritas), not an inbox alert someone has to act on this week.
+      const NEAR_TERM_DAYS = 180;
+      const nearTerm = buildAhiTrendProjections(reports).filter((p) => p.daysUntilCritical <= NEAR_TERM_DAYS);
+      if (nearTerm.length > 0) {
+        notifications.push({
+          id: "ahi-trend-projection",
+          text: `${nearTerm.length} peralatan AHI diproyeksikan Critical dalam ${NEAR_TERM_DAYS} hari`,
+          detail: "Proyeksi tren linear dari riwayat skor AHI",
+          href: "/dashboard/ahi",
+          severity: "warning",
+        });
+      }
+    } catch {
+      // ditto
+    }
   }
 
   try {
