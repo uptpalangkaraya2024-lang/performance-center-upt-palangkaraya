@@ -334,11 +334,30 @@ export function VerifikasiEfektivitasClient({ checks }: { checks: ActionEffectiv
                       <VerdictPill verdict={c.ahiVerdict} />
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                      {c.category === "tidak_relevan"
-                        ? "—"
-                        : c.gangguanVerdict === "belum_cukup_data" && c.daysSinceAction < 90
-                          ? `${c.daysSinceAction} hari berjalan`
-                          : `${c.gangguanBefore} → ${c.gangguanAfter}`}
+                      {c.category === "tidak_relevan" ? (
+                        "—"
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          {c.gangguanVerdict === "belum_cukup_data" && c.daysSinceAction < 90
+                            ? `${c.daysSinceAction} hari berjalan`
+                            : `${c.gangguanBefore} → ${c.gangguanAfter}`}
+                          {(c.category === "binatang" || c.category === "row") && c.gangguanScopedTo === "tower" ? (
+                            <span
+                              className="rounded-full border border-success/40 bg-success/10 px-1.5 py-0.5 text-[10px] font-bold text-success"
+                              title="Dibandingkan hanya gangguan di tower/span tempat pekerjaan ini dilakukan, bukan seluruh GI."
+                            >
+                              per tower
+                            </span>
+                          ) : (c.category === "binatang" || c.category === "row") && c.gangguanScopedTo === "gi" ? (
+                            <span
+                              className="rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground"
+                              title="Lokasi tower/span tidak tercatat di sumber data pekerjaan ini — dibandingkan di level GI."
+                            >
+                              level GI
+                            </span>
+                          ) : null}
+                        </span>
+                      )}
                       <BaselineNote c={c} />
                     </td>
                     <td className="px-3 py-2">
@@ -389,6 +408,14 @@ export function VerifikasiEfektivitasClient({ checks }: { checks: ActionEffectiv
             berpenyebab tegakan/pohon saja, Pengujian Ulang/Perbaikan Peralatan dari kondisi AHI. Pekerjaan
             fasilitas/sipil (atap, AC, pagar, pondasi) tidak dinilai sama sekali — tidak ada skor AHI atau pola
             gangguan yang relevan untuk jenis pekerjaan ini.
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">Cakupan Anti Binatang/ROW ("per tower" vs "level GI"):</span>{" "}
+            kalau sumber datanya (kolom SPAN/TOWER di RENUS, atau span di CE) menyebut tower/span tertentu,
+            perbandingan gangguan dipersempit hanya ke tower itu — badge &ldquo;per tower&rdquo; menandai ini.
+            Pekerjaan trafo (tidak punya konsep tower) dan pekerjaan tanpa lokasi tower tercatat dibandingkan di
+            level GI — badge &ldquo;level GI&rdquo;, bukan kekurangan, memang begitu seharusnya untuk pekerjaan
+            trafo.
           </p>
           <p>
             <span className="font-semibold text-foreground">Pembanding GI lain:</span> untuk hasil gangguan,

@@ -21,7 +21,8 @@
 // "gangguan went down" can be read against whether gangguan went down
 // everywhere that period anyway (a system-wide trend, e.g. a drier month)
 // rather than only at this one GI.
-import { canonicalGiKey } from "@/lib/gi-name";
+import { canonicalGiKey, giTowerKey } from "@/lib/gi-name";
+import { extractRenusTowerNumbers } from "@/lib/ruas-correlation";
 import {
   classifyCeIndikator,
   classifyRenusWorkDetail,
@@ -29,7 +30,26 @@ import {
   EFFECTIVENESS_CATEGORY_LABEL,
   type EffectivenessCategory,
 } from "@/config/effectiveness-indicator-map";
-import type { BayLineReport, CeItem, DisturbanceBayEventRecord, RenusRow } from "@/types";
+import type { BayLineReport, CeItem, DisturbanceBayEventRecord, GangguanHistoryEntry, RenusRow } from "@/types";
+
+// The cause-filtered gangguan categories' RAW sheet value (gangguan-
+// history.ts reads PENYEBAB unmapped) — EFFECTIVENESS_CATEGORY_CAUSE
+// holds the user-facing MAPPED label ("Hewan"/"Tegakan / Pohon", for
+// disturbanceEvents.cause), this is its tower-level counterpart for
+// gangguanByTowerGi.penyebab, used only when a check can be scoped to a
+// specific tower (see extractInterventionTowers below).
+const RAW_CAUSE_FOR_CATEGORY: Partial<Record<EffectivenessCategory, string>> = {
+  binatang: "HEWAN",
+  row: "TEGAKAN",
+};
+
+/** CE's own "span" column names a single tower ("#293") — simpler than
+ *  RENUS's spanTower (which can name a two-tower span, "#227-#228").
+ *  Reuses the same "#digits" extraction either way. */
+function extractCeTowerNumbers(span: string | null): string[] {
+  if (!span) return [];
+  return [...span.matchAll(/#?(\d+)/g)].map((m) => m[1]);
+}
 
 export type EffectivenessVerdict = "membaik" | "tetap" | "memburuk" | "belum_cukup_data" | "tidak_relevan";
 
@@ -76,6 +96,15 @@ export interface ActionEffectivenessCheck {
   gangguanAfter: number;
   gangguanVerdict: EffectivenessVerdict;
   gangguanBaseline: GangguanBaseline | null;
+  /** "tower" when this check's own source named a specific tower/span
+   *  (RENUS's SPAN/TOWER or CE's span column) and the gangguan count
+   *  above is scoped to exactly that tower; "gi" when it falls back to
+   *  every gangguan at the whole GI — the honest case for Trafo work
+   *  (no tower concept at all) and for any row that simply didn't name
+   *  one. Only meaningful for "binatang"/"row" categories; always "gi"
+   *  for "ahi" (GI-wide AHI condition is the actual point there) and
+   *  irrelevant for "tidak_relevan". */
+  gangguanScopedTo: "tower" | "gi";
 }
 
 // Only actions completed within this window are worth re-checking — a
@@ -162,6 +191,38 @@ function countGangguanInWindow(
   }).length;
 }
 
+/** Tower-precise counterpart of countGangguanInWindow, for the Anti
+ *  Binatang/ROW checks that know exactly which tower(s) the work was
+ *  done at (RENUS's own SPAN/TOWER column, or CE's own span column — see
+ *  extractInterventionTowers) — scoped to those specific towers instead
+ *  of every gangguan at the whole GI, per the user's own point: Anti
+ *  Binatang work on one tower should be judged by whether gangguan at
+ *  THAT tower went down, not by the GI's gangguan count overall. Uses
+ *  `.tgl`/`.penyebab` (gangguan-history.ts's own raw-PENYEBAB shape),
+ *  not `.dateISO`/`.cause` — a different data source than the GI-level
+ *  disturbanceEvents (see RAW_CAUSE_FOR_CATEGORY's own comment). */
+function countGangguanInWindowByTower(
+  entries: GangguanHistoryEntry[],
+  centerISO: string,
+  direction: "before" | "after",
+  rawCause: string,
+): number {
+  return entries.filter((e) => {
+    if (e.penyebab !== rawCause) return false;
+    // e.tgl carries a trailing " 00:00:00" (gangguan-history.ts reads TGL
+    // unstripped) — daysBetween appends its own "T00:00:00Z", so the raw
+    // value has to be truncated to "yyyy-MM-dd" first or the concatenated
+    // string fails to parse.
+    const tglDate = e.tgl.slice(0, 10);
+    if (direction === "before") {
+      const d = daysBetween(tglDate, centerISO);
+      return d > 0 && d <= GANGGUAN_WINDOW_DAYS;
+    }
+    const d = daysBetween(centerISO, tglDate);
+    return d > 0 && d <= GANGGUAN_WINDOW_DAYS;
+  }).length;
+}
+
 // --- Raw-row collection + merge -------------------------------------------
 
 interface RawIntervention {
@@ -170,6 +231,11 @@ interface RawIntervention {
   category: EffectivenessCategory;
   description: string;
   realisasiDate: string;
+  /** Specific tower(s) this row's own source names — RENUS's SPAN/TOWER
+   *  column or CE's span column — empty when the row doesn't name one
+   *  (most CE rows, and all Trafo-category RENUS work, which has no
+   *  tower concept at all). */
+  towerNumbers: string[];
 }
 
 function collectRawInterventions(renusRows: RenusRow[], ceItems: CeItem[], todayISO: string): RawIntervention[] {
@@ -185,6 +251,7 @@ function collectRawInterventions(renusRows: RenusRow[], ceItems: CeItem[], today
       category: classifyRenusWorkDetail(r.workDetail),
       description: r.workDetail,
       realisasiDate: r.realisasiDate,
+      towerNumbers: extractRenusTowerNumbers(r.spanTower),
     });
   }
 
@@ -198,6 +265,7 @@ function collectRawInterventions(renusRows: RenusRow[], ceItems: CeItem[], today
       category: classifyCeIndikator(c.indikator),
       description: c.namaProgram || c.anomaliPemicu || `Temuan #${c.id}`,
       realisasiDate: c.tanggalRealisasi,
+      towerNumbers: extractCeTowerNumbers(c.span),
     });
   }
 
@@ -212,6 +280,8 @@ interface MergedIntervention {
   description: string;
   mergedCount: number;
   realisasiDate: string;
+  /** Union of every merged raw row's own tower numbers, deduped. */
+  towerNumbers: string[];
 }
 
 /** One intervention per (GI, category, realisasi date) — several raw rows
@@ -234,11 +304,13 @@ function mergeInterventions(raw: RawIntervention[]): MergedIntervention[] {
         description: r.description,
         mergedCount: 1,
         realisasiDate: r.realisasiDate,
+        towerNumbers: [...r.towerNumbers],
       });
       continue;
     }
     existing.mergedCount += 1;
     if (!existing.source.includes(r.source)) existing.source.push(r.source);
+    for (const t of r.towerNumbers) if (!existing.towerNumbers.includes(t)) existing.towerNumbers.push(t);
     // Keep the merged description short and non-repetitive — list up to 3
     // distinct descriptions, then "+N lainnya", same overflow convention
     // used elsewhere in this app (e.g. root-cause-links' own card).
@@ -318,9 +390,10 @@ function buildCheck(params: {
   allGiKeys: string[];
   interventionsByGi: Map<string, MergedIntervention[]>;
   eventsByGi: Map<string, DisturbanceBayEventRecord[]>;
+  gangguanByTowerGi: Record<string, GangguanHistoryEntry[]>;
 }): ActionEffectivenessCheck {
-  const { intervention, daysSinceAction, bayLineReportsByGi, allGiKeys, interventionsByGi, eventsByGi } = params;
-  const { gi, giDisplay, category, description, mergedCount, realisasiDate, source } = intervention;
+  const { intervention, daysSinceAction, bayLineReportsByGi, allGiKeys, interventionsByGi, eventsByGi, gangguanByTowerGi } = params;
+  const { gi, giDisplay, category, description, mergedCount, realisasiDate, source, towerNumbers } = intervention;
 
   if (category === "tidak_relevan") {
     return {
@@ -339,6 +412,7 @@ function buildCheck(params: {
       gangguanAfter: 0,
       gangguanVerdict: "tidak_relevan",
       gangguanBaseline: null,
+      gangguanScopedTo: "gi",
     };
   }
 
@@ -360,9 +434,28 @@ function buildCheck(params: {
   }
 
   const cause = EFFECTIVENESS_CATEGORY_CAUSE[category];
-  const giEvents = eventsByGi.get(gi) ?? [];
-  const gangguanBefore = countGangguanInWindow(giEvents, realisasiDate, "before", cause);
-  const gangguanAfter = countGangguanInWindow(giEvents, realisasiDate, "after", cause);
+  const rawCause = RAW_CAUSE_FOR_CATEGORY[category];
+
+  // Tower-precise when this intervention's own source named one (and the
+  // category has a RAW cause to filter by — "ahi" doesn't, it's scored
+  // GI-wide on purpose) — otherwise the honest fallback is GI-wide, which
+  // is also simply CORRECT for Trafo work (no tower concept exists for a
+  // trafo at all, so GI-level is the right scope, not a compromise).
+  let gangguanBefore: number;
+  let gangguanAfter: number;
+  let gangguanScopedTo: "tower" | "gi";
+  if (rawCause && towerNumbers.length > 0) {
+    const towerEntries = towerNumbers.flatMap((t) => gangguanByTowerGi[giTowerKey(giDisplay, t)] ?? []);
+    gangguanBefore = countGangguanInWindowByTower(towerEntries, realisasiDate, "before", rawCause);
+    gangguanAfter = countGangguanInWindowByTower(towerEntries, realisasiDate, "after", rawCause);
+    gangguanScopedTo = "tower";
+  } else {
+    const giEvents = eventsByGi.get(gi) ?? [];
+    gangguanBefore = countGangguanInWindow(giEvents, realisasiDate, "before", cause);
+    gangguanAfter = countGangguanInWindow(giEvents, realisasiDate, "after", cause);
+    gangguanScopedTo = "gi";
+  }
+
   const gangguanVerdict: EffectivenessVerdict =
     daysSinceAction < GANGGUAN_WINDOW_DAYS
       ? "belum_cukup_data"
@@ -392,6 +485,7 @@ function buildCheck(params: {
     gangguanAfter,
     gangguanVerdict,
     gangguanBaseline,
+    gangguanScopedTo,
   };
 }
 
@@ -406,9 +500,13 @@ export function buildActionEffectivenessChecks(params: {
   ceItems: CeItem[];
   bayLineReports: BayLineReport[];
   disturbanceEvents: DisturbanceBayEventRecord[];
+  /** Tower-precise gangguan history (same source Infografis Ruas/FASE 1's
+   *  Gangguan Hotspots use) — enables tower-scoped Anti Binatang/ROW
+   *  checks, see gangguanScopedTo. */
+  gangguanByTowerGi: Record<string, GangguanHistoryEntry[]>;
   todayISO: string;
 }): ActionEffectivenessCheck[] {
-  const { renusRows, ceItems, bayLineReports, disturbanceEvents, todayISO } = params;
+  const { renusRows, ceItems, bayLineReports, disturbanceEvents, gangguanByTowerGi, todayISO } = params;
 
   const raw = collectRawInterventions(renusRows, ceItems, todayISO);
   const merged = mergeInterventions(raw);
@@ -457,6 +555,7 @@ export function buildActionEffectivenessChecks(params: {
       allGiKeys,
       interventionsByGi,
       eventsByGi,
+      gangguanByTowerGi,
     }),
   );
 

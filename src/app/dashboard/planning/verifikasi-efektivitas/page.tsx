@@ -7,16 +7,18 @@ import { getRenusData } from "@/services/renus";
 import { getCeSnapshot } from "@/services/ce-proteksi";
 import { getAllBayLineReportsWithHistory } from "@/services/ahi-bay-line-report";
 import { getDisturbances } from "@/services/disturbances";
+import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function VerifikasiEfektivitasPage() {
-  const [renus, ce, bayLineReports, disturbances] = await Promise.all([
+  const [renus, ce, bayLineReports, disturbances, gangguanByTowerGi] = await Promise.all([
     getRenusData(),
     getCeSnapshot(),
     getAllBayLineReportsWithHistory(),
     getDisturbances(),
+    getGangguanHistoryByTowerGi(),
   ]);
 
   if (renus.error) {
@@ -42,6 +44,7 @@ export default async function VerifikasiEfektivitasPage() {
     disturbanceEvents: disturbances.error
       ? []
       : [...disturbances.transmisi.bayEvents, ...disturbances.trafoHv.bayEvents, ...disturbances.trafoLv.bayEvents],
+    gangguanByTowerGi,
     todayISO: renus.today,
   });
 
