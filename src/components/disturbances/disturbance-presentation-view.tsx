@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronLeft, ChevronRight, Maximize2, Printer, RotateCcw, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Maximize2, Minus, Printer, RotateCcw, TrendingDown, TrendingUp, X } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -151,6 +151,66 @@ function StatTile({
         {value}
       </div>
       <div className={cn("font-medium text-muted-foreground", compact ? "text-[11px] leading-tight" : "text-sm")}>{label}</div>
+    </div>
+  );
+}
+
+/** One month-over-month comparison tile (e.g. "Transmisi · Trip": 3 -> 5,
+ *  +2, +67%) for the ringkasan slide's comparison strip. More gangguan is
+ *  worse, fewer is better — colored the opposite of a typical "up is good"
+ *  dashboard tile on purpose, same red/green convention this file already
+ *  uses for Trip (critical/red) vs AR Sukses (success/green). `previous`
+ *  of 0 with a positive `current` has no meaningful percent (not -100%,
+ *  not +Infinity%) — shown as "Baru" instead of a fabricated number; both
+ *  zero shows "Tetap". */
+function MonthComparisonTile({
+  label,
+  current,
+  previous,
+  emphasize = false,
+}: {
+  label: string;
+  current: number;
+  previous: number;
+  emphasize?: boolean;
+}) {
+  const delta = current - previous;
+  const isNew = previous === 0 && current > 0;
+  const isFlat = previous === 0 && current === 0;
+  const percent = !isNew && !isFlat ? Math.round((delta / previous) * 100) : null;
+  const direction: "up" | "down" | "flat" = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+  // "up" (more gangguan) reads as worse -> critical/red; "down" (fewer) reads
+  // as better -> success/green; flat/no-data stays neutral.
+  const toneClass = direction === "up" ? "text-critical" : direction === "down" ? "text-success" : "text-muted-foreground";
+  const Icon = direction === "up" ? TrendingUp : direction === "down" ? TrendingDown : Minus;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 rounded-lg border p-3.5",
+        emphasize ? "border-2 border-primary/40 bg-primary/5" : "bg-muted",
+      )}
+    >
+      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-sm text-muted-foreground tabular-nums">{previous}</span>
+        <span className="text-sm text-muted-foreground">→</span>
+        <span className="text-2xl font-extrabold tabular-nums text-foreground">{current}</span>
+      </div>
+      <div className={cn("flex items-center gap-1 text-sm font-bold", toneClass)}>
+        <Icon className="size-3.5" />
+        {isNew ? (
+          <span>Baru ({current})</span>
+        ) : isFlat ? (
+          <span>Tetap</span>
+        ) : (
+          <span>
+            {delta > 0 ? "+" : ""}
+            {delta} ({percent !== null && percent > 0 ? "+" : ""}
+            {percent}%)
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -495,6 +555,16 @@ export function DisturbancePresentationView({
   const monthLabel = MONTH_ID[monthIndex0];
   const isCurrentPeriod = year === String(current.year) && monthIndex0 === current.monthIndex0;
 
+  // The month immediately before whichever one is selected above (not
+  // necessarily "last calendar month" — the presenter can browse to any
+  // past period, and the comparison should always be "vs the month right
+  // before this one"). Handles the January -> December-of-prior-year
+  // rollover, per the user's own request for a month-over-month AR/Trip
+  // comparison on the ringkasan slide.
+  const prevMonthIndex0 = monthIndex0 === 0 ? 11 : monthIndex0 - 1;
+  const prevYear = monthIndex0 === 0 ? String(Number(year) - 1) : year;
+  const prevMonthLabel = MONTH_ID[prevMonthIndex0];
+
   const [mode, setMode] = useState<"preview" | "present">("preview");
   const [activeSlide, setActiveSlide] = useState(0);
 
@@ -529,6 +599,54 @@ export function DisturbancePresentationView({
     (label: string, kind: string) => kindByCategory.find((c) => c.label === label)?.kind.find((k) => k.label === kind)?.count ?? 0,
     [kindByCategory],
   );
+
+  // Same per-category Trip/AR Sukses breakdown, read for the PREVIOUS month
+  // instead — feeds the ringkasan slide's month-over-month comparison strip
+  // (per the user's own request: AR/Trip Transmisi and Trip Trafo HV/LV,
+  // bulan ini vs bulan lalu, naik/turun berapa dan berapa persen).
+  const kindByCategoryPrev = useMemo(
+    () =>
+      categories.map((c) => ({
+        label: c.label,
+        kind: buildMonthlyBreakdown(c.data.monthlyByYearByKind, (k) => k.kind, prevMonthLabel, prevYear),
+      })),
+    [categories, prevMonthLabel, prevYear],
+  );
+  const kindCountForPrev = useCallback(
+    (label: string, kind: string) =>
+      kindByCategoryPrev.find((c) => c.label === label)?.kind.find((k) => k.label === kind)?.count ?? 0,
+    [kindByCategoryPrev],
+  );
+
+  // The 4 metrics the user explicitly asked for — Transmisi's own Trip AND
+  // AR Sukses (the only category with a reclose scheme), Trip only for
+  // Trafo HV/LV (no AR scheme there) — plus "Seluruhnya", the sum of
+  // exactly these 4, not every possible kind (e.g. "Tidak Trip" is
+  // deliberately excluded, same framing the rest of this slide already
+  // uses: Trip/AR are the meaningful incident counts, Tidak Trip is a
+  // near-miss). previousValue === 0 with a positive current means the
+  // percent change is mathematically undefined (not -100%, not +Infinity%
+  // in any useful sense) — shown as "Baru" (new this month) rather than a
+  // fabricated number; both-zero shows "Tetap" (no change, nothing to
+  // compare).
+  const monthComparison = useMemo(() => {
+    const items = [
+      { label: "Transmisi · Trip", current: kindCountFor("Transmisi", "Trip"), previous: kindCountForPrev("Transmisi", "Trip") },
+      {
+        label: "Transmisi · AR Sukses",
+        current: kindCountFor("Transmisi", "AR Sukses"),
+        previous: kindCountForPrev("Transmisi", "AR Sukses"),
+      },
+      { label: "Trafo HV · Trip", current: kindCountFor("Trafo HV", "Trip"), previous: kindCountForPrev("Trafo HV", "Trip") },
+      { label: "Trafo LV · Trip", current: kindCountFor("Trafo LV", "Trip"), previous: kindCountForPrev("Trafo LV", "Trip") },
+    ];
+    const totalCurrent = items.reduce((s, i) => s + i.current, 0);
+    const totalPrevious = items.reduce((s, i) => s + i.previous, 0);
+    return {
+      items,
+      total: { label: "Seluruhnya", current: totalCurrent, previous: totalPrevious },
+    };
+  }, [kindCountFor, kindCountForPrev]);
 
   // Per-category cause breakdown for the SELECTED MONTH only (not an
   // all-time pareto) — e.g. "Transmisi: 3 gangguan — Petir (2), Hewan (1)" —
@@ -759,6 +877,23 @@ export function DisturbancePresentationView({
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-semibold text-foreground">
+                  Dibanding {prevMonthLabel} {prevYear}
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  {monthComparison.items.map((item) => (
+                    <MonthComparisonTile key={item.label} label={item.label} current={item.current} previous={item.previous} />
+                  ))}
+                  <MonthComparisonTile
+                    label={monthComparison.total.label}
+                    current={monthComparison.total.current}
+                    previous={monthComparison.total.previous}
+                    emphasize
+                  />
                 </div>
               </div>
 
@@ -1296,6 +1431,9 @@ export function DisturbancePresentationView({
       monthLabel,
       year,
       monthIndex0,
+      prevMonthLabel,
+      prevYear,
+      monthComparison,
       grandTotal,
       totalByCategory,
       kindCountFor,
