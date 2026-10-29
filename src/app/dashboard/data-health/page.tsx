@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DataHealthView } from "@/components/dashboard/data-health-view";
 import { buildDataHealthReport } from "@/lib/data-health";
@@ -65,10 +65,8 @@ export default function DataHealthPage() {
 function DataHealthFallback() {
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 py-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-5 w-full" />
-        ))}
+      <CardContent className="py-6">
+        <LoadingScreen />
       </CardContent>
     </Card>
   );

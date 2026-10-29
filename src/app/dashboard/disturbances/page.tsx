@@ -11,12 +11,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { buttonVariants } from "@/components/ui/button";
 import { AiInsightList } from "@/components/dashboard/ai-insight-list";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
+import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DisturbanceParetoChart } from "@/components/charts/disturbance-pareto-chart";
 import { DisturbanceYoyMonthlyChart } from "@/components/charts/disturbance-yoy-monthly-chart";
@@ -513,26 +513,7 @@ export default function DisturbancesPage() {
 }
 
 function DisturbancesFallback() {
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-7 w-80" />
-        <Skeleton className="h-4 w-full max-w-2xl" />
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="flex flex-col gap-2 py-6">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-7 w-16" />
-              <Skeleton className="h-3 w-32" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  return <LoadingScreen />;
 }
 
 async function DisturbancesBody({

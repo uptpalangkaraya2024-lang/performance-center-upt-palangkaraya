@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { PresentationBuilderView } from "@/components/presentation/presentation-builder-view";
 import { getPresentationMateriCatalog } from "@/services/presentation-materi";
@@ -51,13 +51,7 @@ export default function PresentasiPage() {
 }
 
 function PresentasiFallback() {
-  return (
-    <div className="flex flex-col gap-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Skeleton key={i} className="h-16 w-full" />
-      ))}
-    </div>
-  );
+  return <LoadingScreen />;
 }
 
 async function PresentasiBody({

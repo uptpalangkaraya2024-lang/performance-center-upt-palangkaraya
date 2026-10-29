@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { CheckCircle2, Server, XCircle } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { DataSyncTable } from "@/components/dashboard/data-sync-table";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { getDataProvider } from "@/lib/data-provider-registry";
@@ -60,16 +60,11 @@ export default function DataSyncPage() {
 
 function DataSyncFallback() {
   return (
-    <>
-      <Skeleton className="h-24 w-full rounded-xl" />
-      <Card>
-        <CardContent className="flex flex-col gap-3 py-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-5 w-full" />
-          ))}
-        </CardContent>
-      </Card>
-    </>
+    <Card>
+      <CardContent className="py-6">
+        <LoadingScreen />
+      </CardContent>
+    </Card>
   );
 }
 

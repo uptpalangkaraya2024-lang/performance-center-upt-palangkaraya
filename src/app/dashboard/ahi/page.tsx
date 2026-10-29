@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
+import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { AhiExecutiveSummary } from "@/components/ahi/ahi-executive-summary";
 import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
@@ -244,13 +244,7 @@ export default async function AhiPage({
 }
 
 function BayReportFallback() {
-  return (
-    <div className="flex flex-col gap-3 py-8">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Skeleton key={i} className="h-5 w-full" />
-      ))}
-    </div>
-  );
+  return <LoadingScreen compact />;
 }
 
 async function BayReportBody({

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { AboPageShell } from "@/components/abo/abo-page-shell";
 import { getAboProteksiSnapshot } from "@/services/abo-proteksi";
 import { getAboHargiSnapshot } from "@/services/abo-hargi";
@@ -30,16 +30,11 @@ export default function AboPage() {
 
 function AboFallback() {
   return (
-    <div className="flex flex-col gap-6">
-      <Skeleton className="h-9 w-48" />
-      <Card>
-        <CardContent className="flex flex-col gap-3 py-8">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-4 w-full" />
-          ))}
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardContent className="py-6">
+        <LoadingScreen />
+      </CardContent>
+    </Card>
   );
 }
 

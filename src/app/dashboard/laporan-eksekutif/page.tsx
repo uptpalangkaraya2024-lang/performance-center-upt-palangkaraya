@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { buildUltgRanking } from "@/components/kinerja-ultg/ultg-ranking-table";
@@ -100,18 +100,8 @@ export default function LaporanEksekutifPage() {
 function NarrativeReportFallback() {
   return (
     <Card className="print:shadow-none">
-      <CardContent className="flex flex-col gap-4 py-6">
-        <div className="border-b pb-3">
-          <Skeleton className="h-5 w-72" />
-          <Skeleton className="mt-2 h-3 w-96" />
-        </div>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="flex flex-col gap-2">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-5/6" />
-          </div>
-        ))}
+      <CardContent className="py-6">
+        <LoadingScreen />
       </CardContent>
     </Card>
   );

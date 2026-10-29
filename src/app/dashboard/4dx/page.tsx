@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { FourDxView } from "@/components/four-dx/four-dx-view";
@@ -51,10 +51,8 @@ export default function FourDxPage() {
 function FourDxFallback() {
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 py-8">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-4 w-full" />
-        ))}
+      <CardContent className="py-6">
+        <LoadingScreen />
       </CardContent>
     </Card>
   );
