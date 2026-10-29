@@ -1,24 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  CloudSun,
   Copy,
   ExternalLink,
   GitBranch,
   MapPin,
   Navigation,
   RotateCcw,
+  TreePine,
   Zap,
 } from "lucide-react";
 
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -33,6 +33,8 @@ import {
   buildCombinedIncomerRuasList,
   buildDirectionsLink,
   buildEarthLink,
+  buildRowWatchLink,
+  buildRowWatchTowerIndex,
   buildSuttMyMapsLink,
   buildMethodResults,
   combinedIncomerKey,
@@ -48,6 +50,7 @@ import {
   formatSigapInsightLines,
   formatUnbalanceLine,
   formatWaMessage,
+  formatWeatherLine,
   hasFaultHistory,
   isIncomerRuas,
   isTowerKritis,
@@ -56,8 +59,11 @@ import {
   type FaultDirection,
   type MethodEntry,
   type MethodResult,
+  type TowerWeather,
 } from "@/lib/sutt-fault-locator";
+import { giTowerKey } from "@/lib/gi-name";
 import type { SigapTowerInsight } from "@/services/sigap";
+import type { RowWatchSpan } from "@/services/row-watch";
 import type { GangguanHistoryEntry, SuttRuas } from "@/types";
 
 function formatKm(km: number): string {
@@ -127,6 +133,25 @@ function buildEntries(inputs: MethodInputsState): MethodEntry[] {
   return [vaisala, twfl, smde, relay];
 }
 
+/** Current weather at a tower's own coordinates — purely presentational,
+ *  reading from the already-fetched weatherByTowerKey map (see
+ *  SuttFaultLocatorView below, which fetches once per distinct matched
+ *  tower and feeds both this line AND the WA text, per the user's own
+ *  request to add weather to the copy-paste message too — a per-panel
+ *  fetch here couldn't reach into that synchronous text builder). Renders
+ *  nothing while the fetch is still in flight or failed — a field crew's
+ *  weather context is a nice-to-have, never something that should block
+ *  or clutter the result with an error. */
+function TowerWeatherLine({ weather }: { weather: TowerWeather | undefined }) {
+  if (!weather) return null;
+  return (
+    <p className="flex items-center gap-1 text-muted-foreground">
+      <CloudSun className="size-3 shrink-0" />
+      {formatWeatherLine(weather)}
+    </p>
+  );
+}
+
 /** The "we found a tower" block — identical regardless of how the tower
  *  was resolved (nearest-to-a-distance guess, or an exact tower-number/
  *  tower-ke lookup), so every method's own card renders this same panel
@@ -136,11 +161,15 @@ function TowerResultPanel({
   result,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
+  rowWatchIndex,
+  weatherByTowerKey,
 }: {
   ruasSection: string;
   result: MethodResult;
   sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
   gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
+  rowWatchIndex: Map<string, RowWatchSpan>;
+  weatherByTowerKey: Record<string, TowerWeather>;
 }) {
   const { match } = result;
   const sigapInsight = findSigapInsight(match.tower, sigapInsightsByFuncLoc);
@@ -232,6 +261,7 @@ function TowerResultPanel({
             </p>
           ))
         : null}
+      <TowerWeatherLine weather={weatherByTowerKey[giTowerKey(match.tower.gi, match.tower.towerNo)]} />
       {buildSuttMyMapsLink(match.tower.lat, match.tower.lon) ? (
         <div className="flex flex-wrap gap-2 pt-0.5">
           <a
@@ -263,6 +293,18 @@ function TowerResultPanel({
             Google Earth
             <ExternalLink className="size-2.5" />
           </a>
+          {buildRowWatchLink(match.tower, rowWatchIndex) ? (
+            <a
+              href={buildRowWatchLink(match.tower, rowWatchIndex)!}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-primary hover:underline"
+            >
+              <TreePine className="size-3" />
+              ROW Watch
+              <ExternalLink className="size-2.5" />
+            </a>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -275,6 +317,8 @@ type SharedCardProps = {
   direction: FaultDirection;
   sigapInsightsByFuncLoc: Record<string, SigapTowerInsight>;
   gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
+  rowWatchIndex: Map<string, RowWatchSpan>;
+  weatherByTowerKey: Record<string, TowerWeather>;
 };
 
 /** TWFL and Fault Locator Relay: a plain km distance, nearest-match —
@@ -290,6 +334,8 @@ function DistanceCard({
   direction,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
+  rowWatchIndex,
+  weatherByTowerKey,
 }: SharedCardProps & {
   method: "TWFL" | "FAULT_LOCATOR_RELAY";
   label: string;
@@ -336,6 +382,8 @@ function DistanceCard({
             result={result}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+            rowWatchIndex={rowWatchIndex}
+            weatherByTowerKey={weatherByTowerKey}
           />
         )}
       </CardContent>
@@ -358,6 +406,8 @@ function VaisalaCard({
   direction,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
+  rowWatchIndex,
+  weatherByTowerKey,
 }: SharedCardProps & {
   status: VaisalaStatus;
   towerNo: string;
@@ -428,6 +478,8 @@ function VaisalaCard({
             result={result}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+            rowWatchIndex={rowWatchIndex}
+            weatherByTowerKey={weatherByTowerKey}
           />
         )}
       </CardContent>
@@ -449,6 +501,8 @@ function SmdeCard({
   direction,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
+  rowWatchIndex,
+  weatherByTowerKey,
 }: SharedCardProps & {
   distanceValue: string;
   ordinalValue: string;
@@ -524,6 +578,8 @@ function SmdeCard({
             result={result}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+            rowWatchIndex={rowWatchIndex}
+            weatherByTowerKey={weatherByTowerKey}
           />
         )}
       </CardContent>
@@ -536,6 +592,7 @@ export function SuttFaultLocatorView({
   error,
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
+  rowWatchSpans,
 }: {
   ruasList: SuttRuas[];
   error: string | null;
@@ -547,6 +604,13 @@ export function SuttFaultLocatorView({
   /** (normalized GARDU INDUK)::(tower number) -> past gangguan events from
    *  the UPT's own REKAP GANGGUAN — see src/services/gangguan-history.ts. */
   gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
+  /** ROW Watch's own per-span vegetation dataset, best-effort (see
+   *  src/services/row-watch.ts) — indexed once below into a (gi, tower) ->
+   *  span lookup so every matched tower can resolve its own ROW Watch deep
+   *  link, same "build once, read many" shape sigapInsightsByFuncLoc's own
+   *  funcLoc-keyed map already uses. An empty array (ROW Watch
+   *  unreachable) just means no ROW Watch link shows anywhere. */
+  rowWatchSpans: RowWatchSpan[];
 }) {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [selectedGi, setSelectedGi] = useState<string | null>(null);
@@ -554,6 +618,8 @@ export function SuttFaultLocatorView({
   const [direction, setDirection] = useState<FaultDirection>("origin");
   const [inputs, setInputs] = useState<MethodInputsState>(EMPTY_INPUTS);
   const [copied, setCopied] = useState(false);
+
+  const rowWatchIndex = useMemo(() => buildRowWatchTowerIndex(rowWatchSpans), [rowWatchSpans]);
 
   // Through-routes: host ruas (from its own origin) continued straight
   // onto an incomer's own towers out to its new GI, selectable as one
@@ -635,8 +701,53 @@ export function SuttFaultLocatorView({
 
   const entries = useMemo(() => buildEntries(inputs), [inputs]);
   const filledCount = entries.filter((e) => e.mode !== "empty").length;
+
+  // Every currently-matched tower across all 4 methods at once (not just
+  // one card's own single entry) — purely to know which towers need a
+  // weather lookup below; each card still independently resolves its own
+  // single result for display, same as before.
+  const allResults = useMemo(() => (ruas ? buildMethodResults(ruas, ruasList, direction, entries) : []), [ruas, ruasList, direction, entries]);
+
+  // Fetched once per distinct matched tower (deduped via fetchedWeatherKeys,
+  // never re-fetched just because the component re-rendered) and kept here
+  // at the top level — not inside each result panel — so the SAME reading
+  // can feed both the UI (TowerWeatherLine) and the WA text below (per the
+  // user's own request to add weather to the copy-paste message too; a
+  // per-panel fetch couldn't reach into that synchronous text builder).
+  const [weatherByTowerKey, setWeatherByTowerKey] = useState<Record<string, TowerWeather>>({});
+  const fetchedWeatherKeys = useRef(new Set<string>());
+  useEffect(() => {
+    const toFetch: { key: string; lat: number; lon: number }[] = [];
+    for (const r of allResults) {
+      const t = r.match.tower;
+      if (t.lat === null || t.lon === null) continue;
+      const key = giTowerKey(t.gi, t.towerNo);
+      if (fetchedWeatherKeys.current.has(key)) continue;
+      fetchedWeatherKeys.current.add(key);
+      toFetch.push({ key, lat: t.lat, lon: t.lon });
+    }
+    if (toFetch.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      toFetch.map(({ key, lat, lon }) =>
+        fetch(`/api/tower-weather?lat=${lat}&lon=${lon}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data: TowerWeather | null) => [key, data] as const)
+          .catch(() => [key, null] as const),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      const fetched = results.filter((r): r is [string, TowerWeather] => r[1] !== null);
+      if (fetched.length === 0) return;
+      setWeatherByTowerKey((prev) => ({ ...prev, ...Object.fromEntries(fetched) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [allResults]);
+
   const waText = ruas
-    ? formatWaMessage(ruas, ruasList, direction, entries, sigapInsightsByFuncLoc, gangguanHistoryByGiTower)
+    ? formatWaMessage(ruas, ruasList, direction, entries, sigapInsightsByFuncLoc, gangguanHistoryByGiTower, rowWatchIndex, weatherByTowerKey)
     : "";
 
   function reset() {
@@ -864,6 +975,8 @@ export function SuttFaultLocatorView({
             direction={direction}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+            rowWatchIndex={rowWatchIndex}
+            weatherByTowerKey={weatherByTowerKey}
           />
           <DistanceCard
             method="TWFL"
@@ -875,6 +988,8 @@ export function SuttFaultLocatorView({
             direction={direction}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+            rowWatchIndex={rowWatchIndex}
+            weatherByTowerKey={weatherByTowerKey}
           />
           <SmdeCard
             distanceValue={inputs.SMDE.distanceKm}
@@ -886,6 +1001,8 @@ export function SuttFaultLocatorView({
             direction={direction}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+            rowWatchIndex={rowWatchIndex}
+            weatherByTowerKey={weatherByTowerKey}
           />
           <DistanceCard
             method="FAULT_LOCATOR_RELAY"
@@ -897,6 +1014,8 @@ export function SuttFaultLocatorView({
             direction={direction}
             sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+            rowWatchIndex={rowWatchIndex}
+            weatherByTowerKey={weatherByTowerKey}
           />
         </div>
       </div>

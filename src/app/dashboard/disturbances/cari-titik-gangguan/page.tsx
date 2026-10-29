@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Map, Radar, Satellite } from "lucide-react";
+import { ArrowLeft, ExternalLink, Map, Radar, Satellite, TreePine } from "lucide-react";
 
 import { PageHero } from "@/components/dashboard/page-hero";
 import { buttonVariants } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { SuttFaultLocatorView } from "@/components/disturbances/sutt-fault-locat
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getSigapTowerInsights } from "@/services/sigap";
 import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
+import { getRowWatchSpans } from "@/services/row-watch";
 
 export const dynamic = "force-dynamic";
 // See src/app/dashboard/page.tsx for why.
@@ -31,11 +32,19 @@ const LIGHTNING_WATCH_URL = "https://lightning-watch.uptpky.workers.dev/";
 // history.ts), not SIGAP — see that file's own comment for why.
 const SIGAP_URL = "https://sigap.uip3bkal.com/";
 
+// ROW Watch (the UPT's own right-of-way/vegetation risk map) — generic
+// homepage link, same precedent as SIGAP/Lightning Watch above. The more
+// useful per-tower deep link (straight to a matched tower's own point on
+// the map) is built per result instead, see src/lib/sutt-fault-locator.ts's
+// buildRowWatchLink and src/services/row-watch.ts.
+const ROW_WATCH_URL = "https://row-watch.uptpky.workers.dev/map";
+
 export default async function CariTitikGangguanPage() {
-  const [{ ruasList, error }, sigapInsightsByFuncLoc, gangguanHistoryByGiTower] = await Promise.all([
+  const [{ ruasList, error }, sigapInsightsByFuncLoc, gangguanHistoryByGiTower, rowWatchSpans] = await Promise.all([
     getSuttSnapshot(),
     getSigapTowerInsights(),
     getGangguanHistoryByTowerGi(),
+    getRowWatchSpans(),
   ]);
 
   return (
@@ -65,6 +74,16 @@ export default async function CariTitikGangguanPage() {
               Lightning Watch
               <ExternalLink className="size-3" />
             </a>
+            <a
+              href={ROW_WATCH_URL}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <TreePine className="size-3.5" />
+              ROW Watch
+              <ExternalLink className="size-3" />
+            </a>
             <Link href="/dashboard/disturbances/peta-sutt" className={buttonVariants({ variant: "outline", size: "sm" })}>
               <Map className="size-3.5" />
               Peta/SLD SUTT
@@ -81,6 +100,7 @@ export default async function CariTitikGangguanPage() {
         error={error}
         sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
         gangguanHistoryByGiTower={gangguanHistoryByGiTower}
+        rowWatchSpans={rowWatchSpans}
       />
     </div>
   );

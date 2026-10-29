@@ -9,6 +9,7 @@
 import { giTowerKey } from "@/lib/gi-name";
 import type { GangguanHistoryEntry, SuttRuas, SuttTower } from "@/types";
 import type { SigapTowerInsight } from "@/services/sigap";
+import type { RowWatchSpan } from "@/services/row-watch";
 
 // User-specified order (not alphabetical): VAISALA, TWFL, SMDE, then Fault
 // Locator Relay last.
@@ -659,6 +660,93 @@ export function buildEarthLink(lat: number | null, lon: number | null): string |
   return `https://earth.google.com/web/@${lat},${lon},500a,1000d,35y,0h,0t,0r`;
 }
 
+// --- ROW Watch deep link --------------------------------------------------
+//
+// ROW Watch (the UPT's own right-of-way/vegetation risk map, see
+// src/services/row-watch.ts) names each span "SPAN SUTT 150 KV
+// <abbrevGI1> - <abbrevGI2> #NNN-#MMM" — the SAME shape RENUS's own SPAN/
+// TOWER column and CE's own span column use (same abbreviation
+// convention, e.g. "BNTOK"/"MRTWH"), confirmed live. Unlike those two
+// (plain "#digits"), a ROW Watch tower label can carry a letter suffix
+// ("#001A", matching this app's own SuttTower.towerNo, which the same
+// quirk — see its own type comment). This extracts the FULL alphanumeric
+// label (not just the digits) so a letter-suffixed tower still resolves.
+const ROW_WATCH_TOWER_RE = /#(\d+[A-Za-z]?)/g;
+
+function extractRowWatchTowerLabels(span: string): string[] {
+  return [...span.matchAll(ROW_WATCH_TOWER_RE)].map((m) => m[1]);
+}
+
+/** giTowerKey(gi, towerLabel) -> the ROW Watch span that names that tower
+ *  — built once per page load (see sutt-fault-locator-view.tsx) and reused
+ *  for every matched tower, same "build the lookup once, read it many
+ *  times" shape as gangguan-hotspots.ts's own buildTowerCandidates. A
+ *  tower number purely numeric (e.g. "001") goes through giTowerKey's own
+ *  canonicalTowerNo() the same way both sides of this match already do
+ *  elsewhere in this app, so "001" and "1" resolve to the same key; a
+ *  letter-suffixed one ("001A") falls back to canonicalTowerNo's own
+ *  untouched-string case, so it only matches if this app's own SUTT
+ *  registry spells that exact tower the same way ROW Watch does — a
+ *  narrow, accepted limitation for the handful of lettered towers, same
+ *  "don't over-engineer a disambiguator" call already made elsewhere in
+ *  this file. */
+export function buildRowWatchTowerIndex(spans: RowWatchSpan[]): Map<string, RowWatchSpan> {
+  const index = new Map<string, RowWatchSpan>();
+  for (const span of spans) {
+    for (const towerLabel of extractRowWatchTowerLabels(span.span)) {
+      const key = giTowerKey(span.gi, towerLabel);
+      if (!index.has(key)) index.set(key, span);
+    }
+  }
+  return index;
+}
+
+/** Deep link straight to this tower's own point on ROW Watch's map —
+ *  reconstructs the exact hash its own app-map.js reads on load
+ *  (`#span=<encodeURIComponent(no + '|' + span)>`, confirmed live in its
+ *  own source), per the user's own request: not just a generic homepage
+ *  link (the existing SIGAP/Lightning Watch precedent), but one that
+ *  opens straight to the matched tower. Null when the tower isn't in ROW
+ *  Watch's own dataset at all (not every SUTT tower necessarily has a ROW
+ *  survey span covering it). */
+export function buildRowWatchLink(tower: SuttTower, index: Map<string, RowWatchSpan>): string | null {
+  const span = index.get(giTowerKey(tower.gi, tower.towerNo));
+  if (!span) return null;
+  return `https://row-watch.uptpky.workers.dev/map#span=${encodeURIComponent(`${span.no}|${span.span}`)}`;
+}
+
+// --- Weather near the matched tower ---------------------------------------
+//
+// Mirrors the shape src/app/api/tower-weather/route.ts returns (Open-
+// Meteo's current conditions for one lat/lon) — defined here, the shared
+// pure-formatting home, rather than in the route itself, so both the UI
+// (a per-tower fetch, see sutt-fault-locator-view.tsx) and the WA text
+// below read from the exact same type and the exact same line format,
+// never two formatters quietly drifting apart.
+export interface TowerWeather {
+  label: string;
+  temperatureC: number | null;
+  humidityPercent: number | null;
+  precipitationMm: number | null;
+  windSpeedKmh: number | null;
+  cloudCoverPercent: number | null;
+}
+
+/** One line, used both by the UI's own per-result weather line and by the
+ *  WA text (per the user's own request to add weather to the copy-paste
+ *  message too) — never two differently-worded versions of the same
+ *  reading. Leaves out a reading that's 0/absent (e.g. no rain right now)
+ *  rather than clutter the line with "curah hujan 0 mm/jam". */
+export function formatWeatherLine(weather: TowerWeather): string {
+  const bits = [
+    weather.label,
+    weather.temperatureC !== null ? `${Math.round(weather.temperatureC)}°C` : null,
+    weather.precipitationMm !== null && weather.precipitationMm > 0 ? `curah hujan ${weather.precipitationMm} mm/jam` : null,
+    weather.windSpeedKmh !== null ? `angin ${Math.round(weather.windSpeedKmh)} km/jam` : null,
+  ].filter(Boolean);
+  return `Cuaca saat ini: ${bits.join(" · ")}`;
+}
+
 export function isTowerKritis(tower: SuttTower): boolean {
   return Boolean(tower.towerKritisPenanganan || tower.towerKritisMitigasi || tower.towerKritisTglEksekusi);
 }
@@ -874,6 +962,14 @@ export function formatWaMessage(
   entries: MethodEntry[],
   insightsByFuncLoc?: Record<string, SigapTowerInsight>,
   gangguanHistoryByGiTower?: Record<string, GangguanHistoryEntry[]>,
+  rowWatchIndex?: Map<string, RowWatchSpan>,
+  /** giTowerKey(gi, towerNo) -> that tower's own current weather, best-
+   *  effort (see src/app/api/tower-weather/route.ts) — per the user's own
+   *  request to add weather to the WA text too, not just the UI result
+   *  card. Undefined/missing entry just means that line is skipped, same
+   *  degrade-gracefully convention every other optional section here
+   *  already follows. */
+  weatherByTowerKey?: Record<string, TowerWeather>,
 ): string {
   const refLabel = direction === "origin" ? ruas.originLabel : ruas.farEndLabel;
   const sigapBayLine = insightsByFuncLoc ? findSigapBayLine(ruas, insightsByFuncLoc) : null;
@@ -982,6 +1078,10 @@ export function formatWaMessage(
     if (directions) lines.push(`Petunjuk arah: ${directions}`);
     const earth = buildEarthLink(match.tower.lat, match.tower.lon);
     if (earth) lines.push(`Google Earth: ${earth}`);
+    const rowWatch = rowWatchIndex ? buildRowWatchLink(match.tower, rowWatchIndex) : null;
+    if (rowWatch) lines.push(`ROW Watch: ${rowWatch}`);
+    const weather = weatherByTowerKey?.[giTowerKey(match.tower.gi, match.tower.towerNo)];
+    if (weather) lines.push(formatWeatherLine(weather));
     lines.push("");
   }
 
