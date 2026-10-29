@@ -247,3 +247,45 @@
     @apply font-sans;
   }
 }
+
+/* Animated branded loading screen (src/components/dashboard/loading-
+   screen.tsx) — a rotating conic-gradient ring, a soft breathing glow
+   behind the logo, and the logo itself gently scaling, instead of the
+   plain skeleton placeholder every route's own loading.tsx used to show. */
+@keyframes loading-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes loading-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+@keyframes loading-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.08);
+  }
+}
+@keyframes loading-dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
