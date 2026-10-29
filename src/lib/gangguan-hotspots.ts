@@ -6,7 +6,7 @@
 // so a tower/span that's been struck repeatedly surfaces on its own
 // instead of being buried inside a cause-only breakdown.
 import { canonicalGiKey } from "@/lib/gi-name";
-import type { GangguanHistoryEntry, SuttRuas } from "@/types";
+import type { DisturbanceBayEventRecord, GangguanHistoryEntry, SuttRuas } from "@/types";
 
 export interface GangguanHotspot {
   /** This physical tower's own nearest/owning GI per the SUTT asset
@@ -156,6 +156,68 @@ export function buildGangguanHotspots(
       causeBreakdown: [...causeCounts.entries()]
         .map(([cause, count]) => ({ cause, count }))
         .sort((a, b) => b.count - a.count),
+    });
+  }
+
+  return hotspots.sort((a, b) => b.count - a.count).slice(0, topN);
+}
+
+// --- Trafo HV/LV bay repeat-offender ranking -----------------------------
+//
+// Trafo gangguan has no tower to attribute to (per this file's own header
+// comment) — the equivalent physical location there is the specific
+// trafo UNIT at a GI (the sheet's own NAMA BAY GANGGUAN value, e.g.
+// "TRAFO 1"). Unlike a transmission tower, a trafo bay only ever belongs
+// to ONE GI (it isn't shared between two substations the way a line
+// span is), so there's no cross-GI duplicate-reporting ambiguity to
+// resolve here — straight (gi, bay) grouping over the already-computed
+// bayEvents (src/services/disturbances.ts) is enough, no new data source
+// needed.
+
+export interface BayGangguanHotspot {
+  category: string;
+  gi: string;
+  bay: string;
+  count: number;
+  /** Most recent event first. */
+  entries: { date: string; dateISO: string; cause: string }[];
+  causeBreakdown: { cause: string; count: number }[];
+}
+
+/** Top N (category, GI, bay) trafo units by recorded gangguan count,
+ *  across however many categories are passed in (Trafo HV and Trafo LV
+ *  combined, per the user's own request) — ranked together so the single
+ *  worst-offending trafo unit overall sorts first regardless of which
+ *  side it's on. Units with only 1 recorded event are excluded, same
+ *  "not a repeat offender yet" rule as the tower ranking above. */
+export function buildBayGangguanHotspots(
+  categories: { category: string; events: DisturbanceBayEventRecord[] }[],
+  topN = 15,
+): BayGangguanHotspot[] {
+  const byKey = new Map<string, { category: string; gi: string; bay: string; events: DisturbanceBayEventRecord[] }>();
+  for (const { category, events } of categories) {
+    for (const e of events) {
+      const gi = e.gi ?? "-";
+      const key = `${category}::${gi}::${e.bay}`;
+      const existing = byKey.get(key);
+      if (existing) existing.events.push(e);
+      else byKey.set(key, { category, gi, bay: e.bay, events: [e] });
+    }
+  }
+
+  const hotspots: BayGangguanHotspot[] = [];
+  for (const group of byKey.values()) {
+    if (group.events.length < 2) continue;
+    const sorted = [...group.events].sort((a, b) => b.dateISO.localeCompare(a.dateISO));
+    const causeCounts = new Map<string, number>();
+    for (const e of sorted) causeCounts.set(e.cause, (causeCounts.get(e.cause) ?? 0) + 1);
+    hotspots.push({
+      category: group.category,
+      gi: group.gi,
+      bay: group.bay,
+      count: sorted.length,
+      entries: sorted.map((e) => ({ date: e.date, dateISO: e.dateISO, cause: e.cause })),
+      causeBreakdown: [...causeCounts.entries()].map(([cause, count]) => ({ cause, count })).sort((a, b) => b.count - a.count),
     });
   }
 

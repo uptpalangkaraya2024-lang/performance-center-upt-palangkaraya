@@ -27,12 +27,13 @@ import { CauseByBayChart } from "@/components/disturbances/cause-by-bay-chart";
 import { TripEventsPanel } from "@/components/disturbances/trip-events-panel";
 import { YoyCompareTable } from "@/components/disturbances/yoy-compare-table";
 import { GangguanHotspotsCard } from "@/components/disturbances/gangguan-hotspots-card";
+import { TrafoBayHotspotsCard } from "@/components/disturbances/trafo-bay-hotspots-card";
 import { getDisturbances } from "@/services/disturbances";
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { buildYoyCompareRows } from "@/lib/disturbance-yoy-compare";
-import { buildGangguanHotspots } from "@/lib/gangguan-hotspots";
+import { buildGangguanHotspots, buildBayGangguanHotspots } from "@/lib/gangguan-hotspots";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { DisturbanceCategoryResult } from "@/types";
 
@@ -552,6 +553,12 @@ async function DisturbancesBody({
   // current year is never compared against a full previous year.
   const cutoffMonth = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(new Date()));
   const hotspots = sutt.error ? [] : buildGangguanHotspots(gangguanByTowerGi, sutt.ruasList);
+  const trafoBayHotspots = result.error
+    ? []
+    : buildBayGangguanHotspots([
+        { category: "Trafo HV", events: result.trafoHv.bayEvents },
+        { category: "Trafo LV", events: result.trafoLv.bayEvents },
+      ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -759,6 +766,7 @@ async function DisturbancesBody({
           </section>
 
           <GangguanHotspotsCard hotspots={hotspots} />
+          <TrafoBayHotspotsCard hotspots={trafoBayHotspots} />
 
           <CategorySection
             title="Transmisi"
