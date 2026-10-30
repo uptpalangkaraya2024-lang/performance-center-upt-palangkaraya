@@ -926,13 +926,45 @@ export function findGangguanHistory(
   return historyByGiTower[key] ?? [];
 }
 
+/** The full dataset's own min/max "year" field (REKAP GANGGUAN's own TAHUN/
+ *  TGL columns, see gangguan-history.ts), scanned once across every (GI,
+ *  tower) bucket — used so an empty-history tower can say "belum ada
+ *  gangguan ... dari 2024-2026" with the dataset's REAL coverage window,
+ *  never a hardcoded range that would silently go stale next year. */
+export function computeGangguanYearRange(
+  historyByGiTower: Record<string, GangguanHistoryEntry[]>,
+): { min: string; max: string } | null {
+  let min: string | null = null;
+  let max: string | null = null;
+  for (const entries of Object.values(historyByGiTower)) {
+    for (const e of entries) {
+      if (!e.year) continue;
+      if (min === null || e.year < min) min = e.year;
+      if (max === null || e.year > max) max = e.year;
+    }
+  }
+  return min !== null && max !== null ? { min, max } : null;
+}
+
 /** Per-year cause breakdown (e.g. "2024: Petir ×2, Hewan ×1 · 2025: Petir
  *  ×1") plus a total count — unlike SIGAP's own ambiguous "Gangguan
  *  <year>" figure, every number here is a literal count of rows in the
  *  UPT's own gangguan rekap that named this tower, so "Total gangguan
- *  tercatat sebelumnya" can be stated as an exact count, not hedged. */
-export function formatGangguanHistoryLines(entries: GangguanHistoryEntry[]): string[] {
-  if (entries.length === 0) return [];
+ *  tercatat sebelumnya" can be stated as an exact count, not hedged.
+ *  When this tower genuinely has zero recorded events, `yearRange` (see
+ *  computeGangguanYearRange above) drives an explicit "belum ada
+ *  gangguan ..." line instead of silently showing nothing — per the
+ *  user's own request, a real "no history" fact should say so, not look
+ *  identical to "we never checked". */
+export function formatGangguanHistoryLines(
+  entries: GangguanHistoryEntry[],
+  yearRange?: { min: string; max: string } | null,
+): string[] {
+  if (entries.length === 0) {
+    return yearRange
+      ? [`✅ Belum ada gangguan tercatat di tower ini dari ${yearRange.min}-${yearRange.max}.`]
+      : [];
+  }
   const byYear = new Map<string, Map<string, number>>();
   for (const e of entries) {
     const causeMap = byYear.get(e.year) ?? new Map<string, number>();
@@ -1001,6 +1033,7 @@ export function formatWaMessage(
 
   const results = buildMethodResults(ruas, allRuas, direction, entries);
   const resultByMethod = new Map(results.map((r) => [r.method, r]));
+  const gangguanYearRange = gangguanHistoryByGiTower ? computeGangguanYearRange(gangguanHistoryByGiTower) : null;
 
   for (const entry of entries) {
     // Unfilled fields are simply left out of the message — no "Tidak
@@ -1070,8 +1103,10 @@ export function formatWaMessage(
     if (unbalanceLine) lines.push(unbalanceLine);
     const sigapInsight = insightsByFuncLoc ? findSigapInsight(match.tower, insightsByFuncLoc) : null;
     if (sigapInsight) lines.push(...formatSigapInsightLines(sigapInsight));
-    const gangguanHistory = gangguanHistoryByGiTower ? findGangguanHistory(match.tower, gangguanHistoryByGiTower) : [];
-    if (gangguanHistory.length > 0) lines.push(...formatGangguanHistoryLines(gangguanHistory));
+    if (gangguanHistoryByGiTower) {
+      const gangguanHistory = findGangguanHistory(match.tower, gangguanHistoryByGiTower);
+      lines.push(...formatGangguanHistoryLines(gangguanHistory, gangguanYearRange));
+    }
     const myMaps = buildSuttMyMapsLink(match.tower.lat, match.tower.lon);
     if (myMaps) lines.push(`Peta SUTT (Tower): ${myMaps}`);
     const directions = buildDirectionsLink(match.tower.lat, match.tower.lon);

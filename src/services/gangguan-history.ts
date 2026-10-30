@@ -47,23 +47,66 @@ function extractYear(tahun: string, tgl: string): string {
  *  satisfy "T" + whitespace + digits and spuriously extract "150" as a
  *  tower number from the voltage rating text — confirmed live as a real
  *  false positive (SAMPIT tower "150" showing 36 fabricated matches)
- *  before this boundary was added. */
+ *  before this boundary was added.
+ *
+ *  Some towers carry a genuine decimal number (confirmed live in the SUTT
+ *  asset registry's own "NO TOWER" column, e.g. "185.1" through "185.7" on
+ *  PALANGKARAYA - KASONGAN, incomer sub-towers sitting between integer
+ *  towers #184 and #186 — see sutt-asset.ts's naturalTowerKey comment).
+ *  Every number group below optionally captures a "."+digits suffix so a
+ *  mention like "Tower 185.1" or "T.185.4" resolves to that exact tower
+ *  instead of being truncated to a non-existent plain "185". A decimal
+ *  RANGE ("185.1 - 185.7") is only expanded when both ends share the same
+ *  integer prefix and the same decimal-digit length — enumerating the
+ *  fractional part itself (185.1, 185.2, ... 185.7) — since a cross-
+ *  integer decimal range ("185.1 - 186.3") is ambiguous and not worth
+ *  guessing; that case falls through to the single-mention pass instead,
+ *  which still picks up each endpoint on its own. */
 function extractTowerNumbers(text: string): Set<string> {
   const result = new Set<string>();
   if (!text || /^tidak ada temuan\.?$/i.test(text.trim())) return result;
 
-  const hashRe = /#(\d{1,3})\b/g;
+  const NUM = String.raw`\d{1,3}(?:\.\d+)?`;
+
+  const hashRe = new RegExp(`#(${NUM})\\b`, "g");
   let hashMatch: RegExpExecArray | null;
   while ((hashMatch = hashRe.exec(text)) !== null) result.add(hashMatch[1]);
 
-  const rangeRe = /\bT(?:ower)?\.?\s*(\d{1,3})\s*[-–]\s*(?:\bT(?:ower)?\.?\s*)?(\d{1,3})\b/gi;
+  const rangeRe = new RegExp(`\\bT(?:ower)?\\.?\\s*(${NUM})\\s*[-–]\\s*(?:\\bT(?:ower)?\\.?\\s*)?(${NUM})\\b`, "gi");
   const consumed: [number, number][] = [];
   let m: RegExpExecArray | null;
   while ((m = rangeRe.exec(text)) !== null) {
-    const start = Number(m[1]);
-    const end = Number(m[2]);
-    if (Number.isFinite(start) && Number.isFinite(end) && end >= start && end - start < 60) {
-      for (let n = start; n <= end; n++) result.add(String(n));
+    const startStr = m[1];
+    const endStr = m[2];
+    const startHasDecimal = startStr.includes(".");
+    const endHasDecimal = endStr.includes(".");
+    let expanded: string[] | null = null;
+    if (startHasDecimal && endHasDecimal) {
+      const [startInt, startFrac] = startStr.split(".");
+      const [endInt, endFrac] = endStr.split(".");
+      const startFracNum = Number(startFrac);
+      const endFracNum = Number(endFrac);
+      if (
+        startInt === endInt &&
+        startFrac.length === endFrac.length &&
+        Number.isFinite(startFracNum) &&
+        Number.isFinite(endFracNum) &&
+        endFracNum >= startFracNum &&
+        endFracNum - startFracNum < 60
+      ) {
+        expanded = [];
+        for (let n = startFracNum; n <= endFracNum; n++) expanded.push(`${startInt}.${n}`);
+      }
+    } else if (!startHasDecimal && !endHasDecimal) {
+      const start = Number(startStr);
+      const end = Number(endStr);
+      if (Number.isFinite(start) && Number.isFinite(end) && end >= start && end - start < 60) {
+        expanded = [];
+        for (let n = start; n <= end; n++) expanded.push(String(n));
+      }
+    }
+    if (expanded) {
+      for (const n of expanded) result.add(n);
       consumed.push([m.index, m.index + m[0].length]);
     }
   }
@@ -72,7 +115,7 @@ function extractTowerNumbers(text: string): Set<string> {
   for (const [s, e] of consumed.sort((a, b) => b[0] - a[0])) {
     masked = masked.slice(0, s) + " ".repeat(e - s) + masked.slice(e);
   }
-  const singleRe = /\bT(?:ower)?\.?\s*(\d{1,3})\b/gi;
+  const singleRe = new RegExp(`\\bT(?:ower)?\\.?\\s*(${NUM})\\b`, "gi");
   while ((m = singleRe.exec(masked)) !== null) {
     result.add(m[1]);
   }

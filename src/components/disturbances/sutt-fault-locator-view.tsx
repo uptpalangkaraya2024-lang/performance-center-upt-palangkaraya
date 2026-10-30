@@ -38,6 +38,7 @@ import {
   buildSuttMyMapsLink,
   buildMethodResults,
   combinedIncomerKey,
+  computeGangguanYearRange,
   findGangguanHistory,
   findIncomerTapAtTower,
   findIncomerTapInfo,
@@ -174,6 +175,11 @@ function TowerResultPanel({
   const { match } = result;
   const sigapInsight = findSigapInsight(match.tower, sigapInsightsByFuncLoc);
   const gangguanHistory = findGangguanHistory(match.tower, gangguanHistoryByGiTower);
+  // Cheap to recompute per render (iterates an already-in-memory, modest-
+  // sized map) — not worth threading a brand-new prop through every
+  // intermediate card component just to memoize this one step higher.
+  const gangguanYearRange = computeGangguanYearRange(gangguanHistoryByGiTower);
+  const gangguanLines = formatGangguanHistoryLines(gangguanHistory, gangguanYearRange);
   // Once a distance has crossed into an incomer's own tower chain, the
   // matched tower belongs to THAT ruas, not the one being searched — so
   // the "this tower is a splice point" hint (which assumes ruasSection)
@@ -247,13 +253,20 @@ function TowerResultPanel({
           .filter(Boolean)
           .join(" · ") || "—"}
       </p>
-      {gangguanHistory.length > 0
-        ? formatGangguanHistoryLines(gangguanHistory).map((line, i) => (
-            <p key={i} className={cn(i === 0 ? "font-semibold text-warning-foreground" : "text-muted-foreground")}>
-              {line}
-            </p>
-          ))
-        : null}
+      {gangguanLines.map((line, i) => (
+        <p
+          key={i}
+          className={cn(
+            i === 0
+              ? gangguanHistory.length > 0
+                ? "font-semibold text-warning-foreground"
+                : "font-semibold text-success"
+              : "text-muted-foreground",
+          )}
+        >
+          {line}
+        </p>
+      ))}
       {sigapInsight
         ? formatSigapInsightLines(sigapInsight).map((line, i) => (
             <p key={i} className="text-muted-foreground">
