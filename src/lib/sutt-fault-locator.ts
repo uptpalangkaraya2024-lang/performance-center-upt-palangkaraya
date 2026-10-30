@@ -6,8 +6,9 @@
 // in the browser against that already-loaded list, the same "load once,
 // derive many" shape used by every other module's own compute lib
 // (ce-compute.ts, four-dx-compute.ts, ...).
-import { giTowerKey } from "@/lib/gi-name";
-import type { GangguanHistoryEntry, SuttRuas, SuttTower } from "@/types";
+import { canonicalGiKey, giTowerKey } from "@/lib/gi-name";
+import { ultgKey } from "@/lib/ultg";
+import type { GangguanHistoryEntry, GiRecord, SuttRuas, SuttTower } from "@/types";
 import type { SigapTowerInsight } from "@/services/sigap";
 import type { RowWatchSpan } from "@/services/row-watch";
 
@@ -982,6 +983,78 @@ export function formatGangguanHistoryLines(
   ];
 }
 
+/** Real-world great-circle distance in km — unlike roughDegDistance above
+ *  (deliberately kept in raw degree-space, only for ranking which of two
+ *  candidates sits physically closer), this is shown directly to a field
+ *  crew as an estimated distance figure, so it needs to be a real km
+ *  value. Infinity when either point lacks a GPS fix. */
+function haversineKm(a: { lat: number | null; lon: number | null }, b: { lat: number | null; lon: number | null }): number {
+  if (a.lat === null || a.lon === null || b.lat === null || b.lon === null) return Infinity;
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Each ULTG's own field reference point(s) — per the user's own
+ *  confirmation, an ULTG's office physically sits in the same location as
+ *  one of its own GIs, so no separate "office coordinate" is needed: the
+ *  already-loaded DATA GARDU INDUK registry's own GI lat/lon (see
+ *  src/services/sutt-asset.ts's buildGiRegistry) IS the reference point.
+ *  ULTG Pangkalan Bun carries TWO reference points — GI Pangkalan Bun
+ *  itself, plus GI Sampit (a basecamp under the same ULTG, confirmed live
+ *  its own "UNIT" column already says "ULTG PANGKALAN BUN") — a crew
+ *  dispatched from either post needs its own distance shown, not just the
+ *  nearer of the two silently picked for them. Keyed by the shared
+ *  ultgKey() 3-bucket canonical key (src/lib/ultg.ts) so it matches
+ *  regardless of which raw ULTG spelling a sheet used. */
+const ULTG_REFERENCE_POINTS: Record<string, { label: string; giName: string }[]> = {
+  PALANGKARAYA: [{ label: "GI Palangkaraya", giName: "PALANGKARAYA" }],
+  PANGKALANBUN: [
+    { label: "GI Pangkalan Bun", giName: "PANGKALAN BUN" },
+    { label: "GI Sampit", giName: "SAMPIT" },
+  ],
+  MUARATEWEH: [{ label: "GI Muara Teweh", giName: "MUARA TEWEH" }],
+};
+
+export interface ReferenceDistance {
+  label: string;
+  km: number;
+}
+
+/** Straight-line ("perkiraan jarak garis lurus") distance from the matched
+ *  tower to every reference point of the tower's OWN owning GI's ULTG —
+ *  looked up from match.tower.gi itself (not the search ruas's own unit),
+ *  so a tower reached via an incomer crossing (buildMethodResults' own
+ *  crossedToIncomer handling above) still reports against the ULTG that
+ *  actually owns the tower it landed on, not the one the search started
+ *  from. A reference GI missing from the registry, or either point
+ *  lacking a GPS fix, is simply left out of the result rather than
+ *  guessed at. */
+export function findReferenceDistances(tower: SuttTower, giRegistry: GiRecord[]): ReferenceDistance[] {
+  const owningGi = giRegistry.find((g) => canonicalGiKey(g.name) === canonicalGiKey(tower.gi));
+  if (!owningGi) return [];
+  const points = ULTG_REFERENCE_POINTS[ultgKey(owningGi.unit)];
+  if (!points) return [];
+  const out: ReferenceDistance[] = [];
+  for (const point of points) {
+    const refGi = giRegistry.find((g) => canonicalGiKey(g.name) === canonicalGiKey(point.giName));
+    if (!refGi) continue;
+    const km = haversineKm(tower, refGi);
+    if (!Number.isFinite(km)) continue;
+    out.push({ label: point.label, km });
+  }
+  return out;
+}
+
+export function formatReferenceDistanceLine(distances: ReferenceDistance[]): string | null {
+  if (distances.length === 0) return null;
+  return `📏 Perkiraan jarak garis lurus ke titik ULTG: ${distances.map((d) => `${d.label} ${formatKm(d.km)}`).join(" · ")}`;
+}
+
 /** Plain text, WhatsApp-ready (single asterisks for *bold*, no tables/HTML)
  *  — the same thing the result cards show, just flattened into one
  *  copy-paste block. direction/originLabel/farEndLabel come straight off
@@ -1002,6 +1075,13 @@ export function formatWaMessage(
    *  degrade-gracefully convention every other optional section here
    *  already follows. */
   weatherByTowerKey?: Record<string, TowerWeather>,
+  /** DATA GARDU INDUK registry (GI name + lat/lon + owning ULTG), already
+   *  loaded as part of the same getSuttSnapshot() call every caller here
+   *  already makes for `ruas`/`allRuas` — no new fetch. Drives
+   *  findReferenceDistances() above ("perkiraan jarak garis lurus ke titik
+   *  ULTG"); undefined/empty just means that line is skipped, same
+   *  degrade-gracefully convention as every other optional section here. */
+  giRegistry?: GiRecord[],
 ): string {
   const refLabel = direction === "origin" ? ruas.originLabel : ruas.farEndLabel;
   const sigapBayLine = insightsByFuncLoc ? findSigapBayLine(ruas, insightsByFuncLoc) : null;
@@ -1107,6 +1187,8 @@ export function formatWaMessage(
       const gangguanHistory = findGangguanHistory(match.tower, gangguanHistoryByGiTower);
       lines.push(...formatGangguanHistoryLines(gangguanHistory, gangguanYearRange));
     }
+    const referenceLine = giRegistry ? formatReferenceDistanceLine(findReferenceDistances(match.tower, giRegistry)) : null;
+    if (referenceLine) lines.push(referenceLine);
     const myMaps = buildSuttMyMapsLink(match.tower.lat, match.tower.lon);
     if (myMaps) lines.push(`Peta SUTT (Tower): ${myMaps}`);
     const directions = buildDirectionsLink(match.tower.lat, match.tower.lon);

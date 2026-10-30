@@ -40,7 +40,7 @@ const SIGAP_URL = "https://sigap.uip3bkal.com/";
 const ROW_WATCH_URL = "https://row-watch.uptpky.workers.dev/map";
 
 export default async function CariTitikGangguanPage() {
-  const [{ ruasList, error }, sigapInsightsByFuncLoc, gangguanHistoryByGiTower, rowWatchSpans] = await Promise.all([
+  const [{ ruasList, giRegistry, error }, sigapInsightsByFuncLoc, gangguanHistoryByGiTower, rowWatchSpans] = await Promise.all([
     getSuttSnapshot(),
     getSigapTowerInsights(),
     getGangguanHistoryByTowerGi(),
@@ -101,6 +101,7 @@ export default async function CariTitikGangguanPage() {
         sigapInsightsByFuncLoc={sigapInsightsByFuncLoc}
         gangguanHistoryByGiTower={gangguanHistoryByGiTower}
         rowWatchSpans={rowWatchSpans}
+        giRegistry={giRegistry}
       />
     </div>
   );

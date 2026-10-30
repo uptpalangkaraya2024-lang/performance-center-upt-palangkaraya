@@ -43,11 +43,13 @@ import {
   findIncomerTapAtTower,
   findIncomerTapInfo,
   findIncomersTappingFrom,
+  findReferenceDistances,
   formatIncomerTapsLabel,
   findSigapBayLine,
   findSigapFasa,
   findSigapInsight,
   formatGangguanHistoryLines,
+  formatReferenceDistanceLine,
   formatSigapInsightLines,
   formatUnbalanceLine,
   formatWaMessage,
@@ -65,7 +67,7 @@ import {
 import { giTowerKey } from "@/lib/gi-name";
 import type { SigapTowerInsight } from "@/services/sigap";
 import type { RowWatchSpan } from "@/services/row-watch";
-import type { GangguanHistoryEntry, SuttRuas } from "@/types";
+import type { GangguanHistoryEntry, GiRecord, SuttRuas } from "@/types";
 
 function formatKm(km: number): string {
   return `${km.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 3 })} km`;
@@ -164,6 +166,7 @@ function TowerResultPanel({
   gangguanHistoryByGiTower,
   rowWatchIndex,
   weatherByTowerKey,
+  giRegistry,
 }: {
   ruasSection: string;
   result: MethodResult;
@@ -171,10 +174,12 @@ function TowerResultPanel({
   gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
   rowWatchIndex: Map<string, RowWatchSpan>;
   weatherByTowerKey: Record<string, TowerWeather>;
+  giRegistry: GiRecord[];
 }) {
   const { match } = result;
   const sigapInsight = findSigapInsight(match.tower, sigapInsightsByFuncLoc);
   const gangguanHistory = findGangguanHistory(match.tower, gangguanHistoryByGiTower);
+  const referenceDistanceLine = formatReferenceDistanceLine(findReferenceDistances(match.tower, giRegistry));
   // Cheap to recompute per render (iterates an already-in-memory, modest-
   // sized map) — not worth threading a brand-new prop through every
   // intermediate card component just to memoize this one step higher.
@@ -275,6 +280,7 @@ function TowerResultPanel({
           ))
         : null}
       <TowerWeatherLine weather={weatherByTowerKey[giTowerKey(match.tower.gi, match.tower.towerNo)]} />
+      {referenceDistanceLine ? <p className="text-muted-foreground">{referenceDistanceLine}</p> : null}
       {buildSuttMyMapsLink(match.tower.lat, match.tower.lon) ? (
         <div className="flex flex-wrap gap-2 pt-0.5">
           <a
@@ -332,6 +338,7 @@ type SharedCardProps = {
   gangguanHistoryByGiTower: Record<string, GangguanHistoryEntry[]>;
   rowWatchIndex: Map<string, RowWatchSpan>;
   weatherByTowerKey: Record<string, TowerWeather>;
+  giRegistry: GiRecord[];
 };
 
 /** TWFL and Fault Locator Relay: a plain km distance, nearest-match —
@@ -349,6 +356,7 @@ function DistanceCard({
   gangguanHistoryByGiTower,
   rowWatchIndex,
   weatherByTowerKey,
+  giRegistry,
 }: SharedCardProps & {
   method: "TWFL" | "FAULT_LOCATOR_RELAY";
   label: string;
@@ -397,6 +405,7 @@ function DistanceCard({
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
             rowWatchIndex={rowWatchIndex}
             weatherByTowerKey={weatherByTowerKey}
+            giRegistry={giRegistry}
           />
         )}
       </CardContent>
@@ -421,6 +430,7 @@ function VaisalaCard({
   gangguanHistoryByGiTower,
   rowWatchIndex,
   weatherByTowerKey,
+  giRegistry,
 }: SharedCardProps & {
   status: VaisalaStatus;
   towerNo: string;
@@ -493,6 +503,7 @@ function VaisalaCard({
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
             rowWatchIndex={rowWatchIndex}
             weatherByTowerKey={weatherByTowerKey}
+            giRegistry={giRegistry}
           />
         )}
       </CardContent>
@@ -516,6 +527,7 @@ function SmdeCard({
   gangguanHistoryByGiTower,
   rowWatchIndex,
   weatherByTowerKey,
+  giRegistry,
 }: SharedCardProps & {
   distanceValue: string;
   ordinalValue: string;
@@ -593,6 +605,7 @@ function SmdeCard({
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
             rowWatchIndex={rowWatchIndex}
             weatherByTowerKey={weatherByTowerKey}
+            giRegistry={giRegistry}
           />
         )}
       </CardContent>
@@ -606,6 +619,7 @@ export function SuttFaultLocatorView({
   sigapInsightsByFuncLoc,
   gangguanHistoryByGiTower,
   rowWatchSpans,
+  giRegistry,
 }: {
   ruasList: SuttRuas[];
   error: string | null;
@@ -624,6 +638,11 @@ export function SuttFaultLocatorView({
    *  funcLoc-keyed map already uses. An empty array (ROW Watch
    *  unreachable) just means no ROW Watch link shows anywhere. */
   rowWatchSpans: RowWatchSpan[];
+  /** DATA GARDU INDUK registry — same already-loaded getSuttSnapshot()
+   *  result ruasList itself came from (see cari-titik-gangguan/page.tsx),
+   *  no new fetch. Drives "perkiraan jarak garis lurus ke titik ULTG"
+   *  (findReferenceDistances in src/lib/sutt-fault-locator.ts). */
+  giRegistry: GiRecord[];
 }) {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [selectedGi, setSelectedGi] = useState<string | null>(null);
@@ -760,7 +779,17 @@ export function SuttFaultLocatorView({
   }, [allResults]);
 
   const waText = ruas
-    ? formatWaMessage(ruas, ruasList, direction, entries, sigapInsightsByFuncLoc, gangguanHistoryByGiTower, rowWatchIndex, weatherByTowerKey)
+    ? formatWaMessage(
+        ruas,
+        ruasList,
+        direction,
+        entries,
+        sigapInsightsByFuncLoc,
+        gangguanHistoryByGiTower,
+        rowWatchIndex,
+        weatherByTowerKey,
+        giRegistry,
+      )
     : "";
 
   function reset() {
@@ -990,6 +1019,7 @@ export function SuttFaultLocatorView({
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
             rowWatchIndex={rowWatchIndex}
             weatherByTowerKey={weatherByTowerKey}
+            giRegistry={giRegistry}
           />
           <DistanceCard
             method="TWFL"
@@ -1003,6 +1033,7 @@ export function SuttFaultLocatorView({
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
             rowWatchIndex={rowWatchIndex}
             weatherByTowerKey={weatherByTowerKey}
+            giRegistry={giRegistry}
           />
           <SmdeCard
             distanceValue={inputs.SMDE.distanceKm}
@@ -1016,6 +1047,7 @@ export function SuttFaultLocatorView({
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
             rowWatchIndex={rowWatchIndex}
             weatherByTowerKey={weatherByTowerKey}
+            giRegistry={giRegistry}
           />
           <DistanceCard
             method="FAULT_LOCATOR_RELAY"
@@ -1029,6 +1061,7 @@ export function SuttFaultLocatorView({
             gangguanHistoryByGiTower={gangguanHistoryByGiTower}
             rowWatchIndex={rowWatchIndex}
             weatherByTowerKey={weatherByTowerKey}
+            giRegistry={giRegistry}
           />
         </div>
       </div>
