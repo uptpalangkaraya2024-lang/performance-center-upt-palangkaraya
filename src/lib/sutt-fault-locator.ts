@@ -103,6 +103,80 @@ function findRuasBySection(allRuas: SuttRuas[], section: string): SuttRuas | nul
   return allRuas.find((r) => r.section === section) ?? null;
 }
 
+/** A couple of hub GIs have a short run of DECIMAL sub-tower numbers right
+ *  at their own gantry — confirmed by the user against the asset team's
+ *  own Google My Maps viewer (screenshots of each tower's own NAMA
+ *  GARDU_INDUK/LATITUDE/LONGITUDE popup): at GI KASONGAN, towers 185.1-
+ *  185.7 sit in the shared approach corridor where the line forks into
+ *  #184 (continuing to PALANGKARAYA - KASONGAN) and #186 (continuing to
+ *  KASONGAN - SUDAN); same pattern at GI MINTIN with 82.1-82.4 forking
+ *  into #83 (MINTIN - PALANGKARAYA). DATA SUTT UPT PKY's own NAMA_SECTION
+ *  attributes these rows ONLY to `fromSection` (confirmed correct, and
+ *  left untouched — every other module reading SuttRuas.towers, the
+ *  hotspot ranking, maintenance proposals, map, data-health, still counts
+ *  them exactly once, under their one real ruasList entry), but a fault
+ *  physically at that shared corridor is just as reachable searching from
+ *  `toSection`, so the fault-locator's OWN matching (withSharedApproach-
+ *  Corridor below) also resolves them there — built fresh per search from
+ *  real span/haversine distances, never by mutating the shared registry. */
+const SHARED_APPROACH_CORRIDORS: { fromSection: string; toSection: string; towerNos: string[] }[] = [
+  { fromSection: "PALANGKARAYA - KASONGAN", toSection: "KASONGAN - SUDAN", towerNos: ["185.1", "185.2", "185.3", "185.4", "185.5", "185.6", "185.7"] },
+  { fromSection: "SELAT - MINTIN", toSection: "MINTIN - PALANGKARAYA", towerNos: ["82.1", "82.2", "82.3", "82.4"] },
+];
+
+/** When `ruas` is a configured `toSection` above, returns it with the
+ *  corridor towers PREPENDED (cloned from `fromSection`, own distanceKm
+ *  values only) — ascending, ending just before `ruas`'s own existing
+ *  first tower. Every corridor tower's distance-before-the-original-first-
+ *  tower is real: span deltas between consecutive corridor towers reuse
+ *  `fromSection`'s own already-computed cumulative distanceKm (from SPAN
+ *  (M), see sutt-asset.ts), and the one remaining short gap (corridor's
+ *  own last tower -> this ruas's own first tower) is a real haversine
+ *  distance between their actual coordinates — nothing guessed. This
+ *  necessarily makes the prepended towers' own distanceKm NEGATIVE (they
+ *  sit before this ruas's own km-0 reference point) — deliberately NOT
+ *  shifting the ruas's own existing towers to make room instead, since
+ *  every field report on KASONGAN - SUDAN / MINTIN - PALANGKARAYA has
+ *  always measured its distance from that same unmoved km-0 anchor (the
+ *  real GI location); shifting it to accommodate ~1-2km of prepended
+ *  corridor would silently throw off every one of those existing reports
+ *  by that same amount. `ruas.lengthKm` is left as-is for the same
+ *  reason — it's still the real origin-to-far-end length. Returns `ruas`
+ *  unchanged for every other ruas (the overwhelming majority), and never
+ *  mutates the SuttRuas/SuttTower objects it reads from `allRuas`. */
+export function withSharedApproachCorridor(ruas: SuttRuas, allRuas: SuttRuas[]): SuttRuas {
+  const corridor = SHARED_APPROACH_CORRIDORS.find((c) => c.toSection === ruas.section);
+  if (!corridor || ruas.towers.length === 0) return ruas;
+  const fromRuas = findRuasBySection(allRuas, corridor.fromSection);
+  if (!fromRuas) return ruas;
+  const corridorTowers = corridor.towerNos
+    .map((no) => fromRuas.towers.find((t) => t.towerNo === no))
+    .filter((t): t is SuttTower => t !== undefined);
+  if (corridorTowers.length === 0) return ruas;
+
+  const firstOriginal = ruas.towers[0];
+  const lastCorridor = corridorTowers[corridorTowers.length - 1]; // nearest the GI
+  const gapToOriginal = haversineKm(lastCorridor, firstOriginal);
+  if (!Number.isFinite(gapToOriginal)) return ruas;
+
+  // distBefore[i] = real km this corridor tower sits before firstOriginal's
+  // own distanceKm, walking backward from the corridor tower closest to
+  // the GI (last in the array, smallest gap) to the one furthest from it.
+  const distBefore: number[] = new Array(corridorTowers.length);
+  distBefore[corridorTowers.length - 1] = gapToOriginal;
+  for (let i = corridorTowers.length - 2; i >= 0; i--) {
+    const span = corridorTowers[i + 1].distanceKm - corridorTowers[i].distanceKm;
+    distBefore[i] = distBefore[i + 1] + span;
+  }
+
+  const prepended: SuttTower[] = corridorTowers.map((t, i) => ({
+    ...t,
+    distanceKm: Math.round((firstOriginal.distanceKm - distBefore[i]) * 1000) / 1000,
+  }));
+
+  return { ...ruas, towers: [...prepended, ...ruas.towers] };
+}
+
 /** Plain Pythagorean distance in degrees between two towers' own lat/lon —
  *  only used to rank which of an incomer's two ends sits physically next
  *  to a given splice point, never as a real-world distance, so no need
@@ -777,15 +851,19 @@ export function resolveMethodEntry(
   entry: MethodEntry,
   direction: FaultDirection,
 ): TowerMatch | null {
+  // No-op for every ruas except the 2 configured SHARED_APPROACH_CORRIDORS
+  // targets — see that constant's own comment for why this extended view
+  // is built fresh here rather than stored on the shared SuttRuas registry.
+  const searchRuas = withSharedApproachCorridor(ruas, allRuas);
   switch (entry.mode) {
     case "distance":
-      return locateFaultWithIncomerCrossing(ruas, allRuas, entry.distanceKm, direction);
+      return locateFaultWithIncomerCrossing(searchRuas, allRuas, entry.distanceKm, direction);
     case "tower": {
-      const tower = findTowerByNumber(ruas, entry.towerNo);
+      const tower = findTowerByNumber(searchRuas, entry.towerNo);
       return tower ? exactMatch(tower) : null;
     }
     case "ordinal": {
-      const tower = findTowerByOrdinal(ruas, entry.ordinal, direction);
+      const tower = findTowerByOrdinal(searchRuas, entry.ordinal, direction);
       return tower ? exactMatch(tower) : null;
     }
     default:
@@ -813,6 +891,17 @@ function formatKm(km: number): string {
 function formatSignedKm(km: number): string {
   const sign = km > 0 ? "+" : "";
   return `${sign}${km.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 3 })} km`;
+}
+
+/** Same as formatKm, but a tower resolved via withSharedApproachCorridor
+ *  above can carry a NEGATIVE distanceKm (it sits in the shared GI
+ *  approach corridor, before this ruas's own km-0 reference point) — a
+ *  bare negative number there reads like a bug to a field crew, so this
+ *  spells out what it actually means instead. */
+export function formatTowerDistanceLabel(tower: SuttTower): string {
+  return tower.distanceKm < 0
+    ? `~${formatKm(Math.abs(tower.distanceKm))} sebelum km 0 (tower pendekatan bersama)`
+    : formatKm(tower.distanceKm);
 }
 
 /** One method's full result block — what the UI result card and the WA
@@ -1145,13 +1234,13 @@ export function formatWaMessage(
         lines.push(
           `↪ Melebihi ruas ini ${formatKm(match.crossedToIncomer.overflowKm)}, dilanjutkan ke *${match.crossedToIncomer.incomerSection}*`,
         );
-        lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatKm(match.tower.distanceKm)} dari ${match.crossedToIncomer.incomerSection})`);
+        lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatTowerDistanceLabel(match.tower)} dari ${match.crossedToIncomer.incomerSection})`);
       } else {
-        lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatKm(match.tower.distanceKm)}, selisih ${formatSignedKm(match.deltaKm)})`);
+        lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatTowerDistanceLabel(match.tower)}, selisih ${formatSignedKm(match.deltaKm)})`);
       }
     } else {
       lines.push(`${result.inputLabel}`);
-      lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatKm(match.tower.distanceKm)}) — pasti, bukan estimasi`);
+      lines.push(`→ *${towerDisplayLabel(match.tower)}* (${formatTowerDistanceLabel(match.tower)}) — pasti, bukan estimasi`);
     }
     if (match.outOfRange) {
       const rangeRuas = match.crossedToIncomer ? match.crossedToIncomer.incomerSection : ruas.section;
@@ -1166,7 +1255,7 @@ export function formatWaMessage(
     }
     if (match.before && match.after && match.before.towerNo !== match.after.towerNo) {
       lines.push(
-        `Di antara ${towerDisplayLabel(match.before)} (${formatKm(match.before.distanceKm)}) – ${towerDisplayLabel(match.after)} (${formatKm(match.after.distanceKm)})`,
+        `Di antara ${towerDisplayLabel(match.before)} (${formatTowerDistanceLabel(match.before)}) – ${towerDisplayLabel(match.after)} (${formatTowerDistanceLabel(match.after)})`,
       );
     }
     const headline = towerHeadline(match.tower);

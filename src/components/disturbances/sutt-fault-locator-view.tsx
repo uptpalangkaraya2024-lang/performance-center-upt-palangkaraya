@@ -52,9 +52,11 @@ import {
   formatReferenceDistanceLine,
   formatSigapInsightLines,
   formatUnbalanceLine,
+  formatTowerDistanceLabel,
   formatWaMessage,
   formatWeatherLine,
   hasFaultHistory,
+  withSharedApproachCorridor,
   isIncomerRuas,
   isTowerKritis,
   towerDisplayLabel,
@@ -205,12 +207,12 @@ function TowerResultPanel({
         )}
       </div>
       <p className="text-muted-foreground">
-        Jarak tower {formatKm(match.tower.distanceKm)}
+        Jarak tower {formatTowerDistanceLabel(match.tower)}
         {match.before && match.after && match.before.towerNo !== match.after.towerNo ? (
           <>
             {" "}
-            · antara {towerDisplayLabel(match.before)} ({formatKm(match.before.distanceKm)}) –{" "}
-            {towerDisplayLabel(match.after)} ({formatKm(match.after.distanceKm)})
+            · antara {towerDisplayLabel(match.before)} ({formatTowerDistanceLabel(match.before)}) –{" "}
+            {towerDisplayLabel(match.after)} ({formatTowerDistanceLabel(match.after)})
           </>
         ) : null}
       </p>
@@ -728,6 +730,15 @@ export function SuttFaultLocatorView({
       ? (combinedList.find((c) => combinedIncomerKey(c.ruas.section) === sectionKey) ?? null)
       : null;
   const ruas = selectedCombined ? selectedCombined.ruas : (ruasList.find((r) => r.section === sectionKey) ?? null);
+  // Display-only — a handful of ruas (KASONGAN - SUDAN, MINTIN -
+  // PALANGKARAYA) can also resolve a search to a few extra shared-
+  // approach-corridor towers from the GI they share with another ruas
+  // (see withSharedApproachCorridor's own comment in the lib); this count
+  // reflects that so "X tower" here matches what a search can actually
+  // find, without touching ruas.towers itself (every other module reading
+  // SuttRuas still counts these towers exactly once, under their one real
+  // ruasList entry).
+  const searchableTowerCount = ruas ? withSharedApproachCorridor(ruas, ruasList).towers.length : 0;
   const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapInsightsByFuncLoc) : null;
   const sigapFasa = ruas ? findSigapFasa(ruas, sigapInsightsByFuncLoc) : null;
 
@@ -924,7 +935,11 @@ export function SuttFaultLocatorView({
             <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-xs">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-muted-foreground">
-                  {ruas.unit} · {ruas.towers.length} tower · panjang {formatKm(ruas.lengthKm)}
+                  {ruas.unit} ·{" "}
+                  {searchableTowerCount !== ruas.towers.length
+                    ? `${searchableTowerCount} tower (termasuk ${searchableTowerCount - ruas.towers.length} tower pendekatan bersama di GI ${ruas.originLabel})`
+                    : `${ruas.towers.length} tower`}{" "}
+                  · panjang {formatKm(ruas.lengthKm)}
                   {sigapBayLine ? (
                     <>
                       {" "}
