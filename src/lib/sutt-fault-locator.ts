@@ -88,6 +88,65 @@ export function findNearestTower(towers: SuttTower[], distanceKm: number): Tower
   };
 }
 
+/** Corridor-aware nearest match: when `towers` includes the shared-
+ *  approach-corridor prefix (negative distanceKm — see
+ *  withSharedApproachCorridor below), a field crew's own TWFL/SMDE-km/
+ *  Fault Locator Relay reading is a bare conductor-length MAGNITUDE — it
+ *  can't distinguish "X km toward the corridor" from "X km toward this
+ *  ruas's own forward direction" any more than a crew standing at the GI
+ *  could tell which fork a cable length belongs to without more context.
+ *  A plain signed-distance nearest-match (findNearestTower above) would
+ *  essentially never pick a corridor tower once the input exceeds
+ *  roughly half the gap to the first forward tower — meaning a km
+ *  reading could reach almost none of the corridor even though a direct
+ *  VAISALA tower-number entry reaches all of it, giving a different
+ *  answer for what should be the same real tower (the inconsistency the
+ *  user flagged: entering "185.3" directly vs entering the km distance
+ *  that's actually tower 185.3's own real span from the GI used to give
+ *  two different results). This instead searches BOTH zones by true
+ *  magnitude-from-the-GI and returns whichever is genuinely closer to
+ *  the reported reading, so a km distance that matches a corridor
+ *  tower's own real distance now resolves to it exactly like entering
+ *  that tower number directly would. No-op (identical to plain
+ *  findNearestTower) whenever `towers` has no negative-distance prefix
+ *  at all — every ordinary ruas, confirmed by the `towers[0].distanceKm
+ *  >= 0` guard below. */
+function findNearestTowerCorridorAware(towers: SuttTower[], distanceKm: number): TowerMatch | null {
+  if (towers.length === 0) return null;
+  if (towers[0].distanceKm >= 0) return findNearestTower(towers, distanceKm);
+
+  const corridorTowers = towers.filter((t) => t.distanceKm < 0);
+  const forwardTowers = towers.filter((t) => t.distanceKm >= 0);
+  const forwardMatch = forwardTowers.length > 0 ? findNearestTower(forwardTowers, distanceKm) : null;
+  if (corridorTowers.length === 0) return forwardMatch;
+
+  // Nearest-by-magnitude within the corridor itself: searched against a
+  // temporary copy whose own distanceKm is remapped to its magnitude
+  // (ascending, the GI-nearest tower first) so findNearestTower's own
+  // before/after bracketing comes out right within the corridor's own
+  // physical sequence; swapped back to the REAL tower objects (negative
+  // distanceKm intact) before returning, so display/WA text still show
+  // the real "~X km sebelum km 0" line (formatTowerDistanceLabel below).
+  const corridorByMagnitude = [...corridorTowers]
+    .sort((a, b) => Math.abs(a.distanceKm) - Math.abs(b.distanceKm))
+    .map((t) => ({ ...t, distanceKm: Math.abs(t.distanceKm) }));
+  const corridorMagnitudeMatch = findNearestTower(corridorByMagnitude, distanceKm);
+  if (!corridorMagnitudeMatch) return forwardMatch;
+
+  const real = (t: SuttTower) => corridorTowers.find((c) => c.towerNo === t.towerNo) ?? t;
+  const corridorMatch: TowerMatch = {
+    ...corridorMagnitudeMatch,
+    tower: real(corridorMagnitudeMatch.tower),
+    before: corridorMagnitudeMatch.before ? real(corridorMagnitudeMatch.before) : null,
+    after: corridorMagnitudeMatch.after ? real(corridorMagnitudeMatch.after) : null,
+  };
+  if (!forwardMatch) return corridorMatch;
+
+  const forwardAbsDelta = Math.abs(forwardMatch.tower.distanceKm - distanceKm);
+  const corridorAbsDelta = Math.abs(Math.abs(corridorMatch.tower.distanceKm) - distanceKm);
+  return corridorAbsDelta < forwardAbsDelta ? corridorMatch : forwardMatch;
+}
+
 /** Converts a raw entered distance into the ruas's own fixed (origin ->
  *  far-end) coordinate frame before matching — "far" means the distance
  *  counts down from the far end instead of up from the origin. */
@@ -96,7 +155,7 @@ export function effectiveDistanceKm(ruas: SuttRuas, rawDistanceKm: number, direc
 }
 
 export function locateFault(ruas: SuttRuas, rawDistanceKm: number, direction: FaultDirection): TowerMatch | null {
-  return findNearestTower(ruas.towers, effectiveDistanceKm(ruas, rawDistanceKm, direction));
+  return findNearestTowerCorridorAware(ruas.towers, effectiveDistanceKm(ruas, rawDistanceKm, direction));
 }
 
 function findRuasBySection(allRuas: SuttRuas[], section: string): SuttRuas | null {
