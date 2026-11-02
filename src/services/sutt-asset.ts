@@ -60,15 +60,42 @@ function parseLatLong(raw: string): { lat: number | null; lon: number | null } {
 
 /** Natural sort key for NO TOWER — confirmed live this column is never
  *  purely numeric: sub-towers suffixed with letters ("001A", "001B") and,
- *  on at least one ruas (PALANGKARAYA - KASONGAN), genuine decimals listed
- *  in descending row order (185.5, 185.4, ..., 185.1). Sorting by
- *  (numeric prefix, alpha suffix) gives the correct physical sequence
- *  regardless of raw row order or suffix style. */
+ *  on at least one ruas (PALANGKARAYA - KASONGAN), genuine decimals
+ *  ("185.1" through "185.7").
+ *
+ *  A decimal suffix's own VALUE does not reliably indicate physical
+ *  order — confirmed live with real haversine distance from each GI's
+ *  own registered coordinate (DATA GARDU INDUK) to every tower in both
+ *  known decimal runs: PALANGKARAYA - KASONGAN's own 185.1-185.7 reads
+ *  DESCENDING in the raw sheet row order and that IS the correct
+ *  physical sequence (185.7 is ~2.16km from GI KASONGAN, 185.1 is only
+ *  ~0.24km away — sorting ascending-by-value, as an earlier version of
+ *  this function did, put them exactly backwards), while SELAT - MINTIN's
+ *  own 82.1-82.4 reads ASCENDING in the raw sheet and that direction is
+ *  ALSO correct (82.4 is ~0.09km from GI MINTIN, 82.1 is ~1.05km away —
+ *  ascending-by-value happens to already match there). Opposite
+ *  directions in the two confirmed cases means no fixed sort direction
+ *  (ascending OR descending) can be correct for both — but the raw
+ *  sheet's own row order is correct in BOTH, so towers sharing the same
+ *  integer prefix and carrying a decimal suffix are given an IDENTICAL
+ *  secondary key here ("\0") and left entirely to the sort's own
+ *  stability (guaranteed by the spec) to preserve their original row
+ *  order relative to each other, rather than being re-ordered by decimal
+ *  value at all. A letter suffix ("036A") is unaffected — still ordered
+ *  alphabetically after its own bare integer, same as before this fix. */
 function naturalTowerKey(raw: string): [number, string] {
   const s = raw.trim();
-  const m = /^(\d+(?:\.\d+)?)(.*)$/.exec(s);
-  if (!m) return [Number.POSITIVE_INFINITY, s];
-  return [Number(m[1]), m[2]];
+  const strict = /^(\d+)(\.\d+)?([A-Za-z]*)$/.exec(s);
+  if (strict) {
+    const [, intPart, decimalPart, letterSuffix] = strict;
+    return [Number(intPart), decimalPart ? "\0" : letterSuffix];
+  }
+  // Fallback for any NO TOWER value that doesn't fit the "digits[.digits]
+  // [letters]" shape above (not confirmed to occur, but never silently
+  // dropped) — same loose parse this function always used.
+  const loose = /^(\d+(?:\.\d+)?)(.*)$/.exec(s);
+  if (!loose) return [Number.POSITIVE_INFINITY, s];
+  return [Number(loose[1]), loose[2]];
 }
 
 interface RawTower {

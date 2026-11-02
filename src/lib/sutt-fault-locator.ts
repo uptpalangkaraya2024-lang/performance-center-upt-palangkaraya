@@ -177,32 +177,18 @@ function findRuasBySection(allRuas: SuttRuas[], section: string): SuttRuas | nul
  *  physically at that shared corridor is just as reachable searching from
  *  `toSection`, so the fault-locator's OWN matching (withSharedApproach-
  *  Corridor below) also resolves them there — built fresh per search from
- *  real span/haversine distances, never by mutating the shared registry. */
+ *  real span/haversine distances, never by mutating the shared registry.
+ *  `towerNos` here is a plain membership SET, not an ordering — which
+ *  tower is actually nearest the GI is derived from `fromSection`'s own
+ *  natural tower order in getCorridorPrefixTowers below, never hand-
+ *  written here (see that function's own comment for why: a hand-written
+ *  order is exactly what had this corridor backwards for KASONGAN before
+ *  this comment was added). */
 const SHARED_APPROACH_CORRIDORS: { fromSection: string; toSection: string; towerNos: string[] }[] = [
   { fromSection: "PALANGKARAYA - KASONGAN", toSection: "KASONGAN - SUDAN", towerNos: ["185.1", "185.2", "185.3", "185.4", "185.5", "185.6", "185.7"] },
   { fromSection: "SELAT - MINTIN", toSection: "MINTIN - PALANGKARAYA", towerNos: ["82.1", "82.2", "82.3", "82.4"] },
 ];
 
-/** When `ruas` is a configured `toSection` above, returns it with the
- *  corridor towers PREPENDED (cloned from `fromSection`, own distanceKm
- *  values only) — ascending, ending just before `ruas`'s own existing
- *  first tower. Every corridor tower's distance-before-the-original-first-
- *  tower is real: span deltas between consecutive corridor towers reuse
- *  `fromSection`'s own already-computed cumulative distanceKm (from SPAN
- *  (M), see sutt-asset.ts), and the one remaining short gap (corridor's
- *  own last tower -> this ruas's own first tower) is a real haversine
- *  distance between their actual coordinates — nothing guessed. This
- *  necessarily makes the prepended towers' own distanceKm NEGATIVE (they
- *  sit before this ruas's own km-0 reference point) — deliberately NOT
- *  shifting the ruas's own existing towers to make room instead, since
- *  every field report on KASONGAN - SUDAN / MINTIN - PALANGKARAYA has
- *  always measured its distance from that same unmoved km-0 anchor (the
- *  real GI location); shifting it to accommodate ~1-2km of prepended
- *  corridor would silently throw off every one of those existing reports
- *  by that same amount. `ruas.lengthKm` is left as-is for the same
- *  reason — it's still the real origin-to-far-end length. Returns `ruas`
- *  unchanged for every other ruas (the overwhelming majority), and never
- *  mutates the SuttRuas/SuttTower objects it reads from `allRuas`. */
 /** The corridor towers alone (ascending, ending just before `firstOriginal`
  *  — the real first tower of whichever segment is being extended), with
  *  freshly computed distanceKm, or [] when `section` isn't a registered
@@ -215,15 +201,32 @@ const SHARED_APPROACH_CORRIDORS: { fromSection: string; toSection: string; tower
  *  buildCombinedIncomerRuasList's own mid-ruas "approachFromOrigin"
  *  branch) — both cases need the identical prepended towers. See
  *  SHARED_APPROACH_CORRIDORS' own comment for why these exist and why
- *  the distances come out negative rather than shifting anything else. */
+ *  the distances come out negative rather than shifting anything else.
+ *
+ *  `corridorTowers` is filtered straight out of `fromRuas.towers` —
+ *  preserving THAT ruas's own natural order (sutt-asset.ts's
+ *  naturalTowerKey, which trusts the raw sheet's own row order for a
+ *  decimal run rather than guessing a sort direction from the decimal
+ *  value itself) — instead of being built from `corridor.towerNos` in
+ *  the order that array happens to list them. That used to be a real
+ *  bug: this function originally assumed the LAST name in a hand-written
+ *  towerNos array was the one nearest the GI, which only happened to be
+ *  true for MINTIN and was backwards for KASONGAN (confirmed live by
+ *  real haversine distance from each GI's own registered coordinate —
+ *  KASONGAN's own "185.7" is ~2.16km from the GI, "185.1" is only
+ *  ~0.24km away, the opposite of what the old hand-ordered array
+ *  assumed). Deriving the order from fromRuas.towers itself — whose own
+ *  sequence is, by construction, cumulative distance ascending from
+ *  that ruas's own origin — means the LAST tower in `corridorTowers` is
+ *  always genuinely the one closest to reaching toSection's GI, with no
+ *  direction to get backwards by hand a second time. */
 function getCorridorPrefixTowers(section: string, firstOriginal: SuttTower, allRuas: SuttRuas[]): SuttTower[] {
   const corridor = SHARED_APPROACH_CORRIDORS.find((c) => c.toSection === section);
   if (!corridor) return [];
   const fromRuas = findRuasBySection(allRuas, corridor.fromSection);
   if (!fromRuas) return [];
-  const corridorTowers = corridor.towerNos
-    .map((no) => fromRuas.towers.find((t) => t.towerNo === no))
-    .filter((t): t is SuttTower => t !== undefined);
+  const towerNoSet = new Set(corridor.towerNos);
+  const corridorTowers = fromRuas.towers.filter((t) => towerNoSet.has(t.towerNo));
   if (corridorTowers.length === 0) return [];
 
   const lastCorridor = corridorTowers[corridorTowers.length - 1]; // nearest the GI
