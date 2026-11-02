@@ -121,7 +121,13 @@ export function renusGiPairKey(row: RenusRow): string | null {
   const source = row.spanTower || row.section;
   if (!source) return null;
   const withoutPrefix = source.replace(/^(SPAN|TOWER)\s+SUTT\s+\d+\s*KV\s+/i, "").replace(/^TRS\s+\d+\s*KV\s+/i, "");
-  const withoutTowerNumbers = withoutPrefix.replace(/#\d+(-#?\d+)?\s*$/, "").trim();
+  // Decimal suffix optional on each number — some towers near a hub GI
+  // (e.g. GI KASONGAN's own 185.1-185.7) carry a genuine decimal NO TOWER
+  // value (see sutt-asset.ts's naturalTowerKey comment), not just an
+  // integer; without this, a trailing "#185.1" would be left dangling
+  // after the strip instead of removed, corrupting the GI-pair text this
+  // derives.
+  const withoutTowerNumbers = withoutPrefix.replace(/#\d+(?:\.\d+)?(-#?\d+(?:\.\d+)?)?\s*$/, "").trim();
   const sides = withoutTowerNumbers.split(/\s*-\s*/).map((s) => giTokenSet(expandAbbreviations(s)));
   if (sides.length !== 2 || sides.some((s) => !s)) return null;
   return [...sides].sort().join("||");
@@ -130,10 +136,14 @@ export function renusGiPairKey(row: RenusRow): string | null {
 /** Tower number(s) a RENUS row's own "SPAN/TOWER" text names — a span
  *  names two ("#227-#228"), a single tower names one ("#020"). Used by
  *  Verifikasi Efektivitas to scope a gangguan comparison to the exact
- *  tower(s) the work happened at, not the whole ruas/GI. */
+ *  tower(s) the work happened at, not the whole ruas/GI. Decimal suffix
+ *  optional (e.g. "#185.1") — same real decimal NO TOWER values as the
+ *  fault locator's own SHARED_APPROACH_CORRIDORS (sutt-fault-locator.ts)
+ *  — without it a work order at one of those towers would silently be
+ *  scoped to a truncated, non-existent plain "185" instead. */
 export function extractRenusTowerNumbers(spanTower: string | null): string[] {
   if (!spanTower) return [];
-  const matches = [...spanTower.matchAll(/#(\d+)/g)];
+  const matches = [...spanTower.matchAll(/#(\d+(?:\.\d+)?)/g)];
   return matches.map((m) => m[1]);
 }
 

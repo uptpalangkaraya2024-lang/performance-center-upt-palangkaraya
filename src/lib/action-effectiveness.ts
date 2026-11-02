@@ -45,10 +45,14 @@ const RAW_CAUSE_FOR_CATEGORY: Partial<Record<EffectivenessCategory, string>> = {
 
 /** CE's own "span" column names a single tower ("#293") — simpler than
  *  RENUS's spanTower (which can name a two-tower span, "#227-#228").
- *  Reuses the same "#digits" extraction either way. */
+ *  Reuses the same "#digits" extraction either way. Decimal suffix
+ *  optional (e.g. "#185.1") — same real decimal NO TOWER values as the
+ *  fault locator's own SHARED_APPROACH_CORRIDORS (sutt-fault-locator.ts)
+ *  — without it a CE finding at one of those towers would silently be
+ *  scoped to a truncated, non-existent plain "185" instead. */
 function extractCeTowerNumbers(span: string | null): string[] {
   if (!span) return [];
-  return [...span.matchAll(/#?(\d+)/g)].map((m) => m[1]);
+  return [...span.matchAll(/#?(\d+(?:\.\d+)?)/g)].map((m) => m[1]);
 }
 
 export type EffectivenessVerdict = "membaik" | "tetap" | "memburuk" | "belum_cukup_data" | "tidak_relevan";

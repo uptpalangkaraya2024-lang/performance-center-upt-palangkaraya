@@ -847,9 +847,14 @@ export function buildEarthLink(lat: number | null, lon: number | null): string |
 // convention, e.g. "BNTOK"/"MRTWH"), confirmed live. Unlike those two
 // (plain "#digits"), a ROW Watch tower label can carry a letter suffix
 // ("#001A", matching this app's own SuttTower.towerNo, which the same
-// quirk — see its own type comment). This extracts the FULL alphanumeric
-// label (not just the digits) so a letter-suffixed tower still resolves.
-const ROW_WATCH_TOWER_RE = /#(\d+[A-Za-z]?)/g;
+// quirk — see its own type comment) OR a decimal suffix ("#185.1",
+// confirmed live on GI KASONGAN's own shared-approach-corridor spans —
+// see SHARED_APPROACH_CORRIDORS above). This extracts the FULL label
+// (digits, optional decimal, optional trailing letter) so both still
+// resolve — the same decimal-truncation bug already fixed once in
+// gangguan-history.ts's own extractTowerNumbers, just missed here at the
+// time since this module didn't exist yet when that fix shipped.
+const ROW_WATCH_TOWER_RE = /#(\d+(?:\.\d+)?[A-Za-z]?)/g;
 
 function extractRowWatchTowerLabels(span: string): string[] {
   return [...span.matchAll(ROW_WATCH_TOWER_RE)].map((m) => m[1]);
