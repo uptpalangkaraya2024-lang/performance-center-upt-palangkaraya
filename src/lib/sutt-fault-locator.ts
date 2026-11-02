@@ -144,20 +144,32 @@ const SHARED_APPROACH_CORRIDORS: { fromSection: string; toSection: string; tower
  *  reason — it's still the real origin-to-far-end length. Returns `ruas`
  *  unchanged for every other ruas (the overwhelming majority), and never
  *  mutates the SuttRuas/SuttTower objects it reads from `allRuas`. */
-export function withSharedApproachCorridor(ruas: SuttRuas, allRuas: SuttRuas[]): SuttRuas {
-  const corridor = SHARED_APPROACH_CORRIDORS.find((c) => c.toSection === ruas.section);
-  if (!corridor || ruas.towers.length === 0) return ruas;
+/** The corridor towers alone (ascending, ending just before `firstOriginal`
+ *  — the real first tower of whichever segment is being extended), with
+ *  freshly computed distanceKm, or [] when `section` isn't a registered
+ *  `toSection`, the registered `fromSection` isn't loaded, or none of its
+ *  corridor towers resolve. `firstOriginal` is passed separately (not
+ *  read off a ruas) so this same math serves BOTH a plain ruas search
+ *  (withSharedApproachCorridor below, anchored on ruas.towers[0]) AND a
+ *  combined-incomer host segment that happens to start at that same
+ *  physical tower but isn't itself a stored SuttRuas (see
+ *  buildCombinedIncomerRuasList's own mid-ruas "approachFromOrigin"
+ *  branch) — both cases need the identical prepended towers. See
+ *  SHARED_APPROACH_CORRIDORS' own comment for why these exist and why
+ *  the distances come out negative rather than shifting anything else. */
+function getCorridorPrefixTowers(section: string, firstOriginal: SuttTower, allRuas: SuttRuas[]): SuttTower[] {
+  const corridor = SHARED_APPROACH_CORRIDORS.find((c) => c.toSection === section);
+  if (!corridor) return [];
   const fromRuas = findRuasBySection(allRuas, corridor.fromSection);
-  if (!fromRuas) return ruas;
+  if (!fromRuas) return [];
   const corridorTowers = corridor.towerNos
     .map((no) => fromRuas.towers.find((t) => t.towerNo === no))
     .filter((t): t is SuttTower => t !== undefined);
-  if (corridorTowers.length === 0) return ruas;
+  if (corridorTowers.length === 0) return [];
 
-  const firstOriginal = ruas.towers[0];
   const lastCorridor = corridorTowers[corridorTowers.length - 1]; // nearest the GI
   const gapToOriginal = haversineKm(lastCorridor, firstOriginal);
-  if (!Number.isFinite(gapToOriginal)) return ruas;
+  if (!Number.isFinite(gapToOriginal)) return [];
 
   // distBefore[i] = real km this corridor tower sits before firstOriginal's
   // own distanceKm, walking backward from the corridor tower closest to
@@ -169,11 +181,31 @@ export function withSharedApproachCorridor(ruas: SuttRuas, allRuas: SuttRuas[]):
     distBefore[i] = distBefore[i + 1] + span;
   }
 
-  const prepended: SuttTower[] = corridorTowers.map((t, i) => ({
+  return corridorTowers.map((t, i) => ({
     ...t,
     distanceKm: Math.round((firstOriginal.distanceKm - distBefore[i]) * 1000) / 1000,
   }));
+}
 
+/** When `ruas` is a configured `toSection` above, returns it with the
+ *  corridor towers PREPENDED (cloned from `fromSection`, own distanceKm
+ *  values only) — ascending, ending just before `ruas`'s own existing
+ *  first tower. This necessarily makes the prepended towers' own
+ *  distanceKm NEGATIVE (they sit before this ruas's own km-0 reference
+ *  point) — deliberately NOT shifting the ruas's own existing towers to
+ *  make room instead, since every field report on KASONGAN - SUDAN /
+ *  MINTIN - PALANGKARAYA has always measured its distance from that same
+ *  unmoved km-0 anchor (the real GI location); shifting it to accommodate
+ *  ~1-2km of prepended corridor would silently throw off every one of
+ *  those existing reports by that same amount. `ruas.lengthKm` is left
+ *  as-is for the same reason — it's still the real origin-to-far-end
+ *  length. Returns `ruas` unchanged for every other ruas (the
+ *  overwhelming majority), and never mutates the SuttRuas/SuttTower
+ *  objects it reads from `allRuas`. */
+export function withSharedApproachCorridor(ruas: SuttRuas, allRuas: SuttRuas[]): SuttRuas {
+  if (ruas.towers.length === 0) return ruas;
+  const prepended = getCorridorPrefixTowers(ruas.section, ruas.towers[0], allRuas);
+  if (prepended.length === 0) return ruas;
   return { ...ruas, towers: [...prepended, ...ruas.towers] };
 }
 
@@ -597,7 +629,19 @@ export function buildCombinedIncomerRuasList(allRuas: SuttRuas[]): CombinedIncom
 
         const hostFarEndKm = hostRuas.towers[hostRuas.towers.length - 1].distanceKm;
         const hostSegment = approachFromOrigin
-          ? hostRuas.towers.slice(0, tapIndex + 1)
+          ? [
+              // This segment starts at hostRuas's own true origin (same as
+              // a plain search on hostRuas.section itself) — if that
+              // section is a registered SHARED_APPROACH_CORRIDORS
+              // toSection (e.g. "KASONGAN - SUDAN" approaching INCOMER
+              // PARENGGEAN's tap at 335), the combined route needs the
+              // same corridor towers prepended, or a fault actually at
+              // 185.1-185.7 would never resolve while this through-route
+              // is selected either — exactly the gap the user found by
+              // testing "⇒ KASONGAN - PARENGGEAN" directly.
+              ...getCorridorPrefixTowers(hostRuas.section, hostRuas.towers[0], allRuas),
+              ...hostRuas.towers.slice(0, tapIndex + 1),
+            ]
           : hostRuas.towers
               .slice(tapIndex)
               .reverse()
