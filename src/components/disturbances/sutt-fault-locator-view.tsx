@@ -52,7 +52,6 @@ import {
   formatReferenceDistanceLine,
   formatSigapInsightLines,
   formatUnbalanceLine,
-  formatTowerDistanceLabel,
   formatWaMessage,
   formatWeatherLine,
   hasFaultHistory,
@@ -207,12 +206,12 @@ function TowerResultPanel({
         )}
       </div>
       <p className="text-muted-foreground">
-        Jarak tower {formatTowerDistanceLabel(match.tower)}
+        Jarak tower {formatKm(match.tower.distanceKm)}
         {match.before && match.after && match.before.towerNo !== match.after.towerNo ? (
           <>
             {" "}
-            · antara {towerDisplayLabel(match.before)} ({formatTowerDistanceLabel(match.before)}) –{" "}
-            {towerDisplayLabel(match.after)} ({formatTowerDistanceLabel(match.after)})
+            · antara {towerDisplayLabel(match.before)} ({formatKm(match.before.distanceKm)}) –{" "}
+            {towerDisplayLabel(match.after)} ({formatKm(match.after.distanceKm)})
           </>
         ) : null}
       </p>
@@ -738,7 +737,8 @@ export function SuttFaultLocatorView({
   // find, without touching ruas.towers itself (every other module reading
   // SuttRuas still counts these towers exactly once, under their one real
   // ruasList entry).
-  const searchableTowerCount = ruas ? withSharedApproachCorridor(ruas, ruasList).towers.length : 0;
+  const searchableRuas = ruas ? withSharedApproachCorridor(ruas, ruasList) : null;
+  const searchableTowerCount = searchableRuas?.towers.length ?? 0;
   const sigapBayLine = ruas ? findSigapBayLine(ruas, sigapInsightsByFuncLoc) : null;
   const sigapFasa = ruas ? findSigapFasa(ruas, sigapInsightsByFuncLoc) : null;
 
@@ -939,7 +939,7 @@ export function SuttFaultLocatorView({
                   {searchableTowerCount !== ruas.towers.length
                     ? `${searchableTowerCount} tower (termasuk ${searchableTowerCount - ruas.towers.length} tower pendekatan bersama di GI ${ruas.originLabel})`
                     : `${ruas.towers.length} tower`}{" "}
-                  · panjang {formatKm(ruas.lengthKm)}
+                  · panjang {formatKm(searchableRuas?.lengthKm ?? ruas.lengthKm)}
                   {sigapBayLine ? (
                     <>
                       {" "}
@@ -957,7 +957,7 @@ export function SuttFaultLocatorView({
                   <TabsList>
                     <TabsTrigger value="origin">Dari {ruas.originLabel} (km 0)</TabsTrigger>
                     <TabsTrigger value="far">
-                      Dari {ruas.farEndLabel} (km {formatKm(ruas.lengthKm)})
+                      Dari {ruas.farEndLabel} (km {formatKm(searchableRuas?.lengthKm ?? ruas.lengthKm)})
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
