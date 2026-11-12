@@ -1,8 +1,18 @@
+"use client";
+
+// Year-on-year comparison card (per user's own reference screenshot) with
+// its OWN year + cutoff-month filter in the card header (per user: one
+// filter per card, not one shared bar — Penyebab and Kinerja can be read
+// at different periods independently). Defaults to the running year and
+// running month; the previous year is always the calendar year before the
+// selected one.
+import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { YoyCompareRow } from "@/lib/disturbance-yoy-compare";
+import { buildYoyCompareRows, type YoyCompareRow } from "@/lib/disturbance-yoy-compare";
 
 const MONTH_ID = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -31,28 +41,72 @@ function ChangeBadge({ row }: { row: YoyCompareRow }) {
 
 export function YoyCompareTable({
   title,
-  rows,
-  currentYear,
-  previousYear,
-  cutoffMonth,
+  items,
+  years,
+  defaultYear,
+  defaultCutoffMonth,
 }: {
   title: string;
-  rows: YoyCompareRow[];
-  currentYear: string;
-  previousYear: string;
-  /** 1-12 — both years are truncated to this same month, so the column
-   *  headers can say exactly what's being compared (a still-in-progress
-   *  current year was never silently compared against a previous year's
-   *  full 12 months). */
-  cutoffMonth: number;
+  /** Every individual event already reduced to the category label this
+   *  card groups by (cause or kind) — see buildYoyCompareRows. */
+  items: { category: string; year: string; dateISO: string }[];
+  /** Ascending, same list data.years exposes — the year dropdown. */
+  years: string[];
+  /** Running year (Asia/Jakarta), computed on the server; falls back to
+   *  the latest data year if the data has no row for it yet. */
+  defaultYear: string;
+  /** 1-12 — running month (Asia/Jakarta), computed on the server. Both
+   *  years are truncated to the same month, so the column headers say
+   *  exactly what's being compared (a still-in-progress current year is
+   *  never silently compared against a previous year's full 12 months). */
+  defaultCutoffMonth: number;
 }) {
+  const [year, setYear] = useState(years.includes(defaultYear) ? defaultYear : (years.at(-1) ?? defaultYear));
+  const [cutoffMonth, setCutoffMonth] = useState(defaultCutoffMonth);
+
+  const previousYear = String(Number(year) - 1);
+  const rows = useMemo(
+    () => buildYoyCompareRows(items, year, previousYear, cutoffMonth),
+    [items, year, previousYear, cutoffMonth],
+  );
   const monthLabel = MONTH_ID[cutoffMonth - 1] ?? "";
+  const previousHasData = years.includes(previousYear);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg font-extrabold">{title}</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-lg font-extrabold">{title}</CardTitle>
+          <div className="flex items-center gap-2">
+            <Select value={year} onValueChange={(v) => v && setYear(v)}>
+              <SelectTrigger size="sm" className="w-[90px]" aria-label="Tahun">
+                <SelectValue placeholder="Tahun">{year}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {[...years].reverse().map((y) => (
+                  <SelectItem key={y} value={y}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={String(cutoffMonth)} onValueChange={(v) => v && setCutoffMonth(Number(v))}>
+              <SelectTrigger size="sm" className="w-[130px]" aria-label="s.d. Bulan">
+                <SelectValue placeholder="Bulan">s.d. {monthLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {MONTH_ID.map((m, idx) => (
+                  <SelectItem key={m} value={String(idx + 1)}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <p className="text-xs text-muted-foreground">
-          Kumulatif Januari–{monthLabel} — {previousYear} vs {currentYear} — merah berarti naik (lebih banyak
+          Kumulatif Januari–{monthLabel} — {previousYear} vs {year}
+          {!previousHasData ? ` (tidak ada data ${previousYear})` : ""} — merah berarti naik (lebih banyak
           gangguan), hijau berarti turun dibanding periode yang sama tahun sebelumnya.
         </p>
       </CardHeader>
@@ -69,7 +123,7 @@ export function YoyCompareTable({
                     s.d. {monthLabel} {previousYear}
                   </th>
                   <th className="px-3 py-2.5 text-right font-bold">
-                    s.d. {monthLabel} {currentYear}
+                    s.d. {monthLabel} {year}
                   </th>
                   <th className="px-3 py-2.5 text-right font-bold">Perubahan %</th>
                 </tr>

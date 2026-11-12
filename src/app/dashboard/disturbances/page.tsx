@@ -25,7 +25,7 @@ import { UltgCauseChart } from "@/components/disturbances/ultg-cause-chart";
 import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart";
 import { CauseByBayChart } from "@/components/disturbances/cause-by-bay-chart";
 import { TripEventsPanel } from "@/components/disturbances/trip-events-panel";
-import { YoyCompareSection } from "@/components/disturbances/yoy-compare-section";
+import { YoyCompareTable } from "@/components/disturbances/yoy-compare-table";
 import { GangguanHotspotsCard } from "@/components/disturbances/gangguan-hotspots-card";
 import { TrafoBayHotspotsCard } from "@/components/disturbances/trafo-bay-hotspots-card";
 import { getDisturbances } from "@/services/disturbances";
@@ -197,6 +197,7 @@ function CategorySection({
   subtitle,
   data,
   anchorId,
+  currentYear,
   cutoffMonth,
   dataYearRange,
 }: {
@@ -204,6 +205,7 @@ function CategorySection({
   subtitle?: string;
   data: DisturbanceCategoryResult;
   anchorId: string;
+  currentYear: string;
   cutoffMonth: number;
   dataYearRange: string | null;
 }) {
@@ -349,11 +351,28 @@ function CategorySection({
       </div>
 
       {/* Year-on-year comparison tables (per user's own reference
-          screenshot) — year + cutoff month are user-selectable (client
-          component), defaulting to latest year vs the year before, both
-          truncated to today's month so a still-in-progress current year is
-          never compared against a previous year's full 12 months. */}
-      <YoyCompareSection events={data.bayEvents} years={data.years} isTrafo={isTrafo} defaultCutoffMonth={cutoffMonth} />
+          screenshot) — each card has its own year + cutoff-month filter,
+          defaulting to the running year vs the year before, both truncated
+          to the running month so a still-in-progress current year is never
+          compared against a previous year's full 12 months. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <YoyCompareTable
+          title="Perbandingan Penyebab"
+          items={data.bayEvents.map((e) => ({ category: e.cause, year: e.year, dateISO: e.dateISO }))}
+          years={data.years}
+          defaultYear={currentYear}
+          defaultCutoffMonth={cutoffMonth}
+        />
+        <YoyCompareTable
+          title="Perbandingan Kinerja"
+          items={data.bayEvents
+            .filter((e) => !isTrafo || e.kind !== "AR Sukses")
+            .map((e) => ({ category: e.kind, year: e.year, dateISO: e.dateISO }))}
+          years={data.years}
+          defaultYear={currentYear}
+          defaultCutoffMonth={cutoffMonth}
+        />
+      </div>
 
       {/* Dua chart per baris pada layar lebar (dulu satu kartu per baris) —
           chart ULTG-scoped (hanya 3 ULTG) dan chart per-ruas (keduanya
@@ -509,7 +528,9 @@ async function DisturbancesBody({
   // (renus.today, root-cause-links' own todayISO, ...) — the YoY compare
   // tables truncate both years to this same month so a still-in-progress
   // current year is never compared against a full previous year.
-  const cutoffMonth = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(new Date()));
+  const now = new Date();
+  const cutoffMonth = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(now));
+  const currentYear = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric" }).format(now);
   const hotspots = sutt.error ? [] : buildGangguanHotspots(gangguanByTowerGi, sutt.ruasList);
   const trafoBayHotspots = result.error
     ? []
@@ -730,6 +751,7 @@ async function DisturbancesBody({
             title="Transmisi"
             data={result.transmisi}
             anchorId="transmisi"
+            currentYear={currentYear}
             cutoffMonth={cutoffMonth}
             dataYearRange={result.dataYearRange}
           />
@@ -738,6 +760,7 @@ async function DisturbancesBody({
             subtitle="T/R Bay — trafo tripped di sisi tegangan tinggi (seluruh trafo terdampak)."
             data={result.trafoHv}
             anchorId="trafo-hv"
+            currentYear={currentYear}
             cutoffMonth={cutoffMonth}
             dataYearRange={result.dataYearRange}
           />
@@ -746,6 +769,7 @@ async function DisturbancesBody({
             subtitle="T/R Bay (LOW VOLTAGE) — hanya sisi incoming/20kV yang trip, sisi HV tetap bertegangan."
             data={result.trafoLv}
             anchorId="trafo-lv"
+            currentYear={currentYear}
             cutoffMonth={cutoffMonth}
             dataYearRange={result.dataYearRange}
           />
