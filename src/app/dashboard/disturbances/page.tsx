@@ -25,14 +25,13 @@ import { UltgCauseChart } from "@/components/disturbances/ultg-cause-chart";
 import { BayBreakdownChart } from "@/components/disturbances/bay-breakdown-chart";
 import { CauseByBayChart } from "@/components/disturbances/cause-by-bay-chart";
 import { TripEventsPanel } from "@/components/disturbances/trip-events-panel";
-import { YoyCompareTable } from "@/components/disturbances/yoy-compare-table";
+import { YoyCompareSection } from "@/components/disturbances/yoy-compare-section";
 import { GangguanHotspotsCard } from "@/components/disturbances/gangguan-hotspots-card";
 import { TrafoBayHotspotsCard } from "@/components/disturbances/trafo-bay-hotspots-card";
 import { getDisturbances } from "@/services/disturbances";
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
-import { buildYoyCompareRows } from "@/lib/disturbance-yoy-compare";
 import { buildGangguanHotspots, buildBayGangguanHotspots } from "@/lib/gangguan-hotspots";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { DisturbanceCategoryResult } from "@/types";
@@ -231,28 +230,6 @@ function CategorySection({
     ? data.kindBreakdown.filter((k) => k.cause !== "AR Sukses")
     : data.kindBreakdown;
 
-  // Year-on-year comparison tables (per user's own reference screenshot) —
-  // always the latest year vs. the one right before it (data.years is
-  // sorted ascending, same convention monthOverMonth already uses), both
-  // truncated to the same cutoff month so a still-in-progress current year
-  // is never compared against a previous year's full 12 months.
-  const currentYear = data.years.at(-1) ?? "";
-  const previousYear = data.years.at(-2) ?? "";
-  const penyebabCompareRows = buildYoyCompareRows(
-    data.bayEvents.map((e) => ({ category: e.cause, year: e.year, dateISO: e.dateISO })),
-    currentYear,
-    previousYear,
-    cutoffMonth,
-  );
-  const kinerjaCompareRows = buildYoyCompareRows(
-    data.bayEvents
-      .filter((e) => !isTrafo || e.kind !== "AR Sukses")
-      .map((e) => ({ category: e.kind, year: e.year, dateISO: e.dateISO })),
-    currentYear,
-    previousYear,
-    cutoffMonth,
-  );
-
   return (
     <section id={anchorId} className="flex scroll-mt-20 flex-col gap-4">
       <CategoryBanner title={title} subtitle={subtitle} latest={data.summary.latestDisturbance} />
@@ -371,12 +348,12 @@ function CategorySection({
         <TripEventsPanel events={data.bayEvents} years={data.years} />
       </div>
 
-      {currentYear && previousYear ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <YoyCompareTable title="Perbandingan Penyebab" rows={penyebabCompareRows} currentYear={currentYear} previousYear={previousYear} cutoffMonth={cutoffMonth} />
-          <YoyCompareTable title="Perbandingan Kinerja" rows={kinerjaCompareRows} currentYear={currentYear} previousYear={previousYear} cutoffMonth={cutoffMonth} />
-        </div>
-      ) : null}
+      {/* Year-on-year comparison tables (per user's own reference
+          screenshot) — year + cutoff month are user-selectable (client
+          component), defaulting to latest year vs the year before, both
+          truncated to today's month so a still-in-progress current year is
+          never compared against a previous year's full 12 months. */}
+      <YoyCompareSection events={data.bayEvents} years={data.years} isTrafo={isTrafo} defaultCutoffMonth={cutoffMonth} />
 
       {/* Dua chart per baris pada layar lebar (dulu satu kartu per baris) —
           chart ULTG-scoped (hanya 3 ULTG) dan chart per-ruas (keduanya
