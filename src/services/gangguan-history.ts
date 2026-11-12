@@ -128,6 +128,7 @@ interface ParsedEvent {
   year: string;
   tgl: string;
   penyebab: string;
+  bay: string;
 }
 
 function parseEvents(records: Record<string, string>[]): ParsedEvent[] {
@@ -140,7 +141,14 @@ function parseEvents(records: Record<string, string>[]): ParsedEvent[] {
     const tgl = (r["TGL"] ?? "").trim();
     const year = extractYear(r["TAHUN"] ?? "", tgl);
     if (!year) continue;
-    events.push({ towerNumbers, gi: canonicalGiKey(gardu), year, tgl, penyebab: (r["PENYEBAB"] ?? "").trim() });
+    events.push({
+      towerNumbers,
+      gi: canonicalGiKey(gardu),
+      year,
+      tgl,
+      penyebab: (r["PENYEBAB"] ?? "").trim(),
+      bay: (r["NAMA BAY GANGGUAN"] ?? "").trim(),
+    });
   }
   return events;
 }
@@ -171,7 +179,7 @@ export async function getGangguanHistoryByTowerGi(): Promise<Record<string, Gang
     for (const towerNo of ev.towerNumbers) {
       const k = giTowerKey(ev.gi, towerNo);
       const list = byKey[k] ?? [];
-      list.push({ year: ev.year, tgl: ev.tgl, penyebab: ev.penyebab });
+      list.push({ year: ev.year, tgl: ev.tgl, penyebab: ev.penyebab, bay: ev.bay });
       byKey[k] = list;
     }
   }

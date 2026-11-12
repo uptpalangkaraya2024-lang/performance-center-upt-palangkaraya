@@ -1355,6 +1355,13 @@ export interface GangguanHistoryEntry {
   year: string;
   tgl: string;
   penyebab: string; // PENYEBAB, e.g. "PETIR", "HEWAN", "TEGAKAN" — "" if blank
+  /** NAMA BAY GANGGUAN of the source row, e.g. "SKS - KASONGAN 1" — a GI
+   *  pair naming the LINE the trip was on. Carried so consumers can
+   *  resolve the physical ruas precisely (lineGiPairKey against the ruas's
+   *  two endpoint GIs) instead of guessing from (GI, tower number) alone,
+   *  which mis-attributes a tower to another line sharing the same hub GI
+   *  and the same tower numbering. "" if the row had none. */
+  bay: string;
 }
 
 /** One row from DATA GARDU INDUK — the GI's own substation-yard

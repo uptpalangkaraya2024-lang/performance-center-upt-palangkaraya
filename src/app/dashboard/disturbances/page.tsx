@@ -32,7 +32,7 @@ import { getDisturbances } from "@/services/disturbances";
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
-import { buildGangguanHotspots, buildBayGangguanHotspots } from "@/lib/gangguan-hotspots";
+import { buildGangguanHotspots, buildGangguanTowerRanges, buildBayGangguanHotspots } from "@/lib/gangguan-hotspots";
 import { listSyncStatus } from "@/lib/sync-status";
 import type { DisturbanceCategoryResult } from "@/types";
 
@@ -532,6 +532,8 @@ async function DisturbancesBody({
   const cutoffMonth = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(now));
   const currentYear = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric" }).format(now);
   const hotspots = sutt.error ? [] : buildGangguanHotspots(gangguanByTowerGi, sutt.ruasList);
+  const towerRanges5 = sutt.error ? [] : buildGangguanTowerRanges(gangguanByTowerGi, sutt.ruasList, 5);
+  const towerRanges10 = sutt.error ? [] : buildGangguanTowerRanges(gangguanByTowerGi, sutt.ruasList, 10);
   const trafoBayHotspots = result.error
     ? []
     : buildBayGangguanHotspots([
@@ -744,7 +746,7 @@ async function DisturbancesBody({
             </div>
           </section>
 
-          <GangguanHotspotsCard hotspots={hotspots} />
+          <GangguanHotspotsCard hotspots={hotspots} ranges5={towerRanges5} ranges10={towerRanges10} />
           <TrafoBayHotspotsCard hotspots={trafoBayHotspots} />
 
           <CategorySection
