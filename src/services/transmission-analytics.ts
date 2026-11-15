@@ -141,6 +141,19 @@ function referenceOrder(pair: string, circuit: string, towers: string[]): string
   return [...orders][0];
 }
 
+/** Reminder text for an incident whose position couldn't be determined:
+ *  a transposed line in the reference with no faulted tower recorded is a
+ *  data-entry gap in REKAP GANGGUAN; anything else means no phase sequence
+ *  is on file for that line yet (e.g. lines outside ULTG Pangkalan Bun's
+ *  map, per user). */
+function unknownReason(bay: string, towers: string[]): string {
+  const pair = lineGiPairKey(bay);
+  const transposed = PHASE_SEQUENCE_REFERENCE.some((r) => r.ranges && pair && lineGiPairKey(r.line) === pair);
+  return transposed && towers.length === 0
+    ? "nomor tower tidak tercatat di TEMUAN LAPANGAN (ruas ditranspose)"
+    : "data urutan fasa line ini belum tersedia";
+}
+
 function resolveOrder(index: RuasPhaseIndex[], bay: string, circuit: string, towers: string[]): string | null {
   const pair = lineGiPairKey(bay);
   if (!pair) return null;
@@ -256,6 +269,10 @@ export async function getTransmissionAnalytics(): Promise<TransmissionAnalyticsR
       phase: phase || null,
       phasePosition: phase ? positionBucket(phase, phaseOrder) : null,
       phaseOrder,
+      phaseUnknownReason:
+        phase && positionBucket(phase, phaseOrder) === "Urutan belum diketahui"
+          ? unknownReason(text(r["NAMA BAY GANGGUAN"]), temuanTowers)
+          : null,
       locator,
     };
   });

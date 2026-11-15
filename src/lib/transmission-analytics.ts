@@ -46,6 +46,10 @@ export interface TransmissionAnalyticsEvent {
   /** The top-to-bottom phase sequence used for that translation, e.g.
    *  "TSR"; null when it couldn't be determined for this incident. */
   phaseOrder: string | null;
+  /** Why phasePosition is "Urutan belum diketahui" — shown as a reminder
+   *  note on the Fasa Terganggu card so the missing data can be filled in.
+   *  null whenever the position is known. */
+  phaseUnknownReason: string | null;
   /** Tower-count distance between each locator tool's predicted tower(s)
    *  and the tower(s) actually found (TEMUAN LAPANGAN) — closest pair.
    *  Only present for tools that had a prediction AND the incident had a

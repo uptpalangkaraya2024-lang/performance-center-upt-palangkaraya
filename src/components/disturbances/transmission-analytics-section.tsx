@@ -93,6 +93,21 @@ function PhaseBar({ row }: { row: PhaseRow }) {
   );
 }
 
+/** Per-circuit list of incidents whose conductor position is still
+ *  unknown, with the reason — rendered as a reminder on the Fasa
+ *  Terganggu card (per user) so the missing data can be chased down. */
+function summarizeUnknown(events: TransmissionAnalyticsEvent[]): { circuit: string; count: number; reason: string }[] {
+  const m = new Map<string, { circuit: string; count: number; reason: string }>();
+  for (const e of events) {
+    if (!e.phaseUnknownReason) continue;
+    const k = `${e.circuit}|${e.phaseUnknownReason}`;
+    const x = m.get(k) ?? { circuit: e.circuit, count: 0, reason: e.phaseUnknownReason };
+    x.count += 1;
+    m.set(k, x);
+  }
+  return [...m.values()].sort((a, b) => b.count - a.count || a.circuit.localeCompare(b.circuit));
+}
+
 /** Four simple, high-impact views over REKAP GANGGUAN columns the page
  *  didn't use before (per user request) — see transmission-analytics.ts.
  *  One shared year filter; everything recomputes client-side. */
@@ -116,6 +131,7 @@ export function TransmissionAnalyticsSection({
       rates: buildCircuitRates(scoped, span, year === ALL ? 3 : 2),
       hours: buildHourMatrix(scoped),
       phases: buildPhaseBreakdown(scoped),
+      phaseUnknown: summarizeUnknown(scoped),
       locator: buildLocatorAccuracy(scoped),
     };
   }, [events, years, todayISO, year]);
@@ -311,6 +327,25 @@ export function TransmissionAnalyticsSection({
                   </span>
                 ))}
               </div>
+              {view.phaseUnknown.length > 0 ? (
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
+                  <p className="font-bold text-foreground">
+                    Catatan: {view.phaseUnknown.reduce((n, u) => n + u.count, 0)} gangguan belum bisa ditentukan posisi
+                    fasanya
+                  </p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+                    {view.phaseUnknown.map((u) => (
+                      <li key={`${u.circuit}|${u.reason}`}>
+                        <span className="font-semibold text-foreground">{u.circuit}</span> ({u.count}): {u.reason}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-muted-foreground">
+                    Urutan fasa saat ini dari peta transmisi ULTG Pangkalan Bun dan SIGAP. Line di luar ULTG Pangkalan
+                    Bun perlu data urutan fasa tersendiri. Baris di atas hilang otomatis setelah datanya dilengkapi.
+                  </p>
+                </div>
+              ) : null}
             </>
           )}
         </SectionCard>
@@ -365,9 +400,9 @@ export function TransmissionAnalyticsSection({
                   </div>
                 ))}
               </div>
-              <div className="overflow-x-auto rounded-lg border">
+              <div className="max-h-[360px] overflow-auto rounded-lg border">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-card">
+                  <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
                       <th className="px-3 py-2 font-bold">Ruas</th>
                       {view.locator.overall.map((t) => (
