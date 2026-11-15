@@ -1,6 +1,7 @@
 import "server-only";
 
 import { dataSources } from "@/config/data-sources";
+import { PHASE_SEQUENCE_REFERENCE } from "@/config/phase-sequence";
 import { readConfiguredSource } from "@/lib/data-connector";
 import { canonicalTowerNo, extractCircuitSuffix, giTokenSet, lineGiPairKey } from "@/lib/gi-name";
 import {
@@ -120,9 +121,31 @@ const DOMINANT_ORDER_SHARE = 0.8;
  *  right answer on a transposed line. With no tower, the whole candidate
  *  set must agree on one sequence, otherwise it's left unknown rather
  *  than guessed. */
+/** The user's reference document (src/config/phase-sequence.ts), matched
+ *  on the bay's own line name — checked BEFORE SIGAP because it names the
+ *  line, so it can't confuse two lines sharing one corridor of towers.
+ *  undefined = no reference entry for this line (fall through to SIGAP);
+ *  null = entry exists but this incident can't be placed (transposed line
+ *  and no faulted tower recorded, or towers spanning two ranges). */
+function referenceOrder(pair: string, circuit: string, towers: string[]): string | null | undefined {
+  const entries = PHASE_SEQUENCE_REFERENCE.filter((r) => lineGiPairKey(r.line) === pair);
+  const entry = entries.find((r) => r.circuit === circuit) ?? entries.find((r) => !r.circuit);
+  if (!entry) return undefined;
+  if (entry.order) return entry.order;
+  const nums = towers.map(Number).filter(Number.isFinite);
+  if (!entry.ranges || nums.length === 0) return null;
+  const orders = new Set(
+    nums.map((n) => entry.ranges!.find((r) => n >= r.fromTower && n <= r.toTower)?.order ?? null),
+  );
+  if (orders.has(null) || orders.size !== 1) return null;
+  return [...orders][0];
+}
+
 function resolveOrder(index: RuasPhaseIndex[], bay: string, circuit: string, towers: string[]): string | null {
   const pair = lineGiPairKey(bay);
   if (!pair) return null;
+  const fromReference = referenceOrder(pair, circuit, towers);
+  if (fromReference !== undefined) return fromReference;
   const baySides = pair.split("||");
   let candidates = index.filter((r) => r.pairKey === pair);
   if (candidates.length === 0) candidates = index.filter((r) => r.sides.some((side) => baySides.includes(side)));

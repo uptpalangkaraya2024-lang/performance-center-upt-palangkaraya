@@ -53,14 +53,16 @@ function SectionCard({
   title,
   description,
   children,
+  className,
 }: {
   icon: typeof Gauge;
   title: string;
   description: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <Card className="min-w-0">
+    <Card className={cn("min-w-0", className)}>
       <CardHeader>
         <CardTitle className="flex items-center gap-1.5 text-lg font-extrabold">
           <Icon className="size-5 text-primary" />
@@ -68,7 +70,7 @@ function SectionCard({
         </CardTitle>
         <p className="text-xs text-muted-foreground">{description}</p>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">{children}</CardContent>
+      <CardContent className="flex flex-1 flex-col gap-3">{children}</CardContent>
     </Card>
   );
 }
@@ -158,7 +160,11 @@ export function TransmissionAnalyticsSection({
           {view.rates.length === 0 ? (
             <Empty />
           ) : (
-            <div className="max-h-[420px] overflow-auto rounded-lg border">
+            // Fills whatever height the neighbouring Fasa card gives this
+            // row (absolute child = the table adds nothing to row height),
+            // scrolling inside instead of leaving an empty block below.
+            <div className="relative min-h-[420px] flex-1">
+            <div className="absolute inset-0 overflow-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-card">
                   <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
@@ -197,10 +203,14 @@ export function TransmissionAnalyticsSection({
                 </tbody>
               </table>
             </div>
+            </div>
           )}
         </SectionCard>
 
+        {/* Full-width first row (per user): a 24-column grid is short, so
+            beside a tall card it left a large empty block. */}
         <SectionCard
+          className="xl:order-first xl:col-span-2"
           icon={Clock}
           title="Pola Jam Kejadian per Penyebab"
           description="Jam trip tiap penyebab. Dipakai untuk mengatur jadwal siaga dan patroli, dan untuk menilai jarak aman vegetasi pada jam konduktor paling melendut. Warna makin pekat berarti makin banyak kejadian pada jam itu."
@@ -247,7 +257,7 @@ export function TransmissionAnalyticsSection({
         <SectionCard
           icon={Waypoints}
           title="Fasa Terganggu"
-          description="Posisi konduktor yang terganggu (atas, tengah, bawah). Huruf R/S/T dari laporan diterjemahkan memakai urutan fasa SIGAP pada tower lokasi gangguan, karena urutan tiap sirkit berbeda dan sebagian ruas ditranspose. Bila satu penyebab atau satu sirkit terus kena di posisi yang sama, perbaikan bisa difokuskan ke posisi itu. Gangguan yang towernya tidak tercatat di ruas yang ditranspose masuk Urutan belum diketahui."
+          description="Posisi konduktor yang terganggu (atas, tengah, bawah). Huruf R/S/T dari laporan diterjemahkan memakai urutan fasa per line dari peta transmisi ULTG (Pangkalan Bun) dan SIGAP pada tower lokasi gangguan, karena urutan tiap sirkit berbeda dan sebagian ruas ditranspose. Bila satu penyebab atau satu sirkit terus kena di posisi yang sama, perbaikan bisa difokuskan ke posisi itu. Gangguan yang towernya tidak tercatat di ruas yang ditranspose masuk Urutan belum diketahui."
         >
           {view.phases.byCause.length === 0 ? (
             <Empty />
@@ -305,7 +315,10 @@ export function TransmissionAnalyticsSection({
           )}
         </SectionCard>
 
+        {/* Full-width last row (per user): tool cards in one row, the
+            whole per-ruas table below with no inner scroll. */}
         <SectionCard
+          className="xl:col-span-2"
           icon={Crosshair}
           title="Akurasi Alat Fault Locator"
           description="Selisih tower antara prediksi tiap alat dan tower yang ditemukan di lapangan (TEMUAN LAPANGAN). Menunjukkan alat mana yang paling bisa diandalkan saat mencari titik gangguan, dan bahan evaluasi kalibrasi alat."
@@ -313,7 +326,7 @@ export function TransmissionAnalyticsSection({
           {view.locator.overall.every((t) => t.count === 0) ? (
             <Empty />
           ) : (
-            <>
+            <div className="flex flex-col gap-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {view.locator.overall.map((t) => (
                   <div
@@ -352,7 +365,7 @@ export function TransmissionAnalyticsSection({
                   </div>
                 ))}
               </div>
-              <div className="max-h-[260px] overflow-auto rounded-lg border">
+              <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-card">
                     <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
@@ -394,7 +407,7 @@ export function TransmissionAnalyticsSection({
                   </tbody>
                 </table>
               </div>
-            </>
+            </div>
           )}
         </SectionCard>
       </div>
