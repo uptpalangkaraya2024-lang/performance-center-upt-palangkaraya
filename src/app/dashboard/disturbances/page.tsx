@@ -31,6 +31,8 @@ import { TrafoBayHotspotsCard } from "@/components/disturbances/trafo-bay-hotspo
 import { getDisturbances } from "@/services/disturbances";
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
+import { getTransmissionAnalytics } from "@/services/transmission-analytics";
+import { TransmissionAnalyticsSection } from "@/components/disturbances/transmission-analytics-section";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { buildGangguanHotspots, buildGangguanTowerRanges, buildBayGangguanHotspots } from "@/lib/gangguan-hotspots";
 import { listSyncStatus } from "@/lib/sync-status";
@@ -500,10 +502,16 @@ export default function DisturbancesPage() {
   const resultPromise = getDisturbances();
   const suttPromise = getSuttSnapshot();
   const gangguanByTowerGiPromise = getGangguanHistoryByTowerGi();
+  const analyticsPromise = getTransmissionAnalytics();
 
   return (
     <Suspense fallback={<DisturbancesFallback />}>
-      <DisturbancesBody resultPromise={resultPromise} suttPromise={suttPromise} gangguanByTowerGiPromise={gangguanByTowerGiPromise} />
+      <DisturbancesBody
+        resultPromise={resultPromise}
+        suttPromise={suttPromise}
+        gangguanByTowerGiPromise={gangguanByTowerGiPromise}
+        analyticsPromise={analyticsPromise}
+      />
     </Suspense>
   );
 }
@@ -516,12 +524,19 @@ async function DisturbancesBody({
   resultPromise,
   suttPromise,
   gangguanByTowerGiPromise,
+  analyticsPromise,
 }: {
   resultPromise: ReturnType<typeof getDisturbances>;
   suttPromise: ReturnType<typeof getSuttSnapshot>;
   gangguanByTowerGiPromise: ReturnType<typeof getGangguanHistoryByTowerGi>;
+  analyticsPromise: ReturnType<typeof getTransmissionAnalytics>;
 }) {
-  const [result, sutt, gangguanByTowerGi] = await Promise.all([resultPromise, suttPromise, gangguanByTowerGiPromise]);
+  const [result, sutt, gangguanByTowerGi, analytics] = await Promise.all([
+    resultPromise,
+    suttPromise,
+    gangguanByTowerGiPromise,
+    analyticsPromise,
+  ]);
   const syncEntry = listSyncStatus().find((entry) => entry.module === "Gangguan");
   const lastUpdate = formatTime(syncEntry?.lastSync ?? null);
   // Asia/Jakarta, same convention every other "today" in this app uses
@@ -748,6 +763,10 @@ async function DisturbancesBody({
 
           <GangguanHotspotsCard hotspots={hotspots} ranges5={towerRanges5} ranges10={towerRanges10} />
           <TrafoBayHotspotsCard hotspots={trafoBayHotspots} />
+
+          {!analytics.error ? (
+            <TransmissionAnalyticsSection events={analytics.events} years={analytics.years} todayISO={analytics.todayISO} />
+          ) : null}
 
           <CategorySection
             title="Transmisi"

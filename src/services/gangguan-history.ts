@@ -62,7 +62,7 @@ function extractYear(tahun: string, tgl: string): string {
  *  integer decimal range ("185.1 - 186.3") is ambiguous and not worth
  *  guessing; that case falls through to the single-mention pass instead,
  *  which still picks up each endpoint on its own. */
-function extractTowerNumbers(text: string): Set<string> {
+export function extractTowerNumbers(text: string): Set<string> {
   const result = new Set<string>();
   if (!text || /^tidak ada temuan\.?$/i.test(text.trim())) return result;
 

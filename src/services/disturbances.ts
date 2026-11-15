@@ -60,6 +60,17 @@ function titleCase(value: string): string {
   return value.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+/** Same PENYEBAB / KODE GGN display labels the Gangguan page uses, exported
+ *  so other server modules reading the same sheet (transmission-analytics)
+ *  never drift from this mapping. */
+export function labelCause(raw: string): string {
+  return CAUSE_LABELS[raw] ?? titleCase(raw);
+}
+
+export function labelKind(raw: string): string {
+  return KIND_LABELS[raw] ?? titleCase(raw);
+}
+
 // The sheet's own GARDU INDUK column reads e.g. "GI 150 KV KUALA KURUN" /
 // "GIS 150 KV MINTIN" — stripping the "GI(S) <voltage> KV" prefix gives the
 // bare GI name, matching how AHI's own GI column names the same substations.
