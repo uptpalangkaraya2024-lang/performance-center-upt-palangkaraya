@@ -27,13 +27,17 @@ const CAUSE_COLOR: Record<string, string> = {
   "Tegakan / Pohon": "var(--chart-2)",
 };
 
+// Single positions get strong distinct hues; each two-position combo gets
+// a hue between its two members' so "Atas-Tengah" reads as related to both.
 const PHASE_COLOR: Record<PhaseBucket, string> = {
-  "R-N": "#dc2626",
-  "S-N": "#d97706",
-  "T-N": "#2563eb",
-  "2 fasa": "#7c3aed",
+  Atas: "#dc2626",
+  Tengah: "#d97706",
+  Bawah: "#2563eb",
+  "Atas-Tengah": "#db2777",
+  "Tengah-Bawah": "#0d9488",
+  "Atas-Bawah": "#7c3aed",
   "3 fasa": "#475569",
-  Lainnya: "#94a3b8",
+  "Urutan belum diketahui": "#94a3b8",
 };
 
 const fmt1 = (n: number) => n.toLocaleString("id-ID", { maximumFractionDigits: 1 });
@@ -243,7 +247,7 @@ export function TransmissionAnalyticsSection({
         <SectionCard
           icon={Waypoints}
           title="Fasa Terganggu"
-          description="Komposisi fasa saat gangguan. Bila satu penyebab atau satu sirkit terus kena di fasa yang sama, perbaikan bisa difokuskan ke posisi fasa itu, misalnya arrester atau penghalang hewan."
+          description="Posisi konduktor yang terganggu (atas, tengah, bawah). Huruf R/S/T dari laporan diterjemahkan memakai urutan fasa SIGAP pada tower lokasi gangguan, karena urutan tiap sirkit berbeda dan sebagian ruas ditranspose. Bila satu penyebab atau satu sirkit terus kena di posisi yang sama, perbaikan bisa difokuskan ke posisi itu. Gangguan yang towernya tidak tercatat di ruas yang ditranspose masuk Urutan belum diketahui."
         >
           {view.phases.byCause.length === 0 ? (
             <Empty />
@@ -269,6 +273,14 @@ export function TransmissionAnalyticsSection({
                       >
                         <td className={cn("px-3 py-2", isCause ? "font-bold text-foreground" : "text-foreground")}>
                           {r.label} <span className="text-xs font-normal text-muted-foreground">({r.total})</span>
+                          {!isCause ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              Urutan atas-bawah:{" "}
+                              <span className="font-mono font-semibold text-foreground">
+                                {r.order ? r.order.split("").join("-") : r.orderVaries ? "bervariasi (transposisi)" : "belum diketahui"}
+                              </span>
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-3 py-2">
                           <PhaseBar row={r} />

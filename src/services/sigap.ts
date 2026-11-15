@@ -92,6 +92,10 @@ export interface SigapYearValue {
  *  fabricated 0. */
 export interface SigapTowerInsight {
   bayLine: string;
+  /** SIGAP's own tower label for this index ("185.1", "INC3", ...) — lets
+   *  a ruas whose DATA SUTT rows carry no funcLoc still be joined by
+   *  (bayLine, tower number); see transmission-analytics.ts. */
+  towerLabel: string;
   /** Phase sequence for this tower's whole circuit (e.g. "RST", "TSR /
    *  RST") — see the long comment on SigapChartAnalysisResponse.fasa for
    *  why this is sourced from `fasa`, not the similarly-named but
@@ -110,7 +114,9 @@ export interface SigapTowerInsight {
   // — see src/services/gangguan-history.ts.
 }
 
-const cache = new SharedCache<Record<string, SigapTowerInsight>>("sigap-tower-insights");
+// "-v2": entries cached before towerLabel existed lack it, and the
+// stale-while-revalidate fallback would otherwise keep serving them.
+const cache = new SharedCache<Record<string, SigapTowerInsight>>("sigap-tower-insights-v2");
 const CACHE_KEY = "map";
 
 function yearFromLabel(prefix: string, label: string | undefined): string | null {
@@ -151,6 +157,7 @@ function buildInsights(data: SigapChartAnalysisResponse): Record<string, SigapTo
     }
     result[t.funcLoc] = {
       bayLine: t.bayLine ?? "",
+      towerLabel: String(chart?.chartJs?.labels?.[i] ?? ""),
       fasa: fasaArr[i] || null,
       tinggiTowerM: typeof tinggi?.[i] === "number" ? tinggi[i] : null,
       elevasiM: typeof elevasi?.[i] === "number" ? elevasi[i] : null,

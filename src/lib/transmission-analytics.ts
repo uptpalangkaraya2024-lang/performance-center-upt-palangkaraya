@@ -38,6 +38,14 @@ export interface TransmissionAnalyticsEvent {
   cause: string;
   /** Raw PHASE FAULT value, e.g. "R-N", "S-T-N"; null if blank. */
   phase: string | null;
+  /** Conductor POSITION(S) that faulted — the raw R/S/T letters translated
+   *  through this circuit's own phase sequence at the faulted tower
+   *  (SIGAP `fasa`, top-to-bottom). null when PHASE FAULT is blank. See
+   *  positionBucket(). */
+  phasePosition: PhasePosition | null;
+  /** The top-to-bottom phase sequence used for that translation, e.g.
+   *  "TSR"; null when it couldn't be determined for this incident. */
+  phaseOrder: string | null;
   /** Tower-count distance between each locator tool's predicted tower(s)
    *  and the tower(s) actually found (TEMUAN LAPANGAN) — closest pair.
    *  Only present for tools that had a prediction AND the incident had a
@@ -130,25 +138,78 @@ export function buildHourMatrix(events: TransmissionAnalyticsEvent[], topCauses 
 }
 
 // --- 3. faulted phase -------------------------------------------------------
+//
+// Per user: R/S/T letters are NOT a fixed physical position — on most
+// circuits the top-to-bottom order is RST, but some circuits are strung
+// differently and some are transposed partway (confirmed in SIGAP's own
+// `fasa` field: SUKAMARA - KENDAWANGAN goes STR -> TRS -> RST along the
+// line; PANGKALAN BUN - SUKAMARA changes at T.132; PALANGKARAYA -
+// KASONGAN is "TSR / RST", i.e. circuit 1 TSR, circuit 2 RST). Reporting
+// "T-N" across circuits would therefore mix top, middle and bottom
+// conductors. Every fault is instead translated into the POSITION(S) it
+// hit, using the phase sequence at the faulted tower.
 
-export const PHASE_BUCKETS = ["R-N", "S-N", "T-N", "2 fasa", "3 fasa", "Lainnya"] as const;
-export type PhaseBucket = (typeof PHASE_BUCKETS)[number];
+export const PHASE_POSITIONS = [
+  "Atas",
+  "Tengah",
+  "Bawah",
+  "Atas-Tengah",
+  "Tengah-Bawah",
+  "Atas-Bawah",
+  "3 fasa",
+  "Urutan belum diketahui",
+] as const;
+export type PhasePosition = (typeof PHASE_POSITIONS)[number];
+/** Kept for the legend/colour map; same list. */
+export const PHASE_BUCKETS = PHASE_POSITIONS;
+export type PhaseBucket = PhasePosition;
 
-/** Single-phase-to-ground faults keep their own phase (that's where the
- *  physical signal is); any two-phase combo (with or without ground) and
- *  any three-phase combo are grouped, since those point to a cause (e.g.
- *  a strike or a tree spanning conductors) rather than one position. */
-export function phaseBucket(raw: string): PhaseBucket {
-  const p = raw.toUpperCase().replace(/\s+/g, "");
-  if (p === "R-N" || p === "S-N" || p === "T-N") return p;
-  const phases = new Set(p.split("-").filter((x) => x === "R" || x === "S" || x === "T"));
-  if (phases.size === 3) return "3 fasa";
-  if (phases.size === 2) return "2 fasa";
-  return "Lainnya";
+const POSITION_NAMES = ["Atas", "Tengah", "Bawah"] as const;
+
+/** Parses one circuit's phase sequence ("TSR") — exactly the three letters
+ *  R, S, T once each, top to bottom — or null. */
+function parseOrder(raw: string): string | null {
+  const s = raw.toUpperCase().replace(/[^RST]/g, "");
+  return s.length === 3 && new Set(s).size === 3 ? s : null;
+}
+
+/** SIGAP writes one sequence for a whole double-circuit tower ("RST", both
+ *  circuits identical) or one per circuit ("TSR / RST" = circuit 1 /
+ *  circuit 2, matching SIGAP's own "L1 ... | L2 ..." labelling). Returns
+ *  the sequence for `circuit` ("1"/"2"/""), or null if it can't be told —
+ *  e.g. a two-sequence tower but the incident's circuit is unknown. */
+export function orderForCircuit(sigapFasa: string, circuit: string): string | null {
+  const parts = sigapFasa.split("/").map((p) => parseOrder(p)).filter((p): p is string => p !== null);
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0];
+  if (circuit === "1") return parts[0];
+  if (circuit === "2") return parts[1];
+  return parts[0] === parts[1] ? parts[0] : null;
+}
+
+/** Faulted conductor position(s) for a PHASE FAULT value ("R-N", "S-T",
+ *  "R-S-T-N", ...) given the top-to-bottom sequence. Three phases is
+ *  "3 fasa" regardless of order. Without a sequence, a 1- or 2-phase
+ *  fault's position is genuinely unknown and says so — never assumed RST. */
+export function positionBucket(rawPhase: string, order: string | null): PhasePosition | null {
+  const letters = [...new Set(rawPhase.toUpperCase().split(/[^RST]+/).join("").split(""))].filter((x) =>
+    ["R", "S", "T"].includes(x),
+  );
+  if (letters.length === 0) return null;
+  if (letters.length === 3) return "3 fasa";
+  if (!order) return "Urutan belum diketahui";
+  const idx = letters.map((l) => order.indexOf(l)).sort((a, b) => a - b);
+  return idx.map((i) => POSITION_NAMES[i]).join("-") as PhasePosition;
 }
 
 export interface PhaseRow {
   label: string;
+  /** Top-to-bottom sequence when every incident in this row used the same
+   *  one (always true for a single non-transposed circuit), else null. */
+  order: string | null;
+  /** True when incidents in this row used more than one sequence (a
+   *  transposed circuit, or a cause row spanning many circuits). */
+  orderVaries: boolean;
   total: number;
   buckets: Record<PhaseBucket, number>;
   dominant: PhaseBucket;
@@ -157,13 +218,15 @@ export interface PhaseRow {
 function phaseRow(label: string, items: TransmissionAnalyticsEvent[]): PhaseRow {
   const buckets = Object.fromEntries(PHASE_BUCKETS.map((b) => [b, 0])) as Record<PhaseBucket, number>;
   let total = 0;
+  const orders = new Set<string>();
   for (const e of items) {
-    if (!e.phase) continue;
-    buckets[phaseBucket(e.phase)] += 1;
+    if (!e.phasePosition) continue;
+    buckets[e.phasePosition] += 1;
     total += 1;
+    if (e.phaseOrder) orders.add(e.phaseOrder);
   }
   const dominant = PHASE_BUCKETS.reduce((best, b) => (buckets[b] > buckets[best] ? b : best), PHASE_BUCKETS[0]);
-  return { label, total, buckets, dominant };
+  return { label, order: orders.size === 1 ? [...orders][0] : null, orderVaries: orders.size > 1, total, buckets, dominant };
 }
 
 export function buildPhaseBreakdown(
@@ -174,7 +237,7 @@ export function buildPhaseBreakdown(
   const group = (key: (e: TransmissionAnalyticsEvent) => string) => {
     const m = new Map<string, TransmissionAnalyticsEvent[]>();
     for (const e of events) {
-      if (!e.phase) continue;
+      if (!e.phasePosition) continue;
       const k = key(e);
       m.set(k, [...(m.get(k) ?? []), e]);
     }

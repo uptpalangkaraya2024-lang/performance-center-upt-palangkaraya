@@ -2,10 +2,19 @@ import "server-only";
 
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSource } from "@/lib/data-connector";
-import { extractCircuitSuffix, lineGiPairKey } from "@/lib/gi-name";
-import { LOCATOR_TOOLS, type LocatorTool, type TransmissionAnalyticsEvent } from "@/lib/transmission-analytics";
+import { canonicalTowerNo, extractCircuitSuffix, giTokenSet, lineGiPairKey } from "@/lib/gi-name";
+import {
+  LOCATOR_TOOLS,
+  orderForCircuit,
+  positionBucket,
+  type LocatorTool,
+  type TransmissionAnalyticsEvent,
+} from "@/lib/transmission-analytics";
 import { labelCause, labelKind } from "@/services/disturbances";
 import { extractTowerNumbers } from "@/services/gangguan-history";
+import { getSigapTowerInsights, type SigapTowerInsight } from "@/services/sigap";
+import { getSuttSnapshot } from "@/services/sutt-asset";
+import type { SuttRuas } from "@/types";
 
 // Reduces REKAP GANGGUAN to one small record per Transmisi incident for the
 // "Analisa Lanjutan Transmisi" section — see src/lib/transmission-analytics.ts
@@ -42,6 +51,109 @@ function closestDelta(predicted: number[], actual: number[]): number | null {
   return Number.isFinite(best) ? best : null;
 }
 
+// --- phase sequence lookup ------------------------------------------------
+//
+// SIGAP's `fasa` (top-to-bottom phase sequence) is stored per tower and
+// keyed by funcLoc; DATA SUTT carries the same funcLoc per tower plus the
+// ruas it belongs to. Joined here so an incident can be given the sequence
+// at the tower where it actually happened — necessary because some
+// circuits are transposed partway along (see transmission-analytics.ts).
+
+interface RuasPhaseIndex {
+  sides: string[];
+  pairKey: string;
+  /** canonical tower number -> SIGAP fasa string for that tower */
+  fasaByTower: Map<string, string>;
+}
+
+/** DATA SUTT ruas whose rows carry NO funcLoc at all (confirmed live:
+ *  every one of their towers is blank), so the funcLoc join finds nothing.
+ *  Mapped by hand to SIGAP's own bayLine code instead, then joined by
+ *  tower number. Add a row here if another ruas turns up with an empty
+ *  funcLoc column. */
+const SIGAP_BAYLINE_FALLBACK: Record<string, string> = {
+  "SKS - KUALA KURUN": "SKS-KKR",
+  "SUKAMARA - KENDAWANGAN": "SKM-KDW",
+};
+
+function buildPhaseIndex(ruasList: SuttRuas[], sigap: Record<string, SigapTowerInsight>): RuasPhaseIndex[] {
+  const byBayLine = new Map<string, Map<string, string>>();
+  for (const insight of Object.values(sigap)) {
+    if (!insight.fasa || !insight.towerLabel) continue;
+    const m = byBayLine.get(insight.bayLine) ?? new Map<string, string>();
+    m.set(canonicalTowerNo(insight.towerLabel), insight.fasa);
+    byBayLine.set(insight.bayLine, m);
+  }
+  return ruasList.map((ruas) => {
+    const sides = [giTokenSet(ruas.originLabel), giTokenSet(ruas.farEndLabel)];
+    const fasaByTower = new Map<string, string>();
+    for (const t of ruas.towers) {
+      const fasa = t.funcLoc ? sigap[t.funcLoc]?.fasa : null;
+      if (fasa) fasaByTower.set(canonicalTowerNo(t.towerNo), fasa);
+    }
+    const fallback = SIGAP_BAYLINE_FALLBACK[ruas.section];
+    if (fasaByTower.size === 0 && fallback) {
+      const labels = byBayLine.get(fallback) ?? new Map<string, string>();
+      for (const t of ruas.towers) {
+        const fasa = labels.get(canonicalTowerNo(t.towerNo));
+        if (fasa) fasaByTower.set(canonicalTowerNo(t.towerNo), fasa);
+      }
+    }
+    return { sides, pairKey: [...sides].sort().join("||"), fasaByTower };
+  });
+}
+
+/** Share of towers that must carry one sequence before an incident with
+ *  NO recorded tower is given it. Tolerates the handful of shared/corridor
+ *  towers a ruas's list picks up from a neighbouring line (PALANGKARAYA -
+ *  KASONGAN: 187 TSR/RST + 7 SRT at the 185.x junction), while a genuinely
+ *  transposed line (SUKAMARA - KENDAWANGAN: three segments of roughly a
+ *  third each) never reaches it and stays "unknown". */
+const DOMINANT_ORDER_SHARE = 0.8;
+
+/** The top-to-bottom sequence for one incident, or null when it can't be
+ *  pinned down to exactly one. Candidate ruas: the one whose two end GIs
+ *  match the bay name; failing that, any ruas sharing one GI with it (a
+ *  circuit tapped off a registered line, e.g. PALANGKARAYA - PULANG PISAU
+ *  riding the MINTIN - PALANGKARAYA towers). The faulted tower(s) from
+ *  TEMUAN LAPANGAN narrow it to the exact tower — the only way to get the
+ *  right answer on a transposed line. With no tower, the whole candidate
+ *  set must agree on one sequence, otherwise it's left unknown rather
+ *  than guessed. */
+function resolveOrder(index: RuasPhaseIndex[], bay: string, circuit: string, towers: string[]): string | null {
+  const pair = lineGiPairKey(bay);
+  if (!pair) return null;
+  const baySides = pair.split("||");
+  let candidates = index.filter((r) => r.pairKey === pair);
+  if (candidates.length === 0) candidates = index.filter((r) => r.sides.some((side) => baySides.includes(side)));
+  if (candidates.length === 0) return null;
+
+  // At the faulted tower(s): every one must agree — no majority vote.
+  const unanimous = (fasaList: string[]) => {
+    const orders = new Set(fasaList.map((f) => orderForCircuit(f, circuit)));
+    if (orders.has(null)) return null;
+    return orders.size === 1 ? ([...orders][0] as string) : null;
+  };
+  // Whole-ruas fallback: one sequence must cover DOMINANT_ORDER_SHARE.
+  const dominant = (fasaList: string[]) => {
+    const counts = new Map<string, number>();
+    for (const f of fasaList) {
+      const o = orderForCircuit(f, circuit);
+      if (o) counts.set(o, (counts.get(o) ?? 0) + 1);
+    }
+    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    return top && fasaList.length > 0 && top[1] / fasaList.length >= DOMINANT_ORDER_SHARE ? top[0] : null;
+  };
+
+  if (towers.length > 0) {
+    const atTowers = candidates.flatMap((r) =>
+      towers.map((t) => r.fasaByTower.get(t)).filter((f): f is string => !!f),
+    );
+    if (atTowers.length > 0) return unanimous(atTowers);
+  }
+  return dominant(candidates.flatMap((r) => [...r.fasaByTower.values()]));
+}
+
 export interface TransmissionAnalyticsResult {
   events: TransmissionAnalyticsEvent[];
   /** Ascending. */
@@ -54,7 +166,11 @@ export interface TransmissionAnalyticsResult {
 
 export async function getTransmissionAnalytics(): Promise<TransmissionAnalyticsResult> {
   const todayISO = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
-  const results = await readConfiguredSource(SOURCE);
+  // SUTT + SIGAP only feed the phase-position view; both are best-effort
+  // (SIGAP falls back to its last cached copy, or {} — then every 1- and
+  // 2-phase fault shows as "urutan belum diketahui" instead of failing).
+  const [results, sutt, sigap] = await Promise.all([readConfiguredSource(SOURCE), getSuttSnapshot(), getSigapTowerInsights()]);
+  const phaseIndex = sutt.error ? [] : buildPhaseIndex(sutt.ruasList, sigap);
   const sheet = results.find((r) => r.file === EXPECTED_FILE && r.sheet === EXPECTED_SHEET);
   if (!sheet) {
     return { events: [], years: [], todayISO, error: `Gagal membaca sheet "${EXPECTED_SHEET}".` };
@@ -94,7 +210,8 @@ export async function getTransmissionAnalytics(): Promise<TransmissionAnalyticsR
   const events: TransmissionAnalyticsEvent[] = raw.map(({ r, key }) => {
     const circuitNo = key.split("#")[1];
     const ruas = ruasFor(key);
-    const actual = towerNumbers(text(r["TEMUAN LAPANGAN"]));
+    const temuanTowers = [...extractTowerNumbers(text(r["TEMUAN LAPANGAN"]))].map(canonicalTowerNo);
+    const actual = temuanTowers.map(Number).filter(Number.isFinite);
     const locator: { tool: LocatorTool; delta: number }[] = [];
     if (actual.length > 0) {
       for (const tool of LOCATOR_TOOLS) {
@@ -103,6 +220,7 @@ export async function getTransmissionAnalytics(): Promise<TransmissionAnalyticsR
       }
     }
     const phase = text(r["PHASE FAULT"]);
+    const phaseOrder = phase ? resolveOrder(phaseIndex, text(r["NAMA BAY GANGGUAN"]), circuitNo, temuanTowers) : null;
     return {
       year: text(r["TAHUN"]),
       dateISO: text(r["TGL"]).slice(0, 10),
@@ -113,6 +231,8 @@ export async function getTransmissionAnalytics(): Promise<TransmissionAnalyticsR
       hour: parseHour(text(r["WAKTU TRIP"])),
       cause: labelCause(text(r["PENYEBAB"]) || "LAINNYA"),
       phase: phase || null,
+      phasePosition: phase ? positionBucket(phase, phaseOrder) : null,
+      phaseOrder,
       locator,
     };
   });
