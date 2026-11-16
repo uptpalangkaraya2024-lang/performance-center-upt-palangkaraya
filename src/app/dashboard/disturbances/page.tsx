@@ -33,6 +33,10 @@ import { getSuttSnapshot } from "@/services/sutt-asset";
 import { getGangguanHistoryByTowerGi } from "@/services/gangguan-history";
 import { getTransmissionAnalytics } from "@/services/transmission-analytics";
 import { TransmissionAnalyticsSection } from "@/components/disturbances/transmission-analytics-section";
+import { FollowUpAgingCard } from "@/components/disturbances/follow-up-aging-card";
+import { LightningPriorityCard } from "@/components/disturbances/lightning-priority-card";
+import { getFollowUpAging } from "@/services/follow-up-aging";
+import { getLightningPriority } from "@/services/lightning-priority";
 import { buildDisturbanceInsights } from "@/lib/executive-insights";
 import { buildGangguanHotspots, buildGangguanTowerRanges, buildBayGangguanHotspots } from "@/lib/gangguan-hotspots";
 import { listSyncStatus } from "@/lib/sync-status";
@@ -503,6 +507,8 @@ export default function DisturbancesPage() {
   const suttPromise = getSuttSnapshot();
   const gangguanByTowerGiPromise = getGangguanHistoryByTowerGi();
   const analyticsPromise = getTransmissionAnalytics();
+  const followUpPromise = getFollowUpAging();
+  const lightningPromise = getLightningPriority();
 
   return (
     <Suspense fallback={<DisturbancesFallback />}>
@@ -511,6 +517,8 @@ export default function DisturbancesPage() {
         suttPromise={suttPromise}
         gangguanByTowerGiPromise={gangguanByTowerGiPromise}
         analyticsPromise={analyticsPromise}
+        followUpPromise={followUpPromise}
+        lightningPromise={lightningPromise}
       />
     </Suspense>
   );
@@ -525,17 +533,23 @@ async function DisturbancesBody({
   suttPromise,
   gangguanByTowerGiPromise,
   analyticsPromise,
+  followUpPromise,
+  lightningPromise,
 }: {
   resultPromise: ReturnType<typeof getDisturbances>;
   suttPromise: ReturnType<typeof getSuttSnapshot>;
   gangguanByTowerGiPromise: ReturnType<typeof getGangguanHistoryByTowerGi>;
   analyticsPromise: ReturnType<typeof getTransmissionAnalytics>;
+  followUpPromise: ReturnType<typeof getFollowUpAging>;
+  lightningPromise: ReturnType<typeof getLightningPriority>;
 }) {
-  const [result, sutt, gangguanByTowerGi, analytics] = await Promise.all([
+  const [result, sutt, gangguanByTowerGi, analytics, followUp, lightning] = await Promise.all([
     resultPromise,
     suttPromise,
     gangguanByTowerGiPromise,
     analyticsPromise,
+    followUpPromise,
+    lightningPromise,
   ]);
   const syncEntry = listSyncStatus().find((entry) => entry.module === "Gangguan");
   const lastUpdate = formatTime(syncEntry?.lastSync ?? null);
@@ -766,6 +780,22 @@ async function DisturbancesBody({
 
           {!analytics.error ? (
             <TransmissionAnalyticsSection events={analytics.events} years={analytics.years} todayISO={analytics.todayISO} />
+          ) : null}
+
+          {followUp.items.length > 0 || lightning.ranges.length > 0 ? (
+            <section className="flex flex-col gap-4">
+              <div>
+                <h2 className="text-lg font-extrabold tracking-tight">Evaluasi Tindak Lanjut &amp; Prioritas Mitigasi</h2>
+                <p className="text-xs text-muted-foreground">
+                  Bahan rapat evaluasi: tindak lanjut gangguan yang belum tuntas, dan daftar lokasi yang paling layak
+                  dipasang TLA atau diperbaiki pentanahannya.
+                </p>
+              </div>
+              {!followUp.error ? (
+                <FollowUpAgingCard items={followUp.items} openRows={followUp.openRows} todayISO={followUp.todayISO} />
+              ) : null}
+              <LightningPriorityCard ranges={lightning.ranges} sigapAvailable={lightning.sigapAvailable} />
+            </section>
           ) : null}
 
           <CategorySection
