@@ -274,6 +274,9 @@ export function buildGangguanTowerRanges(
   ruasList: SuttRuas[],
   size = 5,
   topN = 15,
+  /** Keep only incidents passing this test (e.g. one cause) — applied
+   *  before counting, so the 2-incident threshold is on what's kept. */
+  filter?: (e: GangguanHistoryEntry) => boolean,
 ): GangguanTowerRange[] {
   const groups = groupByPhysicalTower(historyByTowerGi, ruasList);
   const ranges: GangguanTowerRange[] = [];
@@ -283,7 +286,8 @@ export function buildGangguanTowerRanges(
       const incidents = new Map<string, GangguanTowerRangeIncident>();
       const towers: GangguanTowerRangeTower[] = [];
       for (const tower of slice) {
-        const entries = groups.get(`${ruas.section}::${tower.towerNo}`)?.entries ?? [];
+        const all = groups.get(`${ruas.section}::${tower.towerNo}`)?.entries ?? [];
+        const entries = filter ? all.filter(filter) : all;
         towers.push({ towerNo: tower.towerNo, count: entries.length });
         for (const e of entries) {
           const k = incidentKey(e);

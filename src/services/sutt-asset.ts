@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSource } from "@/lib/data-connector";
 import type { GiRecord, SuttRuas, SuttSnapshot, SuttTower } from "@/types";
@@ -279,7 +281,10 @@ function buildGiRegistry(records: Record<string, string>[]): { registry: GiRecor
   return { registry, dropped };
 }
 
-export async function getSuttSnapshot(): Promise<SuttSnapshot> {
+// Wrapped in React's per-request cache: building the snapshot costs ~0.5 s
+// (measured warm), and one Gangguan page render needs it in three places
+// (page body, transmission analytics, lightning priority).
+export const getSuttSnapshot = cache(async function getSuttSnapshot(): Promise<SuttSnapshot> {
   const results = await readConfiguredSource(SOURCE);
   const sheetResult = results.find((r) => r.file === EXPECTED_FILE && r.sheet === EXPECTED_SHEET);
   const giSheetResult = results.find((r) => r.file === EXPECTED_FILE && r.sheet === GI_REGISTRY_SHEET);
@@ -303,4 +308,4 @@ export async function getSuttSnapshot(): Promise<SuttSnapshot> {
     giRegistryDropped,
     error: ruasList.length === 0 ? "Data ruas SUTT belum tersedia." : null,
   };
-}
+});

@@ -72,6 +72,15 @@ interface SigapChartAnalysisResponse {
         //     `datasets` (used below) remains the best available signal
         //     for that, despite its own undocumented unit.
         fasa?: (string | null)[];
+        // Protection markers: SIGAP stores a fixed non-empty sentinel
+        // ("290" for tla, "285" for dgs — chart-row ids, confirmed live to
+        // be the ONLY non-empty value in each) on towers that HAVE the
+        // equipment, "" otherwise. So presence, not the value, is the flag.
+        tla?: (string | null)[];
+        dgs?: (string | null)[];
+        // Total tower-footing resistance in ohm, comma decimal ("11,57");
+        // "" when never measured.
+        rTotal?: (string | null)[];
       };
     }[];
   };
@@ -102,6 +111,12 @@ export interface SigapTowerInsight {
    *  non-functional `urutanFasa`. null when SIGAP has nothing for this
    *  tower's funcLoc. */
   fasa: string | null;
+  /** Tower carries a Transmission Line Arrester (SIGAP `tla` marker). */
+  tla: boolean;
+  /** Tower carries additional grounding (SIGAP `dgs` marker). */
+  dgs: boolean;
+  /** Total footing resistance (ohm); null when SIGAP has no measurement. */
+  rTotalOhm: number | null;
   tinggiTowerM: number | null;
   elevasiM: number | null;
   arusTertinggiKa: number | null;
@@ -114,9 +129,10 @@ export interface SigapTowerInsight {
   // — see src/services/gangguan-history.ts.
 }
 
-// "-v2": entries cached before towerLabel existed lack it, and the
-// stale-while-revalidate fallback would otherwise keep serving them.
-const cache = new SharedCache<Record<string, SigapTowerInsight>>("sigap-tower-insights-v2");
+// Versioned: entries cached before a field existed lack it (v2 added
+// towerLabel, v3 tla/dgs/rTotalOhm), and the stale-while-revalidate
+// fallback would otherwise keep serving them.
+const cache = new SharedCache<Record<string, SigapTowerInsight>>("sigap-tower-insights-v3");
 const CACHE_KEY = "map";
 
 function yearFromLabel(prefix: string, label: string | undefined): string | null {
@@ -133,11 +149,20 @@ function singleValueDataset(datasets: SigapDatasetRaw[], ...labels: string[]): (
   return null;
 }
 
+function parseOhm(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const n = Number(raw.trim().replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 function buildInsights(data: SigapChartAnalysisResponse): Record<string, SigapTowerInsight> {
   const chart = (data.analysis?.charts ?? [])[0];
   const towerMetadata = chart?.chartJs?.towerMetadata ?? [];
   const datasets = chart?.chartJs?.datasets ?? [];
   const fasaArr = chart?.chartJs?.fasa ?? [];
+  const tlaArr = chart?.chartJs?.tla ?? [];
+  const dgsArr = chart?.chartJs?.dgs ?? [];
+  const rTotalArr = chart?.chartJs?.rTotal ?? [];
   if (towerMetadata.length === 0 || datasets.length === 0) return {};
 
   const tinggi = singleValueDataset(datasets, "Tinggi Tower", "Tinggi");
@@ -159,6 +184,9 @@ function buildInsights(data: SigapChartAnalysisResponse): Record<string, SigapTo
       bayLine: t.bayLine ?? "",
       towerLabel: String(chart?.chartJs?.labels?.[i] ?? ""),
       fasa: fasaArr[i] || null,
+      tla: !!tlaArr[i],
+      dgs: !!dgsArr[i],
+      rTotalOhm: parseOhm(rTotalArr[i]),
       tinggiTowerM: typeof tinggi?.[i] === "number" ? tinggi[i] : null,
       elevasiM: typeof elevasi?.[i] === "number" ? elevasi[i] : null,
       arusTertinggiKa: typeof arusTertinggi?.[i] === "number" ? arusTertinggi[i] : null,

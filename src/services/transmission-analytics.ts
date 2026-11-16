@@ -14,6 +14,7 @@ import {
 import { labelCause, labelKind } from "@/services/disturbances";
 import { extractTowerNumbers } from "@/services/gangguan-history";
 import { getSigapTowerInsights, type SigapTowerInsight } from "@/services/sigap";
+import { buildSigapTowerLookup } from "@/services/sigap-join";
 import { getSuttSnapshot } from "@/services/sutt-asset";
 import type { SuttRuas } from "@/types";
 
@@ -67,38 +68,13 @@ interface RuasPhaseIndex {
   fasaByTower: Map<string, string>;
 }
 
-/** DATA SUTT ruas whose rows carry NO funcLoc at all (confirmed live:
- *  every one of their towers is blank), so the funcLoc join finds nothing.
- *  Mapped by hand to SIGAP's own bayLine code instead, then joined by
- *  tower number. Add a row here if another ruas turns up with an empty
- *  funcLoc column. */
-const SIGAP_BAYLINE_FALLBACK: Record<string, string> = {
-  "SKS - KUALA KURUN": "SKS-KKR",
-  "SUKAMARA - KENDAWANGAN": "SKM-KDW",
-};
-
 function buildPhaseIndex(ruasList: SuttRuas[], sigap: Record<string, SigapTowerInsight>): RuasPhaseIndex[] {
-  const byBayLine = new Map<string, Map<string, string>>();
-  for (const insight of Object.values(sigap)) {
-    if (!insight.fasa || !insight.towerLabel) continue;
-    const m = byBayLine.get(insight.bayLine) ?? new Map<string, string>();
-    m.set(canonicalTowerNo(insight.towerLabel), insight.fasa);
-    byBayLine.set(insight.bayLine, m);
-  }
+  const lookup = buildSigapTowerLookup(sigap);
   return ruasList.map((ruas) => {
     const sides = [giTokenSet(ruas.originLabel), giTokenSet(ruas.farEndLabel)];
     const fasaByTower = new Map<string, string>();
-    for (const t of ruas.towers) {
-      const fasa = t.funcLoc ? sigap[t.funcLoc]?.fasa : null;
-      if (fasa) fasaByTower.set(canonicalTowerNo(t.towerNo), fasa);
-    }
-    const fallback = SIGAP_BAYLINE_FALLBACK[ruas.section];
-    if (fasaByTower.size === 0 && fallback) {
-      const labels = byBayLine.get(fallback) ?? new Map<string, string>();
-      for (const t of ruas.towers) {
-        const fasa = labels.get(canonicalTowerNo(t.towerNo));
-        if (fasa) fasaByTower.set(canonicalTowerNo(t.towerNo), fasa);
-      }
+    for (const [towerNo, insight] of lookup(ruas)) {
+      if (insight.fasa) fasaByTower.set(canonicalTowerNo(towerNo), insight.fasa);
     }
     return { sides, pairKey: [...sides].sort().join("||"), fasaByTower };
   });
