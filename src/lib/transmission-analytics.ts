@@ -278,33 +278,48 @@ function stats(tool: LocatorTool, deltas: number[]): LocatorStats {
   };
 }
 
-export interface LocatorRuasRow {
-  ruas: string;
+export interface LocatorGroupRow {
+  /** Ruas name, or cause label — whichever the breakdown groups by. */
+  label: string;
   /** Per tool: share within 2 towers (0-100) and sample size; null when
-   *  that tool never had a prediction on this ruas in the period. */
+   *  that tool never had a prediction in this group in the period. */
   tools: Record<LocatorTool, { within2Pct: number; count: number } | null>;
   total: number;
 }
+/** Kept for existing callers. */
+export type LocatorRuasRow = LocatorGroupRow;
 
-export function buildLocatorAccuracy(events: TransmissionAnalyticsEvent[]): {
-  overall: LocatorStats[];
-  byRuas: LocatorRuasRow[];
-} {
-  const overall = LOCATOR_TOOLS.map((tool) =>
-    stats(tool, events.flatMap((e) => e.locator.filter((l) => l.tool === tool).map((l) => l.delta))),
-  );
-  const ruasMap = new Map<string, TransmissionAnalyticsEvent[]>();
-  for (const e of events) if (e.locator.length > 0) ruasMap.set(e.ruas, [...(ruasMap.get(e.ruas) ?? []), e]);
-  const byRuas = [...ruasMap.entries()]
-    .map(([ruas, items]) => {
+function locatorBreakdown(
+  events: TransmissionAnalyticsEvent[],
+  key: (e: TransmissionAnalyticsEvent) => string,
+): LocatorGroupRow[] {
+  const groups = new Map<string, TransmissionAnalyticsEvent[]>();
+  for (const e of events) if (e.locator.length > 0) groups.set(key(e), [...(groups.get(key(e)) ?? []), e]);
+  return [...groups.entries()]
+    .map(([label, items]) => {
       const tools = Object.fromEntries(
         LOCATOR_TOOLS.map((tool) => {
           const d = items.flatMap((e) => e.locator.filter((l) => l.tool === tool).map((l) => l.delta));
           return [tool, d.length === 0 ? null : { within2Pct: stats(tool, d).within2Pct, count: d.length }];
         }),
-      ) as LocatorRuasRow["tools"];
-      return { ruas, tools, total: items.length };
+      ) as LocatorGroupRow["tools"];
+      return { label, tools, total: items.length };
     })
-    .sort((a, b) => b.total - a.total);
-  return { overall, byRuas };
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+}
+
+/** Overall per-tool stats plus two breakdowns: per ruas (which line's
+ *  impedance/settings to review) and per cause (per user — e.g. whether a
+ *  tool locates lightning faults well but high-impedance vegetation faults
+ *  poorly, which changes how far the patrol should search around the
+ *  predicted tower for each cause). */
+export function buildLocatorAccuracy(events: TransmissionAnalyticsEvent[]): {
+  overall: LocatorStats[];
+  byRuas: LocatorGroupRow[];
+  byCause: LocatorGroupRow[];
+} {
+  const overall = LOCATOR_TOOLS.map((tool) =>
+    stats(tool, events.flatMap((e) => e.locator.filter((l) => l.tool === tool).map((l) => l.delta))),
+  );
+  return { overall, byRuas: locatorBreakdown(events, (e) => e.ruas), byCause: locatorBreakdown(events, (e) => e.cause) };
 }

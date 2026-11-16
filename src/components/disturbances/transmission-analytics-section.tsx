@@ -121,6 +121,7 @@ export function TransmissionAnalyticsSection({
   todayISO: string;
 }) {
   const [year, setYear] = useState(ALL);
+  const [locatorGroup, setLocatorGroup] = useState<"ruas" | "cause">("ruas");
 
   const view = useMemo(() => {
     const scoped = year === ALL ? events : events.filter((e) => e.year === year);
@@ -400,11 +401,39 @@ export function TransmissionAnalyticsSection({
                   </div>
                 ))}
               </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {locatorGroup === "ruas"
+                    ? "Rincian per ruas: ruas mana yang perlu kaji ulang setting impedansi relay."
+                    : "Rincian per penyebab: seberapa jauh patroli perlu menyisir dari tower prediksi untuk tiap penyebab. VAISALA adalah sistem deteksi petir, jadi hanya punya prediksi untuk gangguan petir."}
+                </span>
+                <div role="group" aria-label="Rincian akurasi" className="inline-flex overflow-hidden rounded-md border text-xs font-semibold">
+                  {(
+                    [
+                      ["ruas", "Per ruas"],
+                      ["cause", "Per penyebab"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={locatorGroup === key}
+                      onClick={() => setLocatorGroup(key)}
+                      className={cn(
+                        "px-3 py-1.5 transition-colors",
+                        locatorGroup === key ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="max-h-[360px] overflow-auto rounded-lg border">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b bg-muted/70 text-left text-xs text-muted-foreground uppercase">
-                      <th className="px-3 py-2 font-bold">Ruas</th>
+                      <th className="px-3 py-2 font-bold">{locatorGroup === "ruas" ? "Ruas" : "Penyebab"}</th>
                       {view.locator.overall.map((t) => (
                         <th key={t.tool} className="px-3 py-2 text-right font-bold">
                           {t.tool} ≤2
@@ -413,10 +442,10 @@ export function TransmissionAnalyticsSection({
                     </tr>
                   </thead>
                   <tbody>
-                    {view.locator.byRuas.map((r) => (
-                      <tr key={r.ruas} className="border-b last:border-0">
+                    {(locatorGroup === "ruas" ? view.locator.byRuas : view.locator.byCause).map((r) => (
+                      <tr key={r.label} className="border-b last:border-0">
                         <td className="px-3 py-1.5 text-foreground">
-                          {r.ruas} <span className="text-xs text-muted-foreground">({r.total})</span>
+                          {r.label} <span className="text-xs text-muted-foreground">({r.total})</span>
                         </td>
                         {(Object.keys(r.tools) as LocatorTool[]).map((tool) => {
                           const v = r.tools[tool];
