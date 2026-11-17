@@ -3,6 +3,7 @@
 // which re-runs these per ULTG / periode filter. Every number is computed
 // from the per-ULTG INPUT sheets (+ ALOKASI ANGGARAN), never from the
 // file's own DASHBOARD sheets.
+import { ceStreamCodeOf } from "@/lib/ce-compute";
 import type { CeItem } from "@/types";
 
 export const CE_STATUS_ORDER = ["NO TARGET", "ON TARGET", "LAGGING", "FINISH (LEAD)", "FINISH (LAGGING)"] as const;
@@ -400,4 +401,71 @@ export function formatRupiah(n: number): string {
   if (n >= 1e9) return `Rp ${(n / 1e9).toLocaleString("id-ID", { maximumFractionDigits: 2 })} M`;
   if (n >= 1e6) return `Rp ${(n / 1e6).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
   return `Rp ${n.toLocaleString("id-ID")}`;
+}
+
+// --- rekap ULTG × stream ---------------------------------------------------
+
+export interface RecapRow {
+  label: string;
+  total: number;
+  inCe: number;
+  notInCe: number;
+  close: number;
+  open: number;
+  items: CeItem[];
+}
+
+export interface RecapGroup {
+  ultg: string;
+  streams: RecapRow[];
+  subtotal: RecapRow;
+}
+
+function recapRow(label: string, list: CeItem[]): RecapRow {
+  const inCe = list.filter(isInCe).length;
+  const close = list.filter((i) => i.done).length;
+  return {
+    label,
+    total: list.length,
+    inCe,
+    notInCe: list.length - inCe,
+    close,
+    open: list.length - close,
+    items: list,
+  };
+}
+
+/** Streams in their CE code order (01..09), unknown labels last. */
+function streamRows(list: CeItem[]): RecapRow[] {
+  return [...groupBy(list, (i) => i.stream.trim() || "—").entries()]
+    .map(([label, l]) => ({
+      row: recapRow(label, l),
+      code: ceStreamCodeOf(l[0]) ?? "99",
+    }))
+    .sort((a, b) => a.code.localeCompare(b.code) || a.row.label.localeCompare(b.row.label))
+    .map((x) => x.row);
+}
+
+/** One table: every ULTG with its streams + subtotal, then (when more than
+ *  one ULTG) the UPT-wide per-stream rows and grand total. */
+export function buildUltgStreamRecap(items: CeItem[]): {
+  groups: RecapGroup[];
+  upt: RecapGroup | null;
+} {
+  const groups = [...groupBy(items, (i) => shortUltg(i.ultg)).entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([ultg, list]) => ({
+      ultg,
+      streams: streamRows(list),
+      subtotal: recapRow(`Total ULTG ${ultg}`, list),
+    }));
+  const upt =
+    groups.length > 1
+      ? {
+          ultg: "UPT Palangkaraya",
+          streams: streamRows(items),
+          subtotal: recapRow("Total UPT Palangkaraya", items),
+        }
+      : null;
+  return { groups, upt };
 }

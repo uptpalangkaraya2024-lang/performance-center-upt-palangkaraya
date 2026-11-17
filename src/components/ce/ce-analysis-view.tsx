@@ -14,6 +14,7 @@ import {
   Target,
 } from "lucide-react";
 
+import { CeRecapTable } from "@/components/ce/ce-recap-table";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -32,6 +33,7 @@ import {
   buildSystemicIssues,
   buildTargetTimeline,
   buildUltgRows,
+  buildUltgStreamRecap,
   formatRupiah,
   giList,
   isInCe,
@@ -227,6 +229,7 @@ export function CeAnalysisView({
     () => ({
       kpi: buildKpis(byUltg, todayISO),
       ultgRows: buildUltgRows(items, todayISO),
+      recap: buildUltgStreamRecap(byUltg),
       streams: buildBreakdown(byUltg, (i) => i.stream),
       jenis: buildBreakdown(scoped, (i) => i.jenisAsset).slice(0, 12),
       matrix: buildGiStreamMatrix(scoped),
@@ -339,6 +342,39 @@ export function CeAnalysisView({
         />
       </div>
 
+      {/* rekap ULTG x stream */}
+      <Section
+        icon={Layers}
+        title="Rekap per ULTG & Stream"
+        description="Jumlah anomali per ULTG dan per stream: total, sudah masuk CE 2026 / belum, serta close / open. Filter ULTG berlaku; filter periode tidak (kolomnya sudah memisah CE 2026 dan belum). Klik angka untuk melihat daftar anomalinya."
+        action={
+          <ExportExcelButton
+            filename={`Rekap-CE-ULTG-Stream-${todayISO}.xlsx`}
+            sheets={[
+              {
+                name: "Rekap ULTG-Stream",
+                rows: [...view.recap.groups, ...(view.recap.upt ? [view.recap.upt] : [])].flatMap((g) =>
+                  [...g.streams, g.subtotal].map((r) => ({
+                    ULTG: g.ultg,
+                    Stream: r === g.subtotal ? "TOTAL" : r.label,
+                    "Total anomali": r.total,
+                    "CE 2026": r.inCe,
+                    "Belum masuk CE": r.notInCe,
+                    Close: r.close,
+                    Open: r.open,
+                  })),
+                ),
+              },
+            ]}
+          />
+        }
+      >
+        <CeRecapTable
+          groups={view.recap.groups}
+          upt={view.recap.upt}
+          onOpen={(title, list) => setDialog({ title, items: list })}
+        />
+      </Section>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* per ULTG */}
         <Section
