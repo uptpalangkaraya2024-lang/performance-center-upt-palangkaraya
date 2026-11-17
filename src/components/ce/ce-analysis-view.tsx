@@ -365,6 +365,27 @@ export function CeAnalysisView({
                   })),
                 ),
               },
+              {
+                name: "Detail per ULTG-Stream",
+                rows: view.recap.groups.flatMap((g) =>
+                  g.streams.flatMap((r) =>
+                    r.items.map((i) => ({
+                      ULTG: g.ultg,
+                      Stream: r.label,
+                      "Gardu Induk": i.gardu,
+                      Bay: i.bay,
+                      "Jenis Aset": i.jenisAsset,
+                      Fasa: i.phasa,
+                      Anomali: i.anomaliPemicu,
+                      "Action Plan": i.actionPlan,
+                      Periode: isInCe(i) ? "CE 2026" : "Belum masuk CE",
+                      Status: i.status,
+                      "Target Tanggal": i.tanggalTarget ?? "",
+                      "Close/Open": i.done ? "CLOSE" : "OPEN",
+                    })),
+                  ),
+                ),
+              },
             ]}
           />
         }
