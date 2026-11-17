@@ -7,14 +7,9 @@ import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { LoadingScreen } from "@/components/dashboard/loading-screen";
 import { PageHero } from "@/components/dashboard/page-hero";
-import { AhiExecutiveSummary } from "@/components/ahi/ahi-executive-summary";
-import { AhiKpiCard } from "@/components/ahi/ahi-kpi-card";
 import { AhiAnomalyTable } from "@/components/ahi/ahi-anomaly-table";
-import { AhiCategoryDetail } from "@/components/ahi/ahi-category-detail";
-import { AhiUltgResumeCard } from "@/components/ahi/ahi-ultg-resume";
-import { CollapsibleDataDetail } from "@/components/ahi/collapsible-data-detail";
+import { AhiOverview } from "@/components/ahi/ahi-overview";
 import { AhiBayReportPanel } from "@/components/ahi/ahi-bay-report-panel";
-import { buildAhiUltgEquipmentMatrix, buildAhiUltgResume } from "@/lib/ahi-compute";
 import { buildRenusOutageSync } from "@/lib/renus-outage-sync";
 import { getAhiPerformance } from "@/services/ahi-performance";
 import { getRenusData } from "@/services/renus";
@@ -85,8 +80,6 @@ export default async function AhiPage({
   }
 
   const { sections, anomalies, lastUpdate } = result.data;
-  const ultgResume = buildAhiUltgResume(anomalies);
-  const ultgEquipmentMatrix = buildAhiUltgEquipmentMatrix(anomalies);
 
   return (
     <div className="flex flex-col gap-6">
@@ -156,34 +149,7 @@ export default async function AhiPage({
         </TabsList>
 
         <TabsContent value="overview" className="flex flex-col gap-6">
-          <AhiExecutiveSummary sections={sections} totalAnomalies={anomalies.length} />
-
-          <section className="flex flex-col gap-3">
-            <div>
-              <h2 className="text-lg font-extrabold tracking-tight">Asset Health Breakdown</h2>
-              <p className="text-xs text-muted-foreground">
-                Healthy Index per KPI utama — MTU, Catu Daya, Trafo, dan Reaktor.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {sections.map((section) => (
-                <AhiKpiCard key={section.key} section={section} />
-              ))}
-            </div>
-          </section>
-
-          <section id="ahi-detail" className="flex scroll-mt-20 flex-col gap-3">
-            <div>
-              <h2 className="text-lg font-extrabold tracking-tight">Detail per Kategori</h2>
-              <p className="text-xs text-muted-foreground">
-                Rincian tiap kategori AHI per kelompok — skor, distribusi hasil pengujian, dan parameter pemeriksaan.
-              </p>
-            </div>
-            <AhiCategoryDetail sections={sections} />
-            <CollapsibleDataDetail sections={sections} />
-          </section>
-
-          <AhiUltgResumeCard resume={ultgResume} matrix={ultgEquipmentMatrix} />
+          <AhiOverview sections={sections} anomalies={anomalies} />
 
           <Card id="ahi-anomaly" className="scroll-mt-20">
             <CardHeader>
