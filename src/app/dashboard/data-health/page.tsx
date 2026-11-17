@@ -130,7 +130,7 @@ async function DataHealthBody({
   // view is only as current as its stalest input, so the newest one alone
   // would overstate freshness.
   const dataAsOf = formatDataAsOfOldest([
-    "CE Proteksi",
+    "CE (Common Enemy)",
     "RENUS",
     "AHI UPT",
     "ABO Proteksi",

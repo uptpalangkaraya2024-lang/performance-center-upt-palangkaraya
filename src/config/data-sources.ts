@@ -342,25 +342,34 @@ export const dataSources = {
       },
     ],
   },
-  // UIP3B Kalimantan-wide file (also holds Input CE for BPP/BJB/PNK, plus
-  // pan-UPT rollup sheets DASHBOARD CE / KAL-CE Weekly) — per the user's
-  // explicit instruction, only Palangkaraya's own sheet is read here, and
-  // every rollup (target/realisasi count, %achieve, breakdown) is computed
-  // independently rather than trusting the pan-UPT DASHBOARD CE sheet
-  // (same "don't rely on a manually-maintained rollup" principle already
-  // applied to 4DX's REKAP and ABO).
+  // UPT Palangkaraya's own CE monitoring file (replaces the UIP3B-wide
+  // "NEXT LEVEL MONITORING Common Enemy 2026" since Nov 2026, per user):
+  // the full list of anomalies across the UPT — both items already adopted
+  // into CE 2026 and ones not yet (PERIODE = "BELUM MASUK CE"). Read per
+  // ULTG sheet (the file's own "INPUT" sheet is a partial merge of them,
+  // confirmed live: 184 vs 202 real rows), plus ALOKASI ANGGARAN for the
+  // budget behind each item. Everything is computed here — the file's own
+  // DASHBOARD sheets are never read.
   ceProteksi: {
     id: "ce-proteksi",
-    label: "CE Proteksi",
+    label: "CE (Common Enemy)",
     sources: [
       {
-        file: "NEXT LEVEL MONITORING Common Enemy 2026",
+        file: "Monitoring Common Enemy UPT Palangkaraya",
         sheets: [
           {
-            name: "🏭 INPUT CE PKY",
+            name: "INPUT ULTG PKY",
             required: false,
             purpose:
-              "Flat list (no block/LM structure) — one row per finding/anomaly, not grouped by program. Real header sits one row below the sheet's own literal row 1 (a helper row with month labels for a pivot area) — found by content match, not a fixed index. Confirmed live: 983 numbered rows, but 349 are empty placeholders (numeric ID, everything else blank) — a real item requires Nama Program or GARDU INDUK to also be non-blank, leaving 634 real findings. CLS/OPN (CLOSE/OPEN) is the sole completion signal; LINK BA/LAP. PENGUJIAN is confirmed blank on every CLOSE item so, unlike ABO, it carries no BA-missing signal here.",
+              "Anomali ULTG Palangkaraya, satu baris per temuan. Header di baris 1 (NO, PERIODE, ULTG, GARDU INDUK, BAY, STREAM, INDIKATOR, JENIS ASET, PHASA, ANOMALI, ACTION PLAN, TANGGAL TEMUAN, LINK BA TEMUAN, TARGET/REALISASI MINGGU & TANGGAL, ANGGARAN, STATUS, CLOSE/OPEN). Baris bernomor tanpa GI/BAY/ANOMALI adalah placeholder kosong.",
+          },
+          { name: "INPUT ULTG PBN", required: false, purpose: "Sama dengan INPUT ULTG PKY, untuk ULTG Pangkalan Bun." },
+          { name: "INPUT ULTG MTW", required: false, purpose: "Sama dengan INPUT ULTG PKY, untuk ULTG Muara Teweh." },
+          {
+            name: "ALOKASI ANGGARAN",
+            required: false,
+            purpose:
+              "Anggaran per anomali (RAB, NILAI, POS/TAHUN ANGGARAN, PRK, kontrak). Header di baris 2. Dicocokkan ke item INPUT ULTG lewat ULTG+GI+BAY+JENIS ASET+PHASA+ANOMALI.",
           },
         ],
       },

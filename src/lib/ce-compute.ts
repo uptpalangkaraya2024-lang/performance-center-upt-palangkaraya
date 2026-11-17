@@ -182,6 +182,20 @@ export const CE_SUB_BIDANG_BY_STREAM: Record<string, string> = {
   "08": "Jaringan",
 };
 
+/** Stream code for one item: from its own STREAM column (the current
+ *  source writes the label, e.g. "Switchyard", "SUTT"), falling back to the
+ *  legacy "NN_" Indikator prefix. */
+export function ceStreamCodeOf(item: Pick<CeItem, "indikator"> & { stream?: string }): string | null {
+  const label = (item.stream ?? "").trim().toUpperCase();
+  if (label) {
+    if (label.startsWith("SUTT")) return "08";
+    if (label.startsWith("SKTT") || label.startsWith("SKLT")) return "07";
+    const hit = Object.entries(CE_STREAM_LABELS).find(([, l]) => l.toUpperCase() === label);
+    if (hit) return hit[0];
+  }
+  return extractCeStreamCode(item.indikator);
+}
+
 export function extractCeStreamCode(indikator: string): string | null {
   const m = /^(\d{2})_/.exec(indikator.trim());
   return m ? m[1] : null;
@@ -201,7 +215,7 @@ export interface CeStreamEntry {
  *  own always-9-rows table. */
 export function buildCeStreamBreakdown(items: CeItem[]): CeStreamEntry[] {
   return Object.entries(CE_STREAM_LABELS).map(([code, label]) => {
-    const group = items.filter((i) => extractCeStreamCode(i.indikator) === code);
+    const group = items.filter((i) => ceStreamCodeOf(i) === code);
     return {
       code,
       label,
@@ -411,7 +425,7 @@ export function buildCeUltgStreamMatrix(items: CeItem[]): CeUltgStreamRow[] {
   }
 
   return Object.entries(CE_STREAM_LABELS).map(([code, label]) => {
-    const group = items.filter((i) => extractCeStreamCode(i.indikator) === code);
+    const group = items.filter((i) => ceStreamCodeOf(i) === code);
     const byUltg = ultgOrder.map((ultg) => {
       const ultgGroup = group.filter((i) => (i.ultg || "Lainnya") === ultg);
       return {
@@ -526,7 +540,7 @@ export function buildCeOpenItemsByUltg(items: CeItem[], selectedWeekLabel: strin
     const ultgItems = byUltg.get(ultg)!;
     const byStream = new Map<string | null, CeItem[]>();
     for (const item of ultgItems) {
-      const code = extractCeStreamCode(item.indikator);
+      const code = ceStreamCodeOf(item);
       const key = code && CE_STREAM_LABELS[code] ? code : null;
       if (!byStream.has(key)) byStream.set(key, []);
       byStream.get(key)!.push(item);
@@ -605,7 +619,7 @@ export function buildCeUltgStreamIdeal(items: CeItem[], selectedWeekLabel: strin
   }
 
   return Object.entries(CE_STREAM_LABELS).map(([code, label]) => {
-    const group = items.filter((i) => extractCeStreamCode(i.indikator) === code);
+    const group = items.filter((i) => ceStreamCodeOf(i) === code);
     const byUltg: CeUltgStreamIdealCell[] = ultgOrder.map((ultg) => {
       const ultgGroup = group.filter((i) => (i.ultg || "Lainnya") === ultg);
       const close = ultgGroup.filter((i) => i.done).length;
@@ -651,7 +665,7 @@ export function buildCeExecutiveSummary(items: CeItem[], streamBreakdown: CeStre
         label: topStream.label,
         open: topStream.open,
         criticalOpen: items.filter(
-          (i) => !i.done && extractCeStreamCode(i.indikator) === topStream.code && i.kriteriaBefore.trim().toLowerCase() === "critical",
+          (i) => !i.done && ceStreamCodeOf(i) === topStream.code && i.kriteriaBefore.trim().toLowerCase() === "critical",
         ).length,
       }
     : null;

@@ -2,24 +2,29 @@ import "server-only";
 
 import { dataSources } from "@/config/data-sources";
 import { readConfiguredSourceRaw } from "@/lib/data-connector";
-import type { CeItem, CeSnapshot } from "@/types";
+import type { CeBudget, CeItem, CeSnapshot, CeUnlinkedBudget } from "@/types";
 
+// Source: "Monitoring Common Enemy UPT Palangkaraya" — one INPUT sheet per
+// ULTG plus ALOKASI ANGGARAN (see data-sources.ts). Every column is found
+// by header name, never a fixed index.
 const SOURCE = dataSources.ceProteksi;
 const FILE = SOURCE.sources[0].file;
-const SHEET = "🏭 INPUT CE PKY";
+const ULTG_SHEETS = ["INPUT ULTG PKY", "INPUT ULTG PBN", "INPUT ULTG MTW"];
+const BUDGET_SHEET = "ALOKASI ANGGARAN";
 
-function textAt(row: unknown[] | undefined, col: number): string {
-  if (!row || col < 0 || col >= row.length) return "";
-  return String(row[col] ?? "").trim();
-}
+const cell = (v: unknown) => String(v ?? "").trim();
+const normalize = (s: string) => s.replace(/\s+/g, " ").trim().toUpperCase();
 
-function normalize(s: string): string {
-  return s.replace(/\s+/g, " ").trim().toUpperCase();
-}
-
-function findCol(row: unknown[], label: string): number {
-  const needle = normalize(label);
-  return row.findIndex((c) => normalize(String(c ?? "")) === needle);
+/** Header-name → column-index map for the first row (within the first 5)
+ *  containing every one of `required`. */
+function locateHeader(rows: unknown[][], required: string[]): { index: number; col: (label: string) => number } | null {
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const labels = (rows[i] ?? []).map((c) => normalize(cell(c)));
+    if (required.every((r) => labels.includes(normalize(r)))) {
+      return { index: i, col: (label) => labels.indexOf(normalize(label)) };
+    }
+  }
+  return null;
 }
 
 function extractWeekLabel(raw: string): string | null {
@@ -27,94 +32,121 @@ function extractWeekLabel(raw: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-function extractDateOnly(raw: unknown): string | null {
-  const text = String(raw ?? "").trim();
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+function extractDateOnly(raw: string): string | null {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(raw.trim());
   return m ? m[1] : null;
 }
 
-/** "🏭 INPUT CE PKY" is a flat list — no block/LM structure. The real
- *  header isn't on the sheet's literal row 1 (that's a helper row with
- *  month labels for a pivot area) — found here by content match (a row
- *  containing both "No" and "Periode"), not a fixed index, since this
- *  file's layout has already proven no more stable than ABO's own INPUT
- *  PKY turned out to be. A row is a real finding only if its own "No" is
- *  numeric AND either Nama Program or GARDU INDUK is non-blank — confirmed
- *  live that ~35% of numbered rows are empty placeholders (a numeric ID
- *  with every other field blank). */
-function parseCeSheet(rows: unknown[][]): CeItem[] {
-  let headerIndex = -1;
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (findCol(row, "No") !== -1 && findCol(row, "Periode") !== -1) {
-      headerIndex = i;
-      break;
-    }
+/** Join key between an INPUT ULTG row and its ALOKASI ANGGARAN row. Both
+ *  sheets carry the same descriptive columns (the budget sheet is a copy
+ *  of the item list) — confirmed live: 182 of 202 items match. ACTION PLAN
+ *  is left out of the key because it is edited after budgeting. */
+function joinKey(parts: string[]): string {
+  return parts.map(normalize).join("|");
+}
+
+function parseBudget(rows: unknown[][]): Map<string, CeUnlinkedBudget[]> {
+  const h = locateHeader(rows, ["ULTG", "GARDU INDUK", "ANOMALI", "NILAI"]);
+  const map = new Map<string, CeUnlinkedBudget[]>();
+  if (!h) return map;
+  const c = (label: string) => h.col(label);
+  for (const row of rows.slice(h.index + 1)) {
+    const at = (label: string) => cell(row[c(label)]);
+    if (!at("ULTG") || at("ULTG").startsWith("#")) continue;
+    const nilaiRaw = at("NILAI").replace(/[^\d.]/g, "");
+    const nilai = nilaiRaw ? Number(nilaiRaw) : NaN;
+    const budget: CeUnlinkedBudget = {
+      ultg: at("ULTG"),
+      gardu: at("GARDU INDUK"),
+      bay: at("BAY"),
+      jenisAsset: at("JENIS ASET"),
+      anomali: at("ANOMALI"),
+      rab: at("RAB"),
+      nilai: Number.isFinite(nilai) && nilai > 0 ? nilai : null,
+      pos: at("POS ANGGARAN"),
+      tahun: at("TAHUN ANGGARAN"),
+      judulPrk: at("JUDUL PRK"),
+      nomorPrk: at("NOMOR PRK"),
+      kontrak: at("KONTRAK dan KETERANGAN"),
+    };
+    const key = joinKey([at("ULTG"), at("GARDU INDUK"), at("BAY"), at("JENIS ASET"), at("PHASA"), at("ANOMALI")]);
+    const list = map.get(key) ?? [];
+    list.push(budget);
+    map.set(key, list);
   }
-  if (headerIndex === -1) return [];
+  return map;
+}
 
-  const header = rows[headerIndex];
-  const col = {
-    id: findCol(header, "No"),
-    ultg: findCol(header, "ULTG"),
-    gardu: findCol(header, "GARDU INDUK"),
-    bay: findCol(header, "NAMA_BAY"),
-    span: findCol(header, "NAMA_SPAN/TOWER"),
-    jenisAsset: findCol(header, "Jenis_Asset"),
-    indikator: findCol(header, "Indikator"),
-    phasa: findCol(header, "PHASA"),
-    namaProgram: findCol(header, "Nama Program"),
-    tanggalTemuan: findCol(header, "Tanggal_Temuan"),
-    anomaliPemicu: findCol(header, "ANOMALI_PEMICU"),
-    kriteriaBefore: findCol(header, "KRITERIA BEFORE"),
-    actionPlan: findCol(header, "ACTION PLAN UNIT"),
-    kriteriaAfter: findCol(header, "KRITERIA AFTER"),
-    catatanUpt: findCol(header, "CATATAN UPT"),
-    alert: findCol(header, "ALERT"),
-    catatanInduk: findCol(header, "CATATAN INDUK"),
-    targetMinggu: findCol(header, "TARGET MINGGU"),
-    tanggalTarget: findCol(header, "TANGGAL TARGET"),
-    realisasiMinggu: findCol(header, "REALISASI MINGGU"),
-    tanggalRealisasi: findCol(header, "TANGGAL REALISASI"),
-    satuan: findCol(header, "Satuan"),
-    status: findCol(header, "STATUS"),
-    clsOpn: findCol(header, "CLS/OPN"),
-  };
-
+function parseUltgSheet(rows: unknown[][], budgets: Map<string, CeUnlinkedBudget[]>, idOffset: number): CeItem[] {
+  const h = locateHeader(rows, ["NO", "PERIODE", "ULTG", "GARDU INDUK", "ANOMALI", "CLOSE/OPEN"]);
+  if (!h) return [];
   const items: CeItem[] = [];
-  for (let i = headerIndex + 1; i < rows.length; i++) {
-    const row = rows[i];
-    const idText = textAt(row, col.id);
-    if (!/^\d+$/.test(idText)) continue;
-    const namaProgram = textAt(row, col.namaProgram);
-    const gardu = textAt(row, col.gardu);
-    if (!namaProgram && !gardu) continue; // empty placeholder row
+  for (const row of rows.slice(h.index + 1)) {
+    const at = (label: string) => {
+      const i = h.col(label);
+      return i === -1 ? "" : cell(row[i]);
+    };
+    const no = at("NO");
+    if (!/^\d+$/.test(no)) continue;
+    const gardu = at("GARDU INDUK");
+    const bay = at("BAY");
+    const anomali = at("ANOMALI");
+    // Numbered rows with nothing in them are pre-filled placeholders.
+    if (!gardu && !bay && !anomali) continue;
+
+    const ultg = at("ULTG");
+    const jenisAsset = at("JENIS ASET");
+    const phasa = at("PHASA");
+    // Two items can share every descriptive column (same anomaly listed
+    // twice); their budget rows are consumed in order so each gets its own.
+    const budgetQueue = budgets.get(joinKey([ultg, gardu, bay, jenisAsset, phasa, anomali]));
+    const linked = budgetQueue && budgetQueue.length > 0 ? budgetQueue.shift()! : null;
+    const budget: CeBudget | null = linked
+      ? {
+          rab: linked.rab,
+          nilai: linked.nilai,
+          pos: linked.pos,
+          tahun: linked.tahun,
+          judulPrk: linked.judulPrk,
+          nomorPrk: linked.nomorPrk,
+          kontrak: linked.kontrak,
+        }
+      : null;
 
     items.push({
-      id: Number(idText),
-      ultg: textAt(row, col.ultg),
+      id: idOffset + Number(no),
+      no: Number(no),
+      ultg,
       gardu,
-      bay: textAt(row, col.bay),
-      span: textAt(row, col.span),
-      jenisAsset: textAt(row, col.jenisAsset),
-      indikator: textAt(row, col.indikator),
-      phasa: textAt(row, col.phasa),
-      namaProgram,
-      tanggalTemuan: extractDateOnly(row[col.tanggalTemuan]),
-      anomaliPemicu: textAt(row, col.anomaliPemicu),
-      kriteriaBefore: textAt(row, col.kriteriaBefore),
-      actionPlan: textAt(row, col.actionPlan),
-      kriteriaAfter: textAt(row, col.kriteriaAfter),
-      catatanUpt: textAt(row, col.catatanUpt),
-      alert: textAt(row, col.alert),
-      catatanInduk: textAt(row, col.catatanInduk),
-      targetWeekLabel: extractWeekLabel(textAt(row, col.targetMinggu)),
-      tanggalTarget: extractDateOnly(row[col.tanggalTarget]),
-      realisasiWeekLabel: extractWeekLabel(textAt(row, col.realisasiMinggu)),
-      tanggalRealisasi: extractDateOnly(row[col.tanggalRealisasi]),
-      satuan: textAt(row, col.satuan),
-      status: textAt(row, col.status),
-      done: textAt(row, col.clsOpn).toUpperCase() === "CLOSE",
+      bay,
+      span: "",
+      jenisAsset,
+      indikator: at("INDIKATOR"),
+      phasa,
+      // No program column in this source; other modules show namaProgram
+      // as an item's label, so give them "<jenis aset>: <anomali>" (or the
+      // action plan when the anomaly text is blank).
+      namaProgram: [jenisAsset, anomali || at("ACTION PLAN")].filter(Boolean).join(": "),
+      tanggalTemuan: extractDateOnly(at("TANGGAL TEMUAN")),
+      anomaliPemicu: anomali,
+      kriteriaBefore: "",
+      actionPlan: at("ACTION PLAN"),
+      kriteriaAfter: "",
+      catatanUpt: "",
+      alert: "",
+      catatanInduk: "",
+      targetWeekLabel: extractWeekLabel(at("TARGET MINGGU")),
+      tanggalTarget: extractDateOnly(at("TARGET TANGGAL")),
+      realisasiWeekLabel: extractWeekLabel(at("REALISASI MINGGU")),
+      tanggalRealisasi: extractDateOnly(at("REALISASI TANGGAL")),
+      satuan: "",
+      status: at("STATUS"),
+      done: at("CLOSE/OPEN").toUpperCase() === "CLOSE",
+      periode: at("PERIODE"),
+      stream: at("STREAM"),
+      linkBaTemuan: at("LINK BA TEMUAN"),
+      anggaranLabel: at("ANGGARAN"),
+      budget,
     });
   }
   return items;
@@ -122,7 +154,12 @@ function parseCeSheet(rows: unknown[][]): CeItem[] {
 
 export async function getCeSnapshot(): Promise<CeSnapshot> {
   const results = await readConfiguredSourceRaw(SOURCE);
-  const sheet = results.find((r) => r.file === FILE && r.sheet === SHEET);
-  const items = sheet ? parseCeSheet(sheet.rows) : [];
-  return { items, error: items.length === 0 ? "Data CE Proteksi belum tersedia." : null };
+  const sheet = (name: string) => results.find((r) => r.file === FILE && r.sheet === name)?.rows ?? [];
+  const budgets = parseBudget(sheet(BUDGET_SHEET));
+  // id = 1000 × sheet position + NO, so ids stay unique across the three
+  // sheets (each restarts NO at 1) and stable as rows are appended.
+  const items = ULTG_SHEETS.flatMap((name, i) => parseUltgSheet(sheet(name), budgets, (i + 1) * 1000));
+  // Whatever is left in the queues matched no item.
+  const budgetUnlinked = [...budgets.values()].flat().filter((b) => b.nilai !== null);
+  return { items, error: items.length === 0 ? "Data CE belum tersedia." : null, budgetUnlinked };
 }

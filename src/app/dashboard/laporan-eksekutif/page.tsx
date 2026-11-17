@@ -265,7 +265,7 @@ async function NarrativeReportBody({
   // from `generatedAt` above (that's when this PAGE was rendered; this is
   // when the underlying sheet data was last actually pulled, which can be
   // hours earlier).
-  const dataAsOf = formatDataAsOfOldest(["Kinerja UPT", "Kinerja ULTG", "RENUS", "Gangguan", "CE Proteksi", "AHI UPT"]);
+  const dataAsOf = formatDataAsOfOldest(["Kinerja UPT", "Kinerja ULTG", "RENUS", "Gangguan", "CE (Common Enemy)", "AHI UPT"]);
 
   return (
     <Card className="print:shadow-none">

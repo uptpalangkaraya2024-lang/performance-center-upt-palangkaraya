@@ -1072,11 +1072,54 @@ export interface CeItem {
    *  unlike ABO there's no separate "realized but evidence missing" case
    *  to track here). */
   done: boolean;
+  // --- Fields from "Monitoring Common Enemy UPT Palangkaraya" (the
+  // per-ULTG INPUT sheets), the CE source since Nov 2026. The legacy
+  // fields above that the new sheet has no column for (namaProgram,
+  // kriteria*, catatan*, alert, span, satuan) are left "".
+  /** Sheet row number ("NO") — restarts per ULTG sheet, so not unique; `id` is. */
+  no: number;
+  /** "CE 2026" (already in the CE program) or "BELUM MASUK CE" (anomaly
+   *  logged but not yet adopted into CE). */
+  periode: string;
+  /** STREAM column as written: Switchyard, Proteksi, Facility, Catu Daya,
+   *  Trafo, GIS, SUTT, MV Apparatus. */
+  stream: string;
+  /** LINK BA TEMUAN — the finding's own BA document name, "" if none. */
+  linkBaTemuan: string;
+  /** ANGGARAN column, e.g. "AI 2027" — "" if blank. */
+  anggaranLabel: string;
+  /** Joined from the same file's "ALOKASI ANGGARAN" sheet; null when the
+   *  item has no row there. */
+  budget: CeBudget | null;
+}
+
+export interface CeBudget {
+  rab: string;
+  /** Rupiah; null when NILAI is blank. */
+  nilai: number | null;
+  /** "Investasi" / "Operasi" / "" */
+  pos: string;
+  tahun: string;
+  judulPrk: string;
+  nomorPrk: string;
+  kontrak: string;
 }
 
 export interface CeSnapshot {
   items: CeItem[];
   error: string | null;
+  /** ALOKASI ANGGARAN rows that match no INPUT ULTG item (e.g. a GI-wide
+   *  package written at GI level while the items are per bay). Shown
+   *  separately so no budgeted money silently disappears. */
+  budgetUnlinked?: CeUnlinkedBudget[];
+}
+
+export interface CeUnlinkedBudget extends CeBudget {
+  ultg: string;
+  gardu: string;
+  bay: string;
+  jenisAsset: string;
+  anomali: string;
 }
 
 // --- Data Aset — "REKAPITULASI SCANNING" ------------------------------

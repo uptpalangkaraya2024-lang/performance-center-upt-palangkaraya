@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { PageHero } from "@/components/dashboard/page-hero";
-import { CeView } from "@/components/ce/ce-view";
+import { CeAnalysisView } from "@/components/ce/ce-analysis-view";
 import { getCeSnapshot } from "@/services/ce-proteksi";
 
 export const dynamic = "force-dynamic";
@@ -10,13 +10,14 @@ export const maxDuration = 60;
 
 export default async function CePage() {
   const snapshot = await getCeSnapshot();
+  const todayISO = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 print:hidden">
         <PageHero
           title="CE (Common Enemy) UPT Palangkaraya"
-          description="Temuan/anomali aset (elektrik & sipil/fasilitas) yang perlu ditindaklanjuti hingga close, per ULTG/GI/jenis aset — dihitung otomatis untuk periode yang dipilih."
+          description="Seluruh anomali aset UPT Palangkaraya, baik yang sudah masuk CE 2026 maupun yang belum: status, sebaran per ULTG/GI/stream/jenis aset, masalah sistemik, kandidat CE berikutnya, anggaran, dan kelengkapan data."
           status={
             !snapshot.error ? (
               <>
@@ -35,11 +36,12 @@ export default async function CePage() {
           </CardContent>
         </Card>
       ) : (
-        <CeView snapshot={snapshot} emptyMessage="Data CE belum tersedia — lihat halaman Data & Sync untuk detail." />
+        <CeAnalysisView items={snapshot.items} budgetUnlinked={snapshot.budgetUnlinked ?? []} todayISO={todayISO} />
       )}
 
       <p className="text-[11px] text-muted-foreground print:hidden">
-        Source: NEXT LEVEL MONITORING Common Enemy 2026 · Sheet: 🏭 INPUT CE PKY · Provider: Apps Script
+        Source: Monitoring Common Enemy UPT Palangkaraya · Sheet: INPUT ULTG PKY, INPUT ULTG PBN, INPUT ULTG MTW, ALOKASI
+        ANGGARAN · Provider: Apps Script
       </p>
     </div>
   );
