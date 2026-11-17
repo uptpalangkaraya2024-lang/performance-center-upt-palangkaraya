@@ -19,7 +19,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <div className="print:hidden">
         <AppSidebar />
       </div>
-      <SidebarInset>
+      {/* min-w-0: a flex child defaults to min-width:auto, so one wide
+          table (AHI's anomaly list) used to stretch the whole page past
+          the viewport instead of scrolling inside its own box. */}
+      <SidebarInset className="min-w-0">
         <div className="print:hidden">
           <SiteHeader />
         </div>
