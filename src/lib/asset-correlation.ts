@@ -1,3 +1,4 @@
+import { splitCeGardu } from "@/lib/ce-compute";
 import { canonicalGiKey, correctGiSpelling } from "@/lib/gi-name";
 import { isRenusOverdue } from "@/lib/renus-helpers";
 import type { AhiAnomalyRecord, CeItem, DisturbanceGiCount, RenusRow } from "@/types";
@@ -133,10 +134,12 @@ export function buildGiCorrelation(params: {
   }
 
   for (const item of ceItems) {
-    if (!item.gardu) continue;
-    const row = ensure(normalizeGiName(item.gardu));
-    row.ceTotal += 1;
-    if (!item.done) row.ceOpen += 1;
+    // A UPT-wide program names several GIs in one cell — count it at each.
+    for (const gardu of splitCeGardu(item.gardu)) {
+      const row = ensure(normalizeGiName(gardu));
+      row.ceTotal += 1;
+      if (!item.done) row.ceOpen += 1;
+    }
   }
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());

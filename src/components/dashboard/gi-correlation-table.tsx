@@ -1,20 +1,10 @@
 import Link from "next/link";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { GiCorrelationRow } from "@/lib/asset-correlation";
 
 export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
-  const withSignal = rows.filter(
-    (r) => r.gangguanTotal > 0 || r.ahiTotal > 0 || r.ceTotal > 0 || r.renusTotal > 0,
-  );
+  const withSignal = rows.filter((r) => r.gangguanTotal > 0 || r.ahiTotal > 0 || r.ceTotal > 0 || r.renusTotal > 0);
 
   if (withSignal.length === 0) {
     return (
@@ -31,24 +21,53 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
         &quot;Gardu&quot;, RENUS: &quot;GI&quot;) — bukan tebakan dari nama bay. Diurutkan dari skor risiko tertinggi
         (AHI Critical dibobot paling berat, lalu AHI Poor/CE Open/RENUS Overdue, lalu jumlah gangguan).
       </p>
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>GI</TableHead>
-              <TableHead className="text-right">Gangguan Trafo</TableHead>
-              <TableHead className="text-right">Gangguan Transmisi</TableHead>
-              <TableHead className="text-right">AHI Poor</TableHead>
-              <TableHead className="text-right">AHI Critical</TableHead>
-              <TableHead className="text-right">CE Open</TableHead>
-              <TableHead className="text-right">RENUS Overdue</TableHead>
-              <TableHead className="border-l text-right">Skor Risiko</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      {/* One box, no sideways scrolling: fixed layout, GI names wrap
+          inside their cell, headers wrap onto two lines. */}
+      <div className="rounded-lg border">
+        <table className="w-full table-fixed text-[11px] sm:text-sm">
+          <colgroup>
+            <col className="w-[36%] sm:w-[34%]" />
+            {Array.from({ length: 7 }, (_, i) => (
+              <col key={i} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr className="border-b bg-muted/70 text-[10px] leading-tight text-muted-foreground sm:text-xs">
+              <th className="px-2 py-2 text-left font-semibold sm:px-3">GI</th>
+              <th className="px-1 py-2 text-right font-semibold sm:px-2" title="Gangguan Trafo">
+                <span className="sm:hidden">Trf</span>
+                <span className="hidden sm:inline">Gangguan Trafo</span>
+              </th>
+              <th className="px-1 py-2 text-right font-semibold sm:px-2" title="Gangguan Transmisi">
+                <span className="sm:hidden">Trans</span>
+                <span className="hidden sm:inline">Gangguan Transmisi</span>
+              </th>
+              <th className="px-1 py-2 text-right font-semibold sm:px-2" title="AHI Poor">
+                <span className="sm:hidden">Poor</span>
+                <span className="hidden sm:inline">AHI Poor</span>
+              </th>
+              <th className="px-1 py-2 text-right font-semibold sm:px-2" title="AHI Critical">
+                <span className="sm:hidden">Crit</span>
+                <span className="hidden sm:inline">AHI Critical</span>
+              </th>
+              <th className="px-1 py-2 text-right font-semibold sm:px-2" title="CE Open">
+                <span className="sm:hidden">CE</span>
+                <span className="hidden sm:inline">CE Open</span>
+              </th>
+              <th className="px-1 py-2 text-right font-semibold sm:px-2" title="RENUS Overdue">
+                <span className="sm:hidden">Renus</span>
+                <span className="hidden sm:inline">RENUS Overdue</span>
+              </th>
+              <th className="border-l px-1 py-2 text-right font-semibold sm:px-2" title="Skor Risiko">
+                <span className="sm:hidden">Skor</span>
+                <span className="hidden sm:inline">Skor Risiko</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
             {withSignal.map((row) => (
-              <TableRow key={row.gi}>
-                <TableCell className="font-medium whitespace-nowrap">
+              <tr key={row.gi} className="border-b last:border-0 hover:bg-muted/40">
+                <td className="px-2 py-2 align-top font-medium [overflow-wrap:normal] sm:px-3">
                   {row.ahiTotal > 0 ? (
                     <Link
                       href={`/dashboard/ahi?gi=${encodeURIComponent(row.gi)}#ahi-anomaly`}
@@ -59,27 +78,56 @@ export function GiCorrelationTable({ rows }: { rows: GiCorrelationRow[] }) {
                   ) : (
                     row.gi
                   )}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{row.gangguanTrafo || "-"}</TableCell>
-                <TableCell className="text-right tabular-nums">{row.gangguanTransmisi || "-"}</TableCell>
-                <TableCell className={cn("text-right text-sm tabular-nums", row.ahiPoor > 0 && "text-warning-foreground font-bold")}>
+                </td>
+                <td className={cn("px-1 py-2 text-right align-top tabular-nums sm:px-2")}>
+                  {row.gangguanTrafo || "-"}
+                </td>
+                <td className={cn("px-1 py-2 text-right align-top tabular-nums sm:px-2")}>
+                  {row.gangguanTransmisi || "-"}
+                </td>
+                <td
+                  className={cn(
+                    "px-1 py-2 text-right align-top tabular-nums sm:px-2",
+                    row.ahiPoor > 0 && "text-warning-foreground font-bold",
+                  )}
+                >
                   {row.ahiPoor || "-"}
-                </TableCell>
-                <TableCell className={cn("text-right text-sm tabular-nums", row.ahiCritical > 0 && "text-critical font-bold")}>
+                </td>
+                <td
+                  className={cn(
+                    "px-1 py-2 text-right align-top tabular-nums sm:px-2",
+                    row.ahiCritical > 0 && "text-critical font-bold",
+                  )}
+                >
                   {row.ahiCritical || "-"}
-                </TableCell>
-                <TableCell className={cn("text-right text-sm tabular-nums", row.ceOpen > 0 && "text-warning-foreground font-bold")}>
+                </td>
+                <td
+                  className={cn(
+                    "px-1 py-2 text-right align-top tabular-nums sm:px-2",
+                    row.ceOpen > 0 && "text-warning-foreground font-bold",
+                  )}
+                >
                   {row.ceOpen || "-"}
-                </TableCell>
-                <TableCell className={cn("text-right text-sm tabular-nums", row.renusOverdue > 0 && "text-warning-foreground font-bold")}>
+                </td>
+                <td
+                  className={cn(
+                    "px-1 py-2 text-right align-top tabular-nums sm:px-2",
+                    row.renusOverdue > 0 && "text-warning-foreground font-bold",
+                  )}
+                >
                   {row.renusOverdue || "-"}
-                </TableCell>
-                <TableCell className="border-l text-right font-bold tabular-nums text-foreground">{row.riskScore}</TableCell>
-              </TableRow>
+                </td>
+                <td className="border-l px-1 py-2 text-right align-top font-bold text-foreground tabular-nums sm:px-2">
+                  {row.riskScore}
+                </td>
+              </tr>
             ))}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
+      <p className="text-[10px] text-muted-foreground sm:hidden">
+        Trf/Trans = gangguan trafo/transmisi · Poor/Crit = AHI Poor/Critical · CE = CE Open · Renus = RENUS Overdue
+      </p>
     </div>
   );
 }

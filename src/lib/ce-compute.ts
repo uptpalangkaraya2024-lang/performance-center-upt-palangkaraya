@@ -677,3 +677,13 @@ export function buildCeExecutiveSummary(items: CeItem[], streamBreakdown: CeStre
     backlogStream,
   };
 }
+
+/** The CE source's GARDU INDUK cell can name several GIs for one UPT-wide
+ *  program ("GI 150 KV KASONGAN, GI 150 KV KUALA KURUN, ..."). Every
+ *  per-GI consumer must split it, or the whole list becomes one bogus GI. */
+export function splitCeGardu(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((g) => g.trim())
+    .filter(Boolean);
+}

@@ -6,6 +6,7 @@
 // time-window join, not a causal claim — every link is presented as
 // "worth checking," never as a confirmed cause, since nothing in these
 // sheets records an actual causal chain.
+import { splitCeGardu } from "@/lib/ce-compute";
 import { canonicalGiKey } from "@/lib/gi-name";
 import type { AhiAnomalyRecord, CeItem, DisturbanceBayEventRecord } from "@/types";
 
@@ -53,7 +54,7 @@ export function findRootCauseLinks(params: {
   const links: RootCauseLink[] = [];
   for (const event of recentEvents) {
     const relatedAhiFindings = anomalies.filter((a) => giMatches(a.gi, event.gi) && (a.kategoriAhi === 4 || a.kategoriAhi === 5));
-    const relatedCeFindings = ceItems.filter((c) => !c.done && giMatches(c.gardu, event.gi));
+    const relatedCeFindings = ceItems.filter((c) => !c.done && splitCeGardu(c.gardu).some((g) => giMatches(g, event.gi)));
     if (relatedAhiFindings.length > 0 || relatedCeFindings.length > 0) {
       links.push({ event, relatedAhiFindings, relatedCeFindings });
     }

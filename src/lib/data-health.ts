@@ -6,6 +6,7 @@
 // module data (same promises the homepage/each page already awaits) and
 // looks for rows that don't fit the shape every *-compute.ts file assumes.
 import { normalizeGiName } from "@/lib/asset-correlation";
+import { splitCeGardu } from "@/lib/ce-compute";
 import { ULTG_CANONICAL_KEYS, ultgKey } from "@/lib/ultg";
 import type { AboSnapshot, AhiAnomalyRecord, CeItem, FourDxLm, RenusRow, SuttRuas, UptKpi, UltgKpi } from "@/types";
 
@@ -350,7 +351,7 @@ export function buildDataHealthReport(params: {
   if (giRegistryDropped) checks.push(giRegistryDropped);
 
   const giNamePairs = findSimilarGiNamePairs([
-    ...params.ceItems.map((i) => i.gardu),
+    ...params.ceItems.flatMap((i) => splitCeGardu(i.gardu)),
     ...params.renusRows.map((r) => r.gi),
     ...params.anomalies.map((a) => a.gi),
   ]);

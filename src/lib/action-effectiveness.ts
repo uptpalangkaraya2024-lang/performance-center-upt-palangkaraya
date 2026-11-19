@@ -21,6 +21,7 @@
 // "gangguan went down" can be read against whether gangguan went down
 // everywhere that period anyway (a system-wide trend, e.g. a drier month)
 // rather than only at this one GI.
+import { splitCeGardu } from "@/lib/ce-compute";
 import { canonicalGiKey, giTowerKey } from "@/lib/gi-name";
 import { extractRenusTowerNumbers } from "@/lib/ruas-correlation";
 import {
@@ -271,9 +272,9 @@ function collectRawInterventions(renusRows: RenusRow[], ceItems: CeItem[], today
     if (!c.done || !c.tanggalRealisasi || !c.gardu) continue;
     const daysSinceAction = daysBetween(c.tanggalRealisasi, todayISO);
     if (daysSinceAction < 0 || daysSinceAction > LOOKBACK_DAYS) continue;
-    raw.push({
+    for (const gi of splitCeGardu(c.gardu)) raw.push({
       source: "CE",
-      gi: c.gardu,
+      gi,
       category: classifyCeIndikator(c.indikator),
       description: c.namaProgram || c.anomaliPemicu || `Temuan #${c.id}`,
       realisasiDate: c.tanggalRealisasi,
