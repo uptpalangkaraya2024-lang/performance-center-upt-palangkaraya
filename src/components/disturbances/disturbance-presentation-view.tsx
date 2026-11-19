@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronLeft, ChevronRight, Maximize2, Minus, Printer, RotateCcw, TrendingDown, TrendingUp, X } from "lucide-react";
 import {
@@ -909,7 +909,7 @@ export function DisturbancePresentationView({
                           innerRadius={72}
                           outerRadius={120}
                           paddingAngle={2}
-                          label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
+                          label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
                         >
                           {donutData.map((d) => (
                             <Cell key={d.name} fill={CATEGORY_COLOR[d.name]} />
@@ -1326,8 +1326,8 @@ export function DisturbancePresentationView({
                     lg:grid-cols-3 breakpoint (presentation mode is
                     effectively always a wide fullscreen viewport). */}
                 <div
-                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                  style={{ gridTemplateRows: `repeat(${Math.ceil(transmisiCauseYearCharts.length / 3)}, minmax(0, 1fr))` }}
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:[grid-template-rows:var(--cause-rows)]"
+                  style={{ "--cause-rows": `repeat(${Math.ceil(transmisiCauseYearCharts.length / 3)}, minmax(0, 1fr))` } as CSSProperties}
                 >
                   {transmisiCauseYearCharts.map((c) => (
                     <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
@@ -1335,7 +1335,7 @@ export function DisturbancePresentationView({
                 </div>
                 <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
                   <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
-                  <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+                  <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
                     {transmisiCauseShareByYear.map((share) => (
                       <CauseShareYearPie key={share.year} share={share} topCauses={transmisiTopCauses} />
                     ))}
@@ -1366,8 +1366,8 @@ export function DisturbancePresentationView({
             ) : (
               <>
                 <div
-                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                  style={{ gridTemplateRows: `repeat(${Math.ceil(trafoHvCauseYearCharts.length / 3)}, minmax(0, 1fr))` }}
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:[grid-template-rows:var(--cause-rows)]"
+                  style={{ "--cause-rows": `repeat(${Math.ceil(trafoHvCauseYearCharts.length / 3)}, minmax(0, 1fr))` } as CSSProperties}
                 >
                   {trafoHvCauseYearCharts.map((c) => (
                     <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
@@ -1375,7 +1375,7 @@ export function DisturbancePresentationView({
                 </div>
                 <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
                   <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
-                  <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+                  <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
                     {trafoHvCauseShareByYear.map((share) => (
                       <CauseShareYearPie key={share.year} share={share} topCauses={trafoHvTopCauses} />
                     ))}
@@ -1406,8 +1406,8 @@ export function DisturbancePresentationView({
             ) : (
               <>
                 <div
-                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                  style={{ gridTemplateRows: `repeat(${Math.ceil(trafoLvCauseYearCharts.length / 3)}, minmax(0, 1fr))` }}
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:[grid-template-rows:var(--cause-rows)]"
+                  style={{ "--cause-rows": `repeat(${Math.ceil(trafoLvCauseYearCharts.length / 3)}, minmax(0, 1fr))` } as CSSProperties}
                 >
                   {trafoLvCauseYearCharts.map((c) => (
                     <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
@@ -1415,7 +1415,7 @@ export function DisturbancePresentationView({
                 </div>
                 <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
                   <p className="shrink-0 text-sm font-semibold text-foreground">Distribusi Penyebab per Tahun</p>
-                  <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+                  <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
                     {trafoLvCauseShareByYear.map((share) => (
                       <CauseShareYearPie key={share.year} share={share} topCauses={trafoLvTopCauses} />
                     ))}
@@ -1555,7 +1555,7 @@ export function DisturbancePresentationView({
           </Button>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
             <Printer className="size-3.5" />
             Cetak / Simpan PDF

@@ -877,7 +877,7 @@ export function FourDxView({ snapshot, outcome }: { snapshot: FourDxSnapshot; ou
           </Button>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <WaRecapSheet text={`${waRecap}\n\n${insightRecap}`} />
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
             <Printer className="size-3.5" />

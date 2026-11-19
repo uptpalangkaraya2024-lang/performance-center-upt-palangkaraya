@@ -29,7 +29,7 @@ export function AboTrajectoryChart({
     <div className="flex flex-col gap-1.5">
       <p className="text-sm font-bold tracking-wide text-foreground uppercase">Grafik Lintasan Tahunan</p>
       <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={trajectory} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+        <LineChart data={trajectory} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="weekLabel"
@@ -45,7 +45,7 @@ export function AboTrajectoryChart({
             axisLine={false}
             fontSize={10}
             stroke="var(--muted-foreground)"
-            width={36}
+            width={40}
             tickFormatter={(v) => `${v}%`}
           />
           <Tooltip
