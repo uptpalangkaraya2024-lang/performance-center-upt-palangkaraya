@@ -95,7 +95,6 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
-  const pageRows = filtered.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE);
 
   if (records.length === 0) {
     return (
@@ -274,8 +273,10 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pageRows.map((r, idx) => (
-              <TableRow key={`${r.no}-${idx}`}>
+            {/* every row is rendered; rows off the current page are hidden on
+                screen only, so print / Export PDF lists them all */}
+            {filtered.map((r, idx) => (
+              <TableRow key={`${r.no}-${idx}`} className={cn((idx < currentPage * PAGE_SIZE || idx >= currentPage * PAGE_SIZE + PAGE_SIZE) && "hidden print:table-row")}>
                 <TableCell className="whitespace-nowrap">{r.ultg}</TableCell>
                 <TableCell className="whitespace-nowrap">{r.gi}</TableCell>
                 <TableCell className="max-w-[220px] truncate" title={r.bay}>
@@ -304,7 +305,7 @@ export function AhiAnomalyTable({ records }: { records: AhiAnomalyRecord[] }) {
       )}
 
       {filtered.length > 0 ? (
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="flex items-center justify-between text-xs text-muted-foreground print:hidden">
         <span>
           Halaman {currentPage + 1} dari {pageCount}
         </span>

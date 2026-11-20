@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeft, Info, Link2 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { cn } from "@/lib/utils";
@@ -37,10 +38,13 @@ export default async function KeterkaitanModulPage() {
         title="Keterkaitan Antar Modul"
         description="Gangguan 90 hari terakhir yang terjadi di GI dengan temuan AHI Poor/Critical atau Common Enemy OPEN — dicek otomatis, bukan bukti penyebab pasti."
         actions={
-          <Link href="/dashboard/disturbances" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <ArrowLeft className="size-3.5" />
-            Kembali ke Gangguan
-          </Link>
+          <>
+            <ExportPdfButton />
+            <Link href="/dashboard/disturbances" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <ArrowLeft className="size-3.5" />
+              Kembali ke Gangguan
+            </Link>
+          </>
         }
       />
 

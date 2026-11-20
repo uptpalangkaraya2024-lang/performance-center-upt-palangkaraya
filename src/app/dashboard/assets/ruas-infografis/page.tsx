@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { RuasInfografisClient } from "@/components/assets/ruas-infografis-client";
@@ -79,6 +80,7 @@ export default async function RuasInfografisPage() {
       <PageHero
         title="Infografis Ruas"
         description="Ringkasan kondisi per ruas SUTT — AHI, CE, riwayat gangguan, ABO, dan sinkronisasi jadwal padam dalam satu tampilan."
+        actions={<ExportPdfButton />}
       />
       <RuasInfografisClient summaries={summaries} />
     </div>

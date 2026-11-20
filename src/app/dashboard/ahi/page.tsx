@@ -83,7 +83,7 @@ export default async function AhiPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="print:hidden">
+      <div>
       <PageHero
         title="AHI UPT Palangkaraya"
         description="Healthy Index Monitoring 2026 — Unit Induk UIP3B Kalimantan / UPT Palangkaraya"

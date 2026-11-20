@@ -90,7 +90,6 @@ export function RenusWorkTable({ rows }: { rows: RenusRow[] }) {
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
-  const pageRows = filtered.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-3">
@@ -125,8 +124,12 @@ export function RenusWorkTable({ rows }: { rows: RenusRow[] }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pageRows.map((row) => (
-                  <TableRow key={row.id} className="cursor-pointer hover:bg-muted/40" onClick={() => setSelected(row)}>
+                {filtered.map((row, idx) => (
+                  <TableRow
+                    key={row.id}
+                    className={cn("cursor-pointer hover:bg-muted/40", (idx < currentPage * PAGE_SIZE || idx >= currentPage * PAGE_SIZE + PAGE_SIZE) && "hidden print:table-row")}
+                    onClick={() => setSelected(row)}
+                  >
                     <TableCell className="whitespace-nowrap">{formatShort(row.rencanaDate)}</TableCell>
                     <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground" title={row.ultg}>
                       {row.ultg}
@@ -152,7 +155,7 @@ export function RenusWorkTable({ rows }: { rows: RenusRow[] }) {
             </Table>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between text-xs text-muted-foreground print:hidden">
             <span>
               Halaman {currentPage + 1} dari {pageCount}
             </span>

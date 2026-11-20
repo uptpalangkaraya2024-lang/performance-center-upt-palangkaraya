@@ -1507,7 +1507,7 @@ export function DisturbancePresentationView({
   }, [mode, clampSlide, exitPresentation]);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5" data-print-slides>
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <Link href="/dashboard/disturbances" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-3.5" />

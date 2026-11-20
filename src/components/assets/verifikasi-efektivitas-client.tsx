@@ -105,7 +105,6 @@ export function VerifikasiEfektivitasClient({ checks }: { checks: ActionEffectiv
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageSafe = Math.min(page, pageCount - 1);
-  const paged = filtered.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
 
   function resetToFirstPage() {
     setPage(0);
@@ -306,8 +305,14 @@ export function VerifikasiEfektivitasClient({ checks }: { checks: ActionEffectiv
                 </tr>
               </thead>
               <tbody>
-                {paged.map((c, i) => (
-                  <tr key={i} className="border-b last:border-0">
+                {filtered.map((c, i) => (
+                  <tr
+                    key={i}
+                    className={cn(
+                      "border-b last:border-0",
+                      (i < pageSafe * PAGE_SIZE || i >= pageSafe * PAGE_SIZE + PAGE_SIZE) && "hidden print:table-row",
+                    )}
+                  >
                     <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{c.source.join(", ")}</td>
                     <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap">
                       {c.gi}
@@ -368,7 +373,7 @@ export function VerifikasiEfektivitasClient({ checks }: { checks: ActionEffectiv
               </tbody>
             </table>
             {pageCount > 1 ? (
-              <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+              <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3 print:hidden">
                 <p className="text-xs text-muted-foreground">
                   Menampilkan {pageSafe * PAGE_SIZE + 1}–{Math.min(filtered.length, (pageSafe + 1) * PAGE_SIZE)} dari {filtered.length}
                 </p>

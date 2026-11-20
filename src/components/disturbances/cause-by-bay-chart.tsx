@@ -115,7 +115,6 @@ export function CauseByBayChart({
   }, [rankedRows, search]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
-  const pageRows = filtered.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE);
 
   if (rows.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">Belum ada data ruas/bay untuk kategori ini.</p>;
@@ -249,8 +248,8 @@ export function CauseByBayChart({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pageRows.map((row) => (
-                        <TableRow key={row.bay}>
+                      {filtered.map((row, idx) => (
+                        <TableRow key={row.bay} className={cn((idx < currentPage * PAGE_SIZE || idx >= currentPage * PAGE_SIZE + PAGE_SIZE) && "hidden print:table-row")}>
                           <TableCell className="max-w-[220px] truncate font-medium" title={row.bay}>
                             {row.bay}
                           </TableCell>
@@ -266,7 +265,7 @@ export function CauseByBayChart({
                   </Table>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="flex items-center justify-between text-xs text-muted-foreground print:hidden">
                   <span>
                     Halaman {currentPage + 1} dari {pageCount}
                   </span>

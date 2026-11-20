@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { UsulanPrioritasClient } from "@/components/assets/usulan-prioritas-client";
@@ -81,6 +82,7 @@ export default async function UsulanPrioritasPage() {
       <PageHero
         title="Usulan Prioritas Pemeliharaan"
         description="Skor risiko per RUAS/sirkit (AHI, CE, gangguan, RENUS) diolah menjadi usulan prioritas pemeliharaan/penggantian untuk perencanaan tahun depan, lengkap dengan alasannya."
+        actions={<ExportPdfButton />}
       />
       <UsulanPrioritasClient proposals={proposals} />
     </div>

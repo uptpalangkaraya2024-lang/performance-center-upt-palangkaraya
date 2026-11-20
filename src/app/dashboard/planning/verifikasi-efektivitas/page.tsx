@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DataUnavailable } from "@/components/dashboard/data-unavailable";
 import { VerifikasiEfektivitasClient } from "@/components/assets/verifikasi-efektivitas-client";
@@ -56,6 +57,7 @@ export default async function VerifikasiEfektivitasPage() {
       <PageHero
         title="Verifikasi Efektivitas Tindak Lanjut"
         description="Pekerjaan RENUS/CE yang selesai dalam 1 tahun terakhir — dibandingkan sebelum vs sesudah: apakah kondisi AHI di GI tersebut membaik, dan apakah gangguan berkurang. Perbandingan langsung, bukan klaim sebab-akibat."
+        actions={<ExportPdfButton />}
       />
       <VerifikasiEfektivitasClient checks={checks} />
     </div>

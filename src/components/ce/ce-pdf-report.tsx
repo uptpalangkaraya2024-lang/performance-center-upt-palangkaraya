@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { FileDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -870,29 +870,14 @@ export function CePdfReport({
   );
 }
 
-/** Saves the report: the browser's print-to-PDF dialog, with the file
- *  name pre-filled through document.title. */
+/** Saves the report: the browser's print-to-PDF dialog; PrintEnhancer
+ *  pre-fills the file name from data-print-filename. */
 export function CePdfButton({ filename }: { filename: string }) {
-  useEffect(() => {
-    const original = document.title;
-    const before = () => {
-      document.title = filename;
-    };
-    const after = () => {
-      document.title = original;
-    };
-    window.addEventListener("beforeprint", before);
-    window.addEventListener("afterprint", after);
-    return () => {
-      window.removeEventListener("beforeprint", before);
-      window.removeEventListener("afterprint", after);
-      document.title = original;
-    };
-  }, [filename]);
   return (
     <Button variant="outline" size="sm" className="gap-1.5 bg-card" onClick={() => window.print()}>
       <FileDown className="size-3.5" />
       Report PDF
+      <span hidden data-print-filename={filename} />
     </Button>
   );
 }

@@ -23,7 +23,7 @@ export default function FourDxPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="print:hidden">
+      <div>
         <PageHero
           title="4DX Transmisi UPT Palangkaraya"
           description="Target dan realisasi mingguan tiap Lead Measure (LM) per WIG — dihitung otomatis dari periode berjalan (tanggal server), menggantikan update manual mingguan."

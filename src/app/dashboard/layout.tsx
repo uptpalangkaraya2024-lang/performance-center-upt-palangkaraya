@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { SiteHeader } from "@/components/layout/site-header";
+import { PrintEnhancer } from "@/components/dashboard/print-enhancer";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 // Deliberately NOT async / not fetching nav badge counts here — this layout
@@ -26,7 +27,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="print:hidden">
           <SiteHeader />
         </div>
-        <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</div>
+        <div className="flex flex-1 flex-col gap-4 p-4 md:p-6" data-print-root data-print-report>
+          {children}
+        </div>
+        <PrintEnhancer />
       </SidebarInset>
     </SidebarProvider>
   );

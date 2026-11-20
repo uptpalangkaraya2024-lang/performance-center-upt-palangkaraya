@@ -92,12 +92,15 @@ export function UptPerformanceStatus({
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-4">
-          <div className="flex shrink-0 flex-col gap-0.5">
-            <div className="flex items-end gap-2">
+          {/* shrinkable down to 10rem with a wrapping label: in a narrow row
+              (A4 print, ~1280px laptop) "KPI tercapai target" drops under the
+              number instead of running over the Skor Kontrak block */}
+          <div className="flex min-w-[10rem] flex-col gap-0.5">
+            <div className="flex flex-wrap items-end gap-x-2">
               <span className={cn("text-4xl font-extrabold tabular-nums sm:text-5xl", meta.scoreClassName)}>
                 {formatAchievedPercentage(score)}
               </span>
-              <span className="mb-1.5 text-sm font-medium text-muted-foreground whitespace-nowrap">KPI tercapai target</span>
+              <span className="mb-1.5 text-sm leading-tight font-medium text-muted-foreground">KPI tercapai target</span>
             </div>
             {noDataCount > 0 ? (
               <p className="text-[11px] text-muted-foreground">
@@ -105,7 +108,7 @@ export function UptPerformanceStatus({
               </p>
             ) : null}
           </div>
-          <div className="hidden min-w-24 flex-1 sm:block">{score !== null ? <Progress value={score} /> : null}</div>
+          <div className="hidden min-w-24 flex-1 sm:block print:hidden">{score !== null ? <Progress value={score} /> : null}</div>
         </div>
 
         {overallWeightedScore !== undefined && overallWeightedScore !== null ? (

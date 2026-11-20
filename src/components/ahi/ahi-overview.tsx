@@ -385,7 +385,6 @@ export function AhiOverview({
   const maxGi = Math.max(1, ...v.gis.map((g) => g.conditions));
   const maxCell = Math.max(1, ...v.matrix.rows.flatMap((r) => Object.values(r.cells).map((c) => c.conditions)));
   const healthyCats = s.categories.filter((c) => c.status === "good").length;
-  const bays = showAllBays ? v.bays : v.bays.slice(0, 8);
   const skdirTotal = k.skdirWorse + k.skdirSame + k.skdirBetter;
 
   return (
@@ -688,7 +687,9 @@ export function AhiOverview({
             <p className="py-6 text-center text-sm text-muted-foreground">Tidak ada bay dengan ≥2 peralatan bermasalah.</p>
           ) : (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {bays.map((b) => (
+              {/* all bays are rendered; beyond the top 8 they show on screen
+                  only after "Lihat semua", but always in print */}
+              {v.bays.map((b, idx) => (
                 <button
                   key={`${b.gi}|${b.label}`}
                   type="button"
@@ -696,6 +697,7 @@ export function AhiOverview({
                   className={cn(
                     "flex flex-col gap-1 rounded-lg border p-2 text-left text-xs hover:bg-muted/50",
                     b.critical > 0 && "border-critical/30",
+                    !showAllBays && idx >= 8 && "hidden print:flex",
                   )}
                 >
                   <span className="line-clamp-1 font-semibold" title={b.label}>
@@ -723,7 +725,7 @@ export function AhiOverview({
             <button
               type="button"
               onClick={() => setShowAllBays((x) => !x)}
-              className="w-fit rounded-md border px-2.5 py-1 text-xs font-semibold hover:bg-muted"
+              className="w-fit rounded-md border px-2.5 py-1 text-xs font-semibold hover:bg-muted print:hidden"
             >
               {showAllBays ? "Tampilkan 8 teratas" : `Lihat semua ${v.bays.length} bay`}
             </button>

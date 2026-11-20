@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingScreen } from "@/components/dashboard/loading-screen";
+import { ExportPdfButton } from "@/components/dashboard/export-pdf-button";
 import { PageHero } from "@/components/dashboard/page-hero";
 import { DataHealthView } from "@/components/dashboard/data-health-view";
 import { buildDataHealthReport } from "@/lib/data-health";
@@ -38,10 +39,11 @@ export default function DataHealthPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 print:hidden">
+      <div className="flex flex-col gap-3">
         <PageHero
           title="Kesehatan Data"
           description="Pemeriksaan otomatis atas data live dari setiap modul — nilai ULTG yang tidak dikenali, kolom atribusi (GI) yang kosong, dan nama GI yang mirip tapi tidak identik antar modul. Bukan untuk memperbaiki data, hanya menunjukkan di mana sheet sumber perlu dirapikan."
+          actions={<ExportPdfButton />}
         />
       </div>
 

@@ -133,7 +133,7 @@ export function PresentationSlideDeck({
   if (slides.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-print-slides>
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <p className="text-sm font-bold tracking-wide text-foreground uppercase">
           Preview Presentasi · {slides.length} slide

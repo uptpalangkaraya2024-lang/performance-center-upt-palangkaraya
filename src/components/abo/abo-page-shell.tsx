@@ -24,8 +24,8 @@ export function AboPageShell({ proteksi, hargi }: { proteksi: AboSnapshot; hargi
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 print:hidden">
-        <Tabs value={tab} onValueChange={(v) => v && setTab(v as AboSubModule)}>
+      <div className="flex flex-col gap-3">
+        <Tabs value={tab} onValueChange={(v) => v && setTab(v as AboSubModule)} className="print:hidden">
           <TabsList className="w-fit">
             {SUB_MODULES.map((m) => (
               <TabsTrigger key={m.value} value={m.value}>

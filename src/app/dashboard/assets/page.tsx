@@ -14,7 +14,7 @@ export default async function AssetsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="print:hidden">
+      <div>
         <PageHero
           title="Data Aset"
           description="Hasil scanning proteksi (MPU/BPU/Buspro) dan anomali per ULTG, GI, dan ruas — dari REKAPITULASI SCANNING."
