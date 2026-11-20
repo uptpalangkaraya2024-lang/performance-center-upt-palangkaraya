@@ -14,6 +14,7 @@ import {
   Target,
 } from "lucide-react";
 
+import { CePdfButton, CePdfReport } from "@/components/ce/ce-pdf-report";
 import { CeRecapTable } from "@/components/ce/ce-recap-table";
 import { ExportExcelButton } from "@/components/dashboard/export-excel-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -273,7 +274,9 @@ export function CeAnalysisView({
   const maxPos = Math.max(1, ...view.budgetByPos.map((b) => b.nilai));
 
   return (
-    <div className="flex flex-col gap-4">
+    <>
+    <CePdfReport items={byUltg} ultg={ultg === ALL ? null : ultg} periode={periode} todayISO={todayISO} />
+    <div className="flex flex-col gap-4 print:hidden">
       {/* filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={ultg} onValueChange={(v) => v && setUltg(v)}>
@@ -307,6 +310,9 @@ export function CeAnalysisView({
         <span className="text-xs text-muted-foreground">
           Filter berlaku untuk semua bagian di bawah, kecuali bagian yang membandingkan CE 2026 dengan Belum masuk CE.
         </span>
+        <div className="ml-auto">
+          <CePdfButton filename={`Laporan-CE-${ultg === ALL ? "UPT-Palangkaraya" : `ULTG-${ultg}`}-${todayISO}`} />
+        </div>
       </div>
 
       {/* KPIs */}
@@ -1058,5 +1064,6 @@ export function CeAnalysisView({
 
       <ItemsDialog title={dialog?.title ?? ""} items={dialog?.items ?? null} onClose={() => setDialog(null)} />
     </div>
+    </>
   );
 }

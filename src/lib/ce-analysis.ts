@@ -15,7 +15,7 @@ export const shortGi = (s: string) => s.replace(/^GIS?\s*\d+\s*KV\s*/i, "").trim
 /** One row can name several GIs ("GI 150 KV KASONGAN, GI 150 KV KUALA
  *  KURUN, ...") — a UPT-wide program such as Wi-Fi. */
 export function giList(item: CeItem): string[] {
-  const parts = item.gardu.split(",").map((g) => shortGi(g)).filter(Boolean);
+  const parts = item.gardu.split(",").map((g) => shortGi(g.trim())).filter(Boolean);
   return parts.length > 0 ? parts : ["—"];
 }
 
