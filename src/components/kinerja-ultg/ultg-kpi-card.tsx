@@ -53,8 +53,8 @@ export function UltgKpiCard({ kpi, highlighted = false }: { kpi: UltgKpi; highli
       <div className={cn("h-1.5 w-full", ACCENT_BY_STATUS[kpi.status])} />
       <CardHeader className="px-4 pt-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base font-extrabold text-foreground">{kpi.abbreviation ?? kpi.displayName}</span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 text-base font-extrabold break-words text-foreground">{kpi.abbreviation ?? kpi.displayName}</span>
             {kpi.direction ? (
               <span title={kpi.direction === "LOWER_IS_BETTER" ? "Lower is better" : "Higher is better"}>
                 <DirectionIcon className="size-3.5 text-muted-foreground" />

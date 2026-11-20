@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -248,6 +248,12 @@
   }
 }
 
+/* Leaflet's own stylesheet sets Helvetica on the map — the Peta SUTT
+   labels and popups use the app font like everything else */
+:root .leaflet-container {
+  font-family: inherit;
+}
+
 /* Animated branded loading screen (src/components/dashboard/loading-
    screen.tsx) — a rotating conic-gradient ring, a soft breathing glow
    behind the logo, and the logo itself gently scaling, instead of the
@@ -402,11 +408,90 @@
   }
   /* a card that fits on one sheet is never split across two (a taller one
      still breaks normally) */
+  /* overflow:hidden on a card that continues on the next sheet clips
+     whatever was pushed over the page break — so cards never clip in print */
   :where([data-print-report]:not(:has([data-print-slides]))) [data-slot="card"] {
     box-shadow: none !important;
     break-inside: avoid;
+    overflow: visible !important;
   }
   :where([data-print-report]:not(:has([data-print-slides]))) [data-slot="card-header"] {
+    break-after: avoid;
+  }
+  /* a chart, picture or bordered panel is never cut in half by a page
+     break — it moves whole to the next sheet (one taller than a sheet
+     still breaks, there is no other way to print it) */
+  :where([data-print-report]:not(:has([data-print-slides])))
+    :is(
+      .recharts-responsive-container,
+      .recharts-wrapper,
+      svg,
+      img,
+      canvas,
+      figure,
+      [class*="rounded"][class*="border"]:not(:has(table)),
+      :has(> .recharts-responsive-container),
+      :has(> svg)
+    ) {
+    break-inside: avoid;
+  }
+  /* the A4 sheet (≈1047px) is about as wide as the desktop content area
+     next to the sidebar, so it gets the desktop (xl) column layout instead
+     of half as many columns and twice as many pages */
+  :where([data-print-report]:not(:has([data-print-slides]))) .xl\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :where([data-print-report]:not(:has([data-print-slides]))) .xl\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  :where([data-print-report]:not(:has([data-print-slides]))) .xl\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  :where([data-print-report]:not(:has([data-print-slides]))) .xl\:grid-cols-5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  :where([data-print-report]:not(:has([data-print-slides]))) .xl\:grid-cols-6 {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  /* a long table (15+ rows) runs over several sheets — Chrome can't split
+     a grid row cleanly across pages (the table spills over whatever comes
+     next and continues in half the page width), so that grid's cells are
+     stacked top-to-bottom on paper instead */
+  :where([data-print-report]:not(:has([data-print-slides]))) .grid:has(tbody > tr:nth-child(15)) {
+    display: block !important;
+  }
+  :where([data-print-report]:not(:has([data-print-slides]))) .grid:has(tbody > tr:nth-child(15)) > * + * {
+    margin-top: 1rem;
+  }
+  :where([data-print-report]:not(:has([data-print-slides]))) .grid:has(tbody > tr:nth-child(15)) > [class*="min-h-"] {
+    min-height: 0 !important;
+  }
+  /* "stretch to fill the card's height" (flex-1 in a column) is screen-only:
+     Chrome sizes such a box from its first page, so a long table inside it
+     lost its rows past the page break and ran over the next card */
+  :where([data-print-report]:not(:has([data-print-slides]))) .flex-col > .flex-1 {
+    flex-basis: auto !important;
+  }
+  /* a long word in one grid cell never widens its column past the sheet */
+  :where([data-print-report]:not(:has([data-print-slides]))) .grid > * {
+    min-width: 0;
+  }
+  :where([data-print-report]:not(:has([data-print-slides]))) .xl\:col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+  :where([data-print-report]:not(:has([data-print-slides]))) .xl\:col-span-3 {
+    grid-column: span 3 / span 3;
+  }
+  /* a section title (or its little title + subtitle block) stays with
+     the content under it instead of being left alone at a page bottom */
+  :where([data-print-report]:not(:has([data-print-slides])))
+    :is(
+      h1,
+      h2,
+      h3,
+      h4,
+      :has(> :is(h1, h2, h3, h4):first-child):not([data-slot="card"], :has(table, svg, [data-slot="card"]))
+    ) {
     break-after: avoid;
   }
   :where([data-print-report]:not(:has([data-print-slides]))) table {

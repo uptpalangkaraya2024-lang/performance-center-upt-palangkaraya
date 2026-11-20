@@ -81,8 +81,8 @@ export function UptPerformanceStatus({
   return (
     <Card className="gap-0 overflow-hidden py-0">
       <div className={cn("h-1.5 w-full", meta.bar)} />
-      <CardContent className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:gap-8">
-        <div className="flex shrink-0 flex-col gap-1.5 lg:w-56">
+      <CardContent className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-6 lg:gap-y-4 2xl:gap-x-8">
+        <div className="flex shrink-0 flex-col gap-1.5 lg:w-44 2xl:w-56">
           <p className="text-sm font-bold tracking-wide text-muted-foreground uppercase">{title}</p>
           <p className="text-xs text-muted-foreground">Kinerja s.d. {periodLabel}</p>
           <span className={cn("mt-1 inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold", meta.tint)}>
@@ -91,11 +91,11 @@ export function UptPerformanceStatus({
           </span>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center gap-4">
-          {/* shrinkable down to 10rem with a wrapping label: in a narrow row
-              (A4 print, ~1280px laptop) "KPI tercapai target" drops under the
-              number instead of running over the Skor Kontrak block */}
-          <div className="flex min-w-[10rem] flex-col gap-0.5">
+        <div className="flex flex-1 items-center gap-4">
+          {/* never shrinks under its own content (the row wraps instead), so the
+              big percentage can not run over the Skor Kontrak block on a
+              ~1280px laptop or on A4 paper */}
+          <div className="flex shrink-0 flex-col gap-0.5">
             <div className="flex flex-wrap items-end gap-x-2">
               <span className={cn("text-4xl font-extrabold tabular-nums sm:text-5xl", meta.scoreClassName)}>
                 {formatAchievedPercentage(score)}
@@ -108,11 +108,11 @@ export function UptPerformanceStatus({
               </p>
             ) : null}
           </div>
-          <div className="hidden min-w-24 flex-1 sm:block print:hidden">{score !== null ? <Progress value={score} /> : null}</div>
+          <div className="hidden min-w-24 flex-1 xl:block print:hidden">{score !== null ? <Progress value={score} /> : null}</div>
         </div>
 
         {overallWeightedScore !== undefined && overallWeightedScore !== null ? (
-          <p className="shrink-0 text-sm text-muted-foreground">
+          <p className="shrink-0 text-sm text-muted-foreground lg:max-w-32 2xl:max-w-none">
             Skor Kontrak (Bobot Resmi)
             <br className="hidden lg:block" />
             <span className="text-xl font-extrabold text-foreground tabular-nums sm:text-2xl">
@@ -121,7 +121,7 @@ export function UptPerformanceStatus({
           </p>
         ) : null}
 
-        <div className="grid shrink-0 grid-cols-3 gap-2 overflow-hidden sm:w-80 sm:gap-2.5 text-center">
+        <div className="grid shrink-0 grid-cols-3 gap-2 overflow-hidden sm:w-80 sm:gap-2.5 lg:w-64 2xl:w-80 text-center">
           <div className="overflow-hidden rounded-lg border border-success/40 bg-success/15">
             <div className="h-1.5 w-full bg-success" />
             <div className="py-2 sm:py-2.5">

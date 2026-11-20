@@ -439,7 +439,7 @@ function WigOutcomeChart({ chart, unit, mode }: { chart: FourDxOutcomeChartPoint
   const showKumulatif = mode === "kumulatif" || mode === "keduanya";
   return (
     <ResponsiveContainer width="100%" height={180}>
-      <ComposedChart data={chart} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+      <ComposedChart data={chart} margin={{ top: 8, right: 40, left: -12, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
         <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
         <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" allowDecimals={unit === "Jam"} />
@@ -463,7 +463,7 @@ function WigOutcomeChart({ chart, unit, mode }: { chart: FourDxOutcomeChartPoint
           </Line>
         ) : null}
         {target !== null ? (
-          <ReferenceLine y={target} stroke="var(--critical)" strokeDasharray="4 4" label={{ value: "Target 4DX", fontSize: 10, fill: "var(--critical)", position: "insideTopRight" }} />
+          <ReferenceLine y={target} stroke="var(--critical)" strokeDasharray="4 4" label={{ value: "Target", fontSize: 10, fill: "var(--critical)", position: "right" }} />
         ) : null}
       </ComposedChart>
     </ResponsiveContainer>
