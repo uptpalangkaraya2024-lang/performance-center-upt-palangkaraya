@@ -314,6 +314,39 @@ export function buildBayEventDetailsForMonth(
   return map;
 }
 
+/** One self-contained resume card per disturbance event in the selected
+ *  month — everything the PPT report would say (time, indication, locator
+ *  estimates, field finding), so the presentation can be read without
+ *  opening each PPT. */
+export interface DisturbanceResumeEvent extends DisturbanceBayEventRecord {
+  category: string;
+  /** 1-based: this is the Nth event on the same bay this month… */
+  occurrence: number;
+  /** …out of this many. */
+  occurrencesInMonth: number;
+}
+
+export function buildDisturbanceResumeEvents(
+  categories: { label: string; events: DisturbanceBayEventRecord[] }[],
+  monthLabel: string,
+  year: string,
+): DisturbanceResumeEvent[] {
+  const list = categories.flatMap((c) =>
+    c.events.filter((e) => e.month === monthLabel && e.year === year).map((e) => ({ ...e, category: c.label })),
+  );
+  list.sort((a, b) =>
+    a.dateISO === b.dateISO ? (a.tripTime ?? "").localeCompare(b.tripTime ?? "") : a.dateISO.localeCompare(b.dateISO),
+  );
+  const totals = new Map<string, number>();
+  for (const e of list) totals.set(e.bay, (totals.get(e.bay) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return list.map((e) => {
+    const n = (seen.get(e.bay) ?? 0) + 1;
+    seen.set(e.bay, n);
+    return { ...e, occurrence: n, occurrencesInMonth: totals.get(e.bay) ?? 1 };
+  });
+}
+
 /** One row per (bay, category) pair that had at least one event this
  *  month — a bay only ever belongs to one category in practice (KODE BAY
  *  determines both), so this is a flat union rather than a per-bay matrix,

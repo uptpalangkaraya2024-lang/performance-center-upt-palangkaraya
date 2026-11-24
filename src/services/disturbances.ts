@@ -127,6 +127,21 @@ interface DisturbanceRow {
   ensKwh: number | null; // ENS (KWH) — Energi Tidak Tersalur, blank on many rows
   pptName: string | null; // LINK PPT — file chip display text, blank = laporan PPT belum ada
   pptUrl: string | null; // PPT LINK CLICKABLE — Drive URL, or "BELUM ADA"
+  tripTime: string | null; // WAKTU TRIP — "HH:mm"
+  indikasi: string | null;
+  vaisala: string | null;
+  smde: string | null; // SMDE/DE
+  tws: string | null;
+  temuanLapangan: string | null;
+  temuanDetail: string | null; // TEMUAN TINDAK LANJUT PRIMARY
+}
+
+// WAKTU TRIP is a sheet TIME value, read back as "1899-12-30 23:49:00"
+// (or occasionally a bare "23:49") — only the clock part means anything.
+function parseClock(raw: string | undefined): string | null {
+  const match = /(\d{1,2}):(\d{2})(?::\d{2})?\s*$/.exec(raw?.trim() ?? "");
+  if (!match) return null;
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
 }
 
 // "KODE BAY" values confirmed against live data: "T/L Bay" (Transmisi/Line),
@@ -177,7 +192,16 @@ function normalizeRow(row: Record<string, string>): DisturbanceRow | null {
   const pptUrl = rawPptUrl && /^https?:\/\//i.test(rawPptUrl) ? rawPptUrl : null;
   const pptName = requireText(row["LINK PPT"]) ?? (pptUrl ? "Laporan PPT" : null);
 
-  return { year, month, tgl, namaBay, category, kind, cause, gi, ultg, durationMinutes, followUp, ensKwh, pptName, pptUrl };
+  return {
+    year, month, tgl, namaBay, category, kind, cause, gi, ultg, durationMinutes, followUp, ensKwh, pptName, pptUrl,
+    tripTime: parseClock(row["WAKTU TRIP"]),
+    indikasi: requireText(row["INDIKASI"]),
+    vaisala: requireText(row["VAISALA"]),
+    smde: requireText(row["SMDE/DE"]),
+    tws: requireText(row["TWS"]),
+    temuanLapangan: requireText(row["TEMUAN LAPANGAN"]),
+    temuanDetail: requireText(row["TEMUAN TINDAK LANJUT PRIMARY"]),
+  };
 }
 
 function emptyCategory(): DisturbanceCategoryResult {
@@ -399,6 +423,13 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     kind: KIND_LABELS[r.kind] ?? titleCase(r.kind),
     pptName: r.pptName,
     pptUrl: r.pptUrl,
+    tripTime: r.tripTime,
+    indikasi: r.indikasi,
+    vaisala: r.vaisala,
+    smde: r.smde,
+    tws: r.tws,
+    temuanLapangan: r.temuanLapangan,
+    temuanDetail: r.temuanDetail,
   }));
 
   // One count per calendar day this category had at least one row — a day

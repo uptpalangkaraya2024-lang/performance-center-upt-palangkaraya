@@ -160,6 +160,18 @@ export interface DisturbanceBayEventRecord {
   /** PPT LINK CLICKABLE — the file's Drive URL; null when the sheet shows
    *  "BELUM ADA" (or anything that isn't an http(s) URL). */
   pptUrl: string | null;
+  /** WAKTU TRIP as "HH:mm" (the sheet stores it as a 1899-12-30 time value). */
+  tripTime: string | null;
+  /** INDIKASI — relay indication / fault distance / weather, free text. */
+  indikasi: string | null;
+  /** Fault-locator estimates, free text (e.g. "TOWER SUTT 150 KV ... #167"). */
+  vaisala: string | null;
+  smde: string | null;
+  tws: string | null;
+  /** TEMUAN LAPANGAN — where the fault was actually found. */
+  temuanLapangan: string | null;
+  /** TEMUAN TINDAK LANJUT PRIMARY — what was found there, free text. */
+  temuanDetail: string | null;
 }
 
 /** Everything needed to render one category's (Transmisi or Trafo) section

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Maximize2, Minus, Printer, RotateCcw, TrendingDown, TrendingUp, X } from "lucide-react";
 import {
@@ -39,15 +39,15 @@ import {
   buildCombinedUltgByCause,
   buildCombinedUltgByKind,
   buildCumulativeByYear,
+  buildDisturbanceResumeEvents,
   buildMonthlyBreakdown,
   comparisonYears,
   summarizeCombinedCalendar,
   sumMonthlyByYear,
-  type BayEventDetail,
   type CauseShareYear,
-  type CombinedBayEntry,
   type CombinedCalendarDay,
   type CumulativePoint,
+  type DisturbanceResumeEvent,
 } from "@/lib/disturbance-presentation-compute";
 import type { DisturbanceCause } from "@/types";
 import type { DisturbanceCategoryResult } from "@/types";
@@ -66,7 +66,9 @@ const DAY_LABELS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 const CATEGORY_COLOR: Record<string, string> = {
   Transmisi: "var(--chart-1)",
   "Trafo HV": "var(--chart-4)",
-  "Trafo LV": "var(--chart-3)",
+  // Violet, not --chart-3: that token is the same green as --success
+  // (Reclose), so a Trafo LV trip on the calendar read as a reclose.
+  "Trafo LV": "#8b5cf6",
 };
 const KIND_COLOR: Record<string, string> = {
   Trip: "var(--critical)",
@@ -228,19 +230,6 @@ function InfoTile({ label, value, className }: { label: string; value: string; c
   );
 }
 
-function CategoryBadge({ label }: { label: string }) {
-  const color = CATEGORY_COLOR[label] ?? "var(--muted-foreground)";
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm font-medium whitespace-nowrap"
-      style={{ borderColor: `color-mix(in srgb, ${color} 45%, transparent)`, color }}
-    >
-      <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
-      {label}
-    </span>
-  );
-}
-
 function ChartTooltip({ contentStyle }: { contentStyle?: React.CSSProperties } = {}) {
   return (
     <Tooltip
@@ -260,10 +249,20 @@ function ChartTooltip({ contentStyle }: { contentStyle?: React.CSSProperties } =
  *  explicit request shows one chart per cause (not one chart with every
  *  cause overlaid) so each cause's own year-over-year comparison stays
  *  readable instead of a single chart with 5 causes x 3 years = 15 lines. */
-function CauseYearChart({ cause, data, years }: { cause: string; data: CumulativePoint[]; years: string[] }) {
+function CauseYearChart({
+  cause,
+  data,
+  years,
+  className,
+}: {
+  cause: string;
+  data: CumulativePoint[];
+  years: string[];
+  className?: string;
+}) {
   return (
-    <div className="flex h-full flex-col gap-1.5 rounded-lg border bg-muted p-3">
-      <p className="shrink-0 truncate text-sm font-semibold text-foreground" title={cause}>
+    <div className={cn("flex h-full min-h-0 flex-col gap-1.5 rounded-lg border bg-muted p-3", className)}>
+      <p className="shrink-0 truncate text-sm font-semibold text-foreground md:text-base" title={cause}>
         {cause}
       </p>
       {/* height="100%" here relies on the grid cell above having a
@@ -275,8 +274,8 @@ function CauseYearChart({ cause, data, years }: { cause: string; data: Cumulativ
         <ResponsiveContainer width="100%" height="100%" minHeight={140}>
           <LineChart data={data} margin={{ top: 14, right: 8, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} stroke="var(--muted-foreground)" />
-            <YAxis tickLine={false} axisLine={false} fontSize={10} stroke="var(--muted-foreground)" allowDecimals={false} width={22} />
+            <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" />
+            <YAxis tickLine={false} axisLine={false} fontSize={11} stroke="var(--muted-foreground)" allowDecimals={false} width={24} />
             <ChartTooltip contentStyle={{ fontSize: 11 }} />
             {years.map((y, i) => (
               <Line
@@ -285,9 +284,9 @@ function CauseYearChart({ cause, data, years }: { cause: string; data: Cumulativ
                 dataKey={y}
                 name={y}
                 stroke={YEAR_COLORS[i % YEAR_COLORS.length]}
-                strokeWidth={2}
-                dot={{ r: 2 }}
-                label={{ position: "top", fontSize: 9, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
+                strokeWidth={2.5}
+                dot={{ r: 2.5 }}
+                label={{ position: "top", fontSize: 10, fill: YEAR_COLORS[i % YEAR_COLORS.length] }}
               />
             ))}
           </LineChart>
@@ -295,6 +294,14 @@ function CauseYearChart({ cause, data, years }: { cause: string; data: Cumulativ
       </div>
     </div>
   );
+}
+
+function causeChartSpan(index: number, count: number): string {
+  const remainder = count % 3;
+  const inLastRow = index >= count - remainder;
+  if (remainder === 2 && inLastRow) return "lg:col-span-3";
+  if (remainder === 1 && inLastRow) return "lg:col-span-6";
+  return "lg:col-span-2";
 }
 
 // Cause colors are assigned by POSITION in the shared top-5 list (not the
@@ -319,39 +326,36 @@ function causeColorOf(topCauses: string[], cause: string): string {
 function CauseShareYearPie({ share, topCauses }: { share: CauseShareYear; topCauses: string[] }) {
   if (share.total === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-1 rounded-lg border bg-muted p-3 text-center">
-        <p className="text-sm font-semibold text-foreground">{share.year}</p>
-        <p className="text-xs text-muted-foreground">Belum ada gangguan.</p>
+      <div className="flex h-full flex-col items-center justify-center gap-2 rounded-lg border bg-muted p-3 text-center">
+        <p className="text-2xl font-bold text-foreground">{share.year}</p>
+        <p className="text-base text-muted-foreground">Belum ada gangguan.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-1.5 rounded-lg border bg-muted p-2.5">
-      <p className="shrink-0 text-center text-sm font-semibold text-foreground">
+    <div className="flex h-full min-h-0 flex-col gap-2 rounded-lg border bg-muted p-3">
+      <p className="shrink-0 text-center text-base font-semibold text-foreground">
         {share.year} <span className="font-normal text-muted-foreground">({share.total} gangguan)</span>
       </p>
-      {/* A generous PieChart margin (not just container padding) plus a
-          smaller outerRadius give the percent labels real clearance from
-          the pie's own edge — without this, a label near the very top or
-          bottom of the pie sits flush against the title/legend rows right
-          outside the chart, reading as cut off or overlapping (confirmed
-          from a live screenshot: the largest slice's own label was
-          invisible behind the title, and a 50/50 two-slice pie's two
-          labels overlapped the legend below). Per explicit user feedback. */}
-      <div className="min-h-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%" minHeight={180}>
-          <PieChart margin={{ top: 22, right: 8, bottom: 22, left: 8 }}>
+      {/* Donut sized in % of its own box so it fills the card on a
+          presentation screen; slice labels sit just outside the ring with
+          enough margin to never touch the title or legend. The year's total
+          sits in the hole. */}
+      <div className="relative min-h-0 flex-1">
+        <ResponsiveContainer width="100%" height="100%" minHeight={160}>
+          <PieChart margin={{ top: 22, right: 16, bottom: 22, left: 16 }}>
             <Pie
               data={share.slices}
               dataKey="count"
               nameKey="cause"
-              innerRadius="34%"
-              outerRadius="62%"
+              innerRadius="52%"
+              outerRadius="84%"
               paddingAngle={2}
-              label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
+              label={({ percent }) => ((percent ?? 0) >= 0.04 ? `${Math.round((percent ?? 0) * 100)}%` : "")}
               labelLine={false}
-              fontSize={11}
+              fontSize={13}
+              fontWeight={600}
             >
               {share.slices.map((s) => (
                 <Cell key={s.cause} fill={causeColorOf(topCauses, s.cause)} />
@@ -360,12 +364,17 @@ function CauseShareYearPie({ share, topCauses }: { share: CauseShareYear; topCau
             <ChartTooltip />
           </PieChart>
         </ResponsiveContainer>
+        <div className="pointer-events-none absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
+          <span className="text-2xl font-extrabold tabular-nums text-foreground md:text-3xl">{share.total}</span>
+          <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase md:text-xs">Gangguan</span>
+        </div>
       </div>
-      <div className="flex shrink-0 flex-wrap justify-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+      <div className="flex shrink-0 flex-wrap justify-center gap-x-3 gap-y-1 text-xs md:text-sm">
         {share.slices.map((s) => (
-          <span key={s.cause} className="inline-flex items-center gap-1">
-            <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: causeColorOf(topCauses, s.cause) }} />
+          <span key={s.cause} className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: causeColorOf(topCauses, s.cause) }} />
             {s.cause}
+            <span className="font-semibold tabular-nums text-foreground">{Math.round((s.count / share.total) * 100)}%</span>
           </span>
         ))}
       </div>
@@ -475,14 +484,30 @@ function CombinedCalendarGrid({
   );
 }
 
-function PptStatusPill({ event, showDate }: { event: BayEventDetail; showDate: boolean }) {
-  const done = Boolean(event.pptName || event.pptUrl);
-  const label = `${done ? "Sudah" : "Belum"}${showDate ? ` (${event.date})` : ""}`;
+function hasPpt(e: { pptName: string | null; pptUrl: string | null }): boolean {
+  return Boolean(e.pptName || e.pptUrl);
+}
+
+function PptStatusPill({
+  event,
+  large = false,
+}: {
+  event: { pptName: string | null; pptUrl: string | null };
+  large?: boolean;
+}) {
+  const done = hasPpt(event);
   const className = cn(
-    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap",
+    "inline-flex shrink-0 items-center gap-1 rounded-full font-semibold whitespace-nowrap",
+    large ? "px-4 py-1.5 text-base" : "px-2.5 py-1 text-xs",
     done ? "bg-success/15 text-success" : "bg-critical/15 text-critical",
   );
-  const icon = done ? <Check className="size-3" aria-hidden /> : <X className="size-3" aria-hidden />;
+  const iconClass = large ? "size-4" : "size-3.5";
+  const content = (
+    <>
+      {done ? <Check className={iconClass} aria-hidden /> : <X className={iconClass} aria-hidden />}
+      {done ? "PPT Sudah" : "PPT Belum"}
+    </>
+  );
   if (done && event.pptUrl) {
     return (
       <a
@@ -492,113 +517,355 @@ function PptStatusPill({ event, showDate }: { event: BayEventDetail; showDate: b
         title={event.pptName ?? "Buka laporan PPT"}
         className={cn(className, "hover:underline")}
       >
-        {icon}
-        {label}
+        {content}
       </a>
     );
   }
   return (
     <span className={className} title={done ? (event.pptName ?? undefined) : "Laporan PPT belum diunggah di kolom LINK PPT"}>
-      {icon}
-      {label}
+      {content}
     </span>
   );
 }
 
-function PptCompletenessSummary({ entries }: { entries: CombinedBayEntry[] }) {
-  const events = entries.flatMap((e) => e.events.map((ev) => ({ ...ev, bay: e.bay })));
-  if (events.length === 0) return null;
-  const done = events.filter((ev) => Boolean(ev.pptName || ev.pptUrl)).length;
-  const missing = events.filter((ev) => !ev.pptName && !ev.pptUrl);
-  const pct = Math.round((done / events.length) * 100);
+/** "TOWER SUTT 150 KV KSNGN-PLSKS #167" -> "Tower KSNGN-PLSKS #167" — the
+ *  "SUTT 150 KV" part is identical on every entry and only costs width on
+ *  a slide; the full sheet text stays available as the hover title. */
+function shortLocation(raw: string): string {
+  return raw
+    .split(/\s*,\s*/)
+    .map((part) =>
+      part
+        .replace(/^TOWER\s+SUTT\s*\d+\s*KV\s*/i, "Tower ")
+        .replace(/^SPAN\s+SUTT\s*\d+\s*KV\s*/i, "Span ")
+        .replace(/\s+-\s+/g, "-"),
+    )
+    .join(", ");
+}
+
+function ResumeChip({
+  children,
+  className,
+  style,
+  large = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  large?: boolean;
+}) {
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md border font-medium whitespace-nowrap",
+        large ? "px-3 py-1 text-base md:text-lg" : "px-2 py-0.5 text-xs md:px-2.5 md:text-sm",
+        className,
+      )}
+      style={style}
+    >
+      {children}
+    </span>
+  );
+}
+
+function resumeLabelClass(large: boolean): string {
+  return cn(
+    "font-bold tracking-wide text-muted-foreground uppercase",
+    large ? "text-sm md:text-base" : "text-[11px] md:text-xs",
+  );
+}
+
+/** Shows ALL of a long text inside whatever height its box has: starts at
+ *  `max` px and steps the font down until nothing overflows (never below
+ *  `min`; only past that does the box scroll). Re-fits when the box
+ *  resizes — so a long "temuan" never gets cut off with "…" on a slide. */
+function FitText({ text, min, max, className }: { text: string; min: number; max: number; className?: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      let size = max;
+      el.style.fontSize = `${size}px`;
+      while (size > min && el.scrollHeight > el.clientHeight + 1) {
+        size -= 0.5;
+        el.style.fontSize = `${size}px`;
+      }
+      el.style.overflowY = el.scrollHeight > el.clientHeight + 1 ? "auto" : "hidden";
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text, min, max]);
+  return (
+    <p ref={ref} className={cn("min-h-0 shrink overflow-hidden leading-snug whitespace-pre-line", className)} title={text}>
+      {text}
+    </p>
+  );
+}
+
+function ResumeField({
+  label,
+  value,
+  detail,
+  large = false,
+}: {
+  label: string;
+  value: string | null;
+  detail?: string | null;
+  large?: boolean;
+}) {
+  return (
+    // With a detail text the field may be squeezed by a short card; FitText
+    // then shrinks the detail's font so it still shows in full.
+    <div className={cn("min-w-0", detail ? "flex min-h-0 flex-col" : "shrink-0")}>
+      <p className={resumeLabelClass(large)}>{label}</p>
+      <p
+        className={cn(
+          "shrink-0 leading-snug",
+          large ? "line-clamp-3 text-xl md:text-2xl" : "line-clamp-2 text-sm md:text-base",
+          value ? "font-medium text-foreground" : "text-muted-foreground/70 italic",
+        )}
+        title={value ?? undefined}
+      >
+        {value ?? "Belum diisi"}
+      </p>
+      {detail ? <FitText text={detail} min={large ? 14 : 10} max={large ? 20 : 15} className="mt-1 text-muted-foreground" /> : null}
+    </div>
+  );
+}
+
+/** `large` is used when a slide holds only one or two cards (e.g. a month
+ *  with a single Trip): the card then fills most of the screen, so its text
+ *  scales up to match instead of leaving small text in a huge empty box. */
+function ResumeCard({ event, index, large = false }: { event: DisturbanceResumeEvent; index: number; large?: boolean }) {
+  const kindColor = KIND_COLOR[event.kind] ?? "var(--muted-foreground)";
+  const categoryColor = CATEGORY_COLOR[event.category] ?? "var(--muted-foreground)";
+  const locators: { label: string; value: string | null }[] = [
+    { label: "Vaisala", value: event.vaisala },
+    { label: "SMDE/DE", value: event.smde },
+    { label: "TWS", value: event.tws },
+  ];
+  return (
+    // h-full + overflow-hidden: the card stretches to its grid cell (the
+    // slide's rows split the full screen height evenly) and never spills
+    // into the card below it.
+    <article
+      className={cn(
+        "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-background/60 break-inside-avoid",
+        large ? "gap-5 p-6 md:p-8" : "gap-2.5 p-4 md:p-5",
+      )}
+    >
+      <header className="flex shrink-0 items-start justify-between gap-3">
+        <div className={cn("flex min-w-0 items-start", large ? "gap-4" : "gap-3")}>
+          <span
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-full bg-muted font-bold tabular-nums text-muted-foreground",
+              large ? "size-10 text-base" : "size-7 text-xs md:size-8 md:text-sm",
+            )}
+          >
+            {index}
+          </span>
+          <div className="min-w-0">
+            <p className={cn("leading-snug font-bold text-foreground", large ? "text-2xl md:text-3xl" : "text-base md:text-lg")}>
+              {event.bay}
+            </p>
+            <p className={cn("text-muted-foreground", large ? "line-clamp-2 text-base md:text-lg" : "truncate text-xs md:text-sm")}>
+              {event.ultg}
+              {event.gi ? ` · GI ${event.gi}` : ""}
+            </p>
+          </div>
+        </div>
+        <PptStatusPill event={event} large={large} />
+      </header>
+
+      <div className={cn("flex shrink-0 flex-wrap items-center", large ? "gap-2" : "gap-1.5")}>
+        <ResumeChip large={large} className="font-semibold text-foreground">
+          {event.date} · {event.tripTime ? `${event.tripTime} WIB` : "jam —"}
+        </ResumeChip>
+        <ResumeChip
+          large={large}
+          style={{ color: categoryColor, borderColor: `color-mix(in srgb, ${categoryColor} 45%, transparent)` }}
+        >
+          {event.category}
+        </ResumeChip>
+        <ResumeChip large={large} style={{ color: kindColor, borderColor: `color-mix(in srgb, ${kindColor} 45%, transparent)` }}>
+          {event.kind === "AR Sukses" ? "Reclose Sukses" : event.kind}
+        </ResumeChip>
+        <ResumeChip large={large} className="text-foreground">
+          {event.cause}
+        </ResumeChip>
+        {event.occurrencesInMonth > 1 ? (
+          <ResumeChip large={large} className="border-warning/50 text-warning">
+            Ke-{event.occurrence} dari {event.occurrencesInMonth} di ruas ini
+          </ResumeChip>
+        ) : null}
+      </div>
+
+      {/* Body sections share the card's remaining height evenly, so a tall
+          card reads as spacious rather than half-empty. */}
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col justify-around",
+          large ? "gap-5" : "gap-3",
+        )}
+      >
+        <ResumeField label="Indikasi" value={event.indikasi} large={large} />
+
+        <div className={cn("grid shrink-0 grid-cols-3 rounded-lg bg-muted/50", large ? "gap-6 p-5" : "gap-3 p-2.5 md:p-3")}>
+          {locators.map((l) => (
+            <div key={l.label} className="min-w-0">
+              <p className={resumeLabelClass(large)}>{l.label}</p>
+              <p
+                className={cn(
+                  "leading-snug font-medium",
+                  large ? "line-clamp-4 text-base md:text-lg" : "line-clamp-3 text-xs md:text-sm",
+                  l.value ? "text-foreground" : "text-muted-foreground/70",
+                )}
+                title={l.value ?? undefined}
+              >
+                {l.value ? shortLocation(l.value) : "—"}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <ResumeField
+          label="Temuan Lapangan"
+          value={event.temuanLapangan ? shortLocation(event.temuanLapangan) : null}
+          detail={event.temuanDetail}
+          large={large}
+        />
+      </div>
+    </article>
+  );
+}
+
+// Grid shape per screen: columns follow the grid's own breakpoints (3 from
+// xl, 2 from md), rows = how many cards fit vertically at full text size (2
+// on a 1080p-class screen, 1 on a 768px laptop). The rows then split the
+// slide's full height evenly so the cards fill the whole screen; more
+// events continue on the next slide instead of shrinking anything.
+interface ResumeLayout {
+  perSlide: number;
+  cols: number;
+  /** One row of cards on a tall-enough screen: each card is ~800px tall,
+   *  so it uses the large text size instead of looking half empty. */
+  roomy: boolean;
+  /** null on phones: one column that simply scrolls. */
+  rows: number | null;
+}
+
+const RESUME_LAYOUT_DEFAULT: ResumeLayout = { perSlide: 6, cols: 3, rows: 2, roomy: false };
+
+function resumeLayoutFor(width: number, height: number): ResumeLayout {
+  if (width < 768) return { perSlide: 3, cols: 1, rows: null, roomy: false };
+  // 3 columns only from 1536px wide: on a 1366px laptop a third of the
+  // width is too narrow for a long "temuan" to stay readable.
+  const cols = width >= 1536 ? 3 : 2;
+  // 2 rows only on tall screens (e.g. 1920x1200): at 1080px a half-height
+  // card is too short to show a long "temuan" in full at a readable size.
+  const rows = height >= 1150 ? 2 : 1;
+  return { perSlide: cols * rows, cols, rows, roomy: rows === 1 && height >= 1000 };
+}
+
+function useResumeLayout(): ResumeLayout {
+  const [layout, setLayout] = useState<ResumeLayout>(RESUME_LAYOUT_DEFAULT);
+  useEffect(() => {
+    const update = () => {
+      const next = resumeLayoutFor(window.innerWidth, window.innerHeight);
+      setLayout((prev) => (prev.perSlide === next.perSlide && prev.cols === next.cols && prev.rows === next.rows && prev.roomy === next.roomy
+          ? prev
+          : next));
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return layout;
+}
+
+// Group pill color follows the same kind palette as everywhere else
+// (Reclose = green, Trip = red).
+const GROUP_KIND: Record<string, string> = { Reclose: "AR Sukses", Trip: "Trip", "Tidak Trip": "Tidak Trip" };
+
+function PptCompletenessBar({ events, groupLabel }: { events: DisturbanceResumeEvent[]; groupLabel: string }) {
+  const done = events.filter(hasPpt).length;
+  const missing = events.filter((e) => !hasPpt(e));
+  const pct = events.length > 0 ? Math.round((done / events.length) * 100) : 0;
+  const groupColor = KIND_COLOR[GROUP_KIND[groupLabel] ?? ""] ?? "var(--muted-foreground)";
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border px-3 py-2 text-sm">
+      {groupLabel ? (
+        <span
+          className="rounded-md px-2.5 py-0.5 text-sm font-bold tracking-wide uppercase"
+          style={{ color: groupColor, backgroundColor: `color-mix(in srgb, ${groupColor} 15%, transparent)` }}
+        >
+          {groupLabel} · {events.length} kejadian
+        </span>
+      ) : null}
       <span className="font-semibold text-foreground">
         Kelengkapan Laporan PPT:{" "}
         <span className={cn("tabular-nums", missing.length === 0 ? "text-success" : "text-critical")}>
           {done}/{events.length} kejadian ({pct}%)
         </span>
       </span>
+      <div className="h-2 w-32 overflow-hidden rounded-full bg-secondary">
+        <div className={cn("h-full rounded-full", missing.length === 0 ? "bg-success" : "bg-critical")} style={{ width: `${pct}%` }} />
+      </div>
       {missing.length > 0 ? (
-        <span className="text-muted-foreground">
+        <span className="min-w-0 text-muted-foreground">
           Belum ada PPT: {missing.map((m) => `${m.bay} (${m.date})`).join(", ")}
         </span>
       ) : (
-        <span className="text-success">Semua gangguan bulan ini sudah dilengkapi PPT.</span>
+        <span className="text-success">Semua gangguan di kelompok ini sudah dilengkapi PPT.</span>
       )}
     </div>
   );
 }
 
-function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?: number }) {
-  if (entries.length === 0) {
+function ResumeSlide({
+  all,
+  page,
+  layout,
+  groupLabel,
+}: {
+  all: DisturbanceResumeEvent[];
+  page: number;
+  layout: ResumeLayout;
+  groupLabel: string;
+}) {
+  if (all.length === 0) {
     return <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>;
   }
-  const shown = entries.slice(0, limit);
+  const start = page * layout.perSlide;
+  const shown = all.slice(start, start + layout.perSlide);
+  // A group that fits on one slide (e.g. a single Trip) spreads its few
+  // cards over the whole slide instead of sitting in one small corner
+  // cell; multi-slide groups keep the standard grid so every card in the
+  // run has the same size.
+  let gridStyle: CSSProperties | undefined;
+  const large = layout.roomy || (Boolean(layout.rows) && all.length <= layout.perSlide && shown.length <= 2);
+  if (layout.rows) {
+    const cols = all.length <= layout.perSlide ? Math.min(layout.cols, shown.length) : layout.cols;
+    const rows = all.length <= layout.perSlide ? Math.ceil(shown.length / cols) : layout.rows;
+    gridStyle = {
+      gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+      gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+    };
+  }
   return (
-    <div className="flex flex-col gap-2">
-      <PptCompletenessSummary entries={entries} />
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-base">
-          <thead>
-            <tr className="border-b bg-muted/70 text-left text-sm text-muted-foreground uppercase">
-              <th className="px-4 py-2.5 font-bold">Ruas</th>
-              <th className="px-4 py-2.5 font-bold">ULTG</th>
-              <th className="px-4 py-2.5 font-bold">Kategori</th>
-              <th className="px-4 py-2.5 font-bold">Tanggal Gangguan</th>
-              <th className="px-4 py-2.5 font-bold">Penyebab</th>
-              <th className="px-4 py-2.5 font-bold">Keterangan</th>
-              <th className="px-4 py-2.5 font-bold">Laporan PPT</th>
-              <th className="px-4 py-2.5 font-bold text-right">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((e, i) => (
-              <tr key={`${e.bay}-${i}`} className="border-b last:border-0">
-                <td className="px-4 py-2.5 text-foreground">{e.bay}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{e.ultg}</td>
-                <td className="px-4 py-2.5">
-                  <CategoryBadge label={e.category} />
-                </td>
-                {/* Tanggal/Penyebab/Keterangan each read off the SAME
-                    events array in the same order, so a bay with more than
-                    one event this month keeps its date, cause, and kind
-                    correctly paired per event instead of 3 independently
-                    joined lists that could drift out of alignment. */}
-                <td className="px-4 py-2.5 text-muted-foreground">
-                  {e.events.length > 0 ? e.events.map((ev) => ev.date).join(", ") : "—"}
-                </td>
-                <td className="px-4 py-2.5 text-muted-foreground">
-                  {e.events.length > 0 ? e.events.map((ev) => ev.cause).join(", ") : "—"}
-                </td>
-                <td className="px-4 py-2.5 text-muted-foreground">
-                  {e.events.length > 0 ? e.events.map((ev) => ev.kind).join(", ") : "—"}
-                </td>
-                {/* One pill per event, same order as the date column, so a
-                    bay with 2 events this month shows which one still
-                    lacks its PPT report. */}
-                <td className="px-4 py-2.5">
-                  {e.events.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {e.events.map((ev, j) => (
-                        <PptStatusPill key={j} event={ev} showDate={e.events.length > 1} />
-                      ))}
-                    </div>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-foreground">{e.count}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <PptCompletenessBar events={all} groupLabel={groupLabel} />
+      <div
+        className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
+        style={gridStyle}
+      >
+        {shown.map((e, i) => (
+          <ResumeCard key={`${e.bay}-${e.dateISO}-${e.tripTime}-${i}`} event={e} index={start + i + 1} large={large} />
+        ))}
       </div>
-      {entries.length > limit ? (
-        <p className="text-sm text-muted-foreground">
-          Menampilkan {limit} dari {entries.length} ruas yang mengalami gangguan bulan ini.
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -772,6 +1039,33 @@ export function DisturbancePresentationView({
       ),
     [categories, monthLabel, year],
   );
+
+  const resumeEvents = useMemo(
+    () =>
+      buildDisturbanceResumeEvents(
+        categories.map((c) => ({ label: c.label, events: c.data.bayEvents })),
+        monthLabel,
+        year,
+      ),
+    [categories, monthLabel, year],
+  );
+  const resumeLayout = useResumeLayout();
+  // Reclose and Trip are reviewed separately — reclose first, Trip grouped
+  // on its own slide(s) at the end. Any other KODE GGN (Tidak Trip, or a
+  // new value) gets its own group in between rather than being dropped.
+  const resumeGroups = useMemo(() => {
+    const groups: { key: string; label: string; events: DisturbanceResumeEvent[] }[] = [
+      { key: "reclose", label: "Reclose", events: resumeEvents.filter((e) => e.kind === "AR Sukses") },
+      { key: "tidak-trip", label: "Tidak Trip", events: resumeEvents.filter((e) => e.kind === "Tidak Trip") },
+      {
+        key: "lainnya",
+        label: "Lainnya",
+        events: resumeEvents.filter((e) => !["AR Sukses", "Tidak Trip", "Trip"].includes(e.kind)),
+      },
+      { key: "trip", label: "Trip", events: resumeEvents.filter((e) => e.kind === "Trip") },
+    ];
+    return groups.filter((g) => g.events.length > 0);
+  }, [resumeEvents]);
 
   // Combined (all 3 categories) top-5 causes for the SELECTED MONTH — feeds
   // the new per-ULTG cause breakdown chart's fixed column set (anything
@@ -969,35 +1263,51 @@ export function DisturbancePresentationView({
                 </div>
               </div>
 
-              <div className="grid flex-1 grid-cols-1 items-center gap-6 lg:grid-cols-2">
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-2">
                 {donutData.length > 0 ? (
-                  <div className="relative">
-                    <ResponsiveContainer width="100%" height={360}>
-                      <PieChart>
-                        <Pie
-                          data={donutData}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={72}
-                          outerRadius={120}
-                          paddingAngle={2}
-                          label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
-                        >
-                          {donutData.map((d) => (
-                            <Cell key={d.name} fill={CATEGORY_COLOR[d.name]} />
-                          ))}
-                        </Pie>
-                        <ChartTooltip />
-                        <Legend wrapperStyle={{ fontSize: 13 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    {/* Center total — the donut's own radius leaves a big
-                        empty hole in the middle; putting the grand total
-                        there (same idea as the reference site's donuts)
-                        gives that space a job instead of wasting it. */}
-                    <div className="pointer-events-none absolute left-1/2 top-[45%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
-                      <span className="text-3xl font-extrabold tabular-nums text-foreground">{grandTotal}</span>
-                      <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Event</span>
+                  // The donut scales with its cell (radii in %, container
+                  // 100% tall) instead of a fixed 120px radius — on a
+                  // fullscreen presentation it fills its half of the slide
+                  // rather than floating small in the middle. The legend
+                  // sits outside the chart so the center total stays at the
+                  // donut's true center.
+                  <div className="flex min-h-[200px] flex-col gap-2">
+                    <div className="relative min-h-0 flex-1">
+                      <ResponsiveContainer width="100%" height="100%" minHeight={180}>
+                        <PieChart margin={{ top: 20, right: 24, bottom: 20, left: 24 }}>
+                          <Pie
+                            data={donutData}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius="58%"
+                            outerRadius="90%"
+                            paddingAngle={2}
+                            label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
+                            fontSize={15}
+                          >
+                            {donutData.map((d) => (
+                              <Cell key={d.name} fill={CATEGORY_COLOR[d.name]} />
+                            ))}
+                          </Pie>
+                          <ChartTooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      {/* Center total — the donut's own radius leaves a big
+                          empty hole in the middle; putting the grand total
+                          there gives that space a job instead of wasting it. */}
+                      <div className="pointer-events-none absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
+                        <span className="text-4xl font-extrabold tabular-nums text-foreground md:text-6xl">{grandTotal}</span>
+                        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase md:text-sm">Event</span>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm">
+                      {donutData.map((d) => (
+                        <span key={d.name} className="inline-flex items-center gap-1.5 text-muted-foreground">
+                          <span className="size-3 rounded-sm" style={{ backgroundColor: CATEGORY_COLOR[d.name] }} />
+                          {d.name}
+                          <span className="font-semibold tabular-nums text-foreground">{d.value}</span>
+                        </span>
+                      ))}
                     </div>
                   </div>
                 ) : (
@@ -1239,14 +1549,35 @@ export function DisturbancePresentationView({
                 );
               })()
             )}
-            <div className="shrink-0">
-              <p className="mb-2 text-base font-semibold text-foreground">Kontribusi Ruas</p>
-              <BayTable entries={combinedBay} />
-            </div>
           </div>
           );
         },
       },
+      // Kontribusi Ruas as one resume card per disturbance (time, indikasi,
+      // Vaisala/SMDE/TWS, temuan lapangan, PPT status) — moved off the chart
+      // slide above onto its own slide(s), resumeLayout.perSlide cards each, so
+      // nothing has to shrink or overlap however many events the month had.
+      // One run of slides per group (Reclose, then Trip last).
+      ...(resumeGroups.length === 0
+        ? [
+            {
+              id: "ruas-resume-kosong",
+              title: "Kontribusi Ruas — Resume Gangguan",
+              subtitle: `${monthLabel} ${year}`,
+              render: () => <ResumeSlide all={[]} page={0} layout={resumeLayout} groupLabel="" />,
+            },
+          ]
+        : resumeGroups.flatMap((g) => {
+            const pageCount = Math.ceil(g.events.length / resumeLayout.perSlide);
+            return Array.from({ length: pageCount }, (_, page) => ({
+              id: `ruas-resume-${g.key}-${page + 1}`,
+              title: `Kontribusi Ruas — Resume Gangguan ${g.label}`,
+              subtitle: `${monthLabel} ${year} · ${g.events.length} kejadian ${g.label.toLowerCase()} dari ${resumeEvents.length} total${
+                pageCount > 1 ? ` · Halaman ${page + 1}/${pageCount}` : ""
+              }`,
+              render: () => <ResumeSlide all={g.events} page={page} layout={resumeLayout} groupLabel={g.label} />,
+            }));
+          })),
       {
         id: "kumulatif-transmisi-trafo",
         title: "Kumulatif Transmisi & Trafo",
@@ -1398,11 +1729,17 @@ export function DisturbancePresentationView({
                     lg:grid-cols-3 breakpoint (presentation mode is
                     effectively always a wide fullscreen viewport). */}
                 <div
-                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:[grid-template-rows:var(--cause-rows)]"
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6 lg:[grid-template-rows:var(--cause-rows)]"
                   style={{ "--cause-rows": `repeat(${Math.ceil(transmisiCauseYearCharts.length / 3)}, minmax(0, 1fr))` } as CSSProperties}
                 >
-                  {transmisiCauseYearCharts.map((c) => (
-                    <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
+                  {transmisiCauseYearCharts.map((c, i, all) => (
+                    <CauseYearChart
+                      key={c.cause}
+                      cause={c.cause}
+                      data={c.data}
+                      years={compareYears}
+                      className={causeChartSpan(i, all.length)}
+                    />
                   ))}
                 </div>
                 <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
@@ -1438,11 +1775,17 @@ export function DisturbancePresentationView({
             ) : (
               <>
                 <div
-                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:[grid-template-rows:var(--cause-rows)]"
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6 lg:[grid-template-rows:var(--cause-rows)]"
                   style={{ "--cause-rows": `repeat(${Math.ceil(trafoHvCauseYearCharts.length / 3)}, minmax(0, 1fr))` } as CSSProperties}
                 >
-                  {trafoHvCauseYearCharts.map((c) => (
-                    <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
+                  {trafoHvCauseYearCharts.map((c, i, all) => (
+                    <CauseYearChart
+                      key={c.cause}
+                      cause={c.cause}
+                      data={c.data}
+                      years={compareYears}
+                      className={causeChartSpan(i, all.length)}
+                    />
                   ))}
                 </div>
                 <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
@@ -1478,11 +1821,17 @@ export function DisturbancePresentationView({
             ) : (
               <>
                 <div
-                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:[grid-template-rows:var(--cause-rows)]"
+                  className="grid min-h-0 flex-[3] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6 lg:[grid-template-rows:var(--cause-rows)]"
                   style={{ "--cause-rows": `repeat(${Math.ceil(trafoLvCauseYearCharts.length / 3)}, minmax(0, 1fr))` } as CSSProperties}
                 >
-                  {trafoLvCauseYearCharts.map((c) => (
-                    <CauseYearChart key={c.cause} cause={c.cause} data={c.data} years={compareYears} />
+                  {trafoLvCauseYearCharts.map((c, i, all) => (
+                    <CauseYearChart
+                      key={c.cause}
+                      cause={c.cause}
+                      data={c.data}
+                      years={compareYears}
+                      className={causeChartSpan(i, all.length)}
+                    />
                   ))}
                 </div>
                 <div className="flex min-h-0 flex-[3] flex-col gap-1.5">
@@ -1515,6 +1864,9 @@ export function DisturbancePresentationView({
       combinedCalendarDays,
       combinedUltg,
       combinedBay,
+      resumeEvents,
+      resumeGroups,
+      resumeLayout,
       combinedUltgByCause,
       combinedUltgByKind,
       topCausesThisMonth,
@@ -1536,6 +1888,9 @@ export function DisturbancePresentationView({
   );
 
   const clampSlide = useCallback((i: number) => Math.min(Math.max(i, 0), slides.length - 1), [slides.length]);
+  // The resume slides re-paginate when the window is resized, so the slide
+  // count can shrink under an active index — always read through this.
+  const currentSlide = clampSlide(activeSlide);
 
   const enterPresentation = useCallback(() => {
     setActiveSlide(0);
@@ -1570,8 +1925,8 @@ export function DisturbancePresentationView({
   useEffect(() => {
     if (mode !== "present") return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "ArrowRight" || e.key === " ") setActiveSlide((i) => clampSlide(i + 1));
-      else if (e.key === "ArrowLeft") setActiveSlide((i) => clampSlide(i - 1));
+      if (e.key === "ArrowRight" || e.key === " ") setActiveSlide((i) => clampSlide(clampSlide(i) + 1));
+      else if (e.key === "ArrowLeft") setActiveSlide((i) => clampSlide(clampSlide(i) - 1));
       else if (e.key === "Escape") exitPresentation();
     }
     window.addEventListener("keydown", onKeyDown);
@@ -1667,18 +2022,18 @@ export function DisturbancePresentationView({
 
           <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 overflow-y-auto">
             <div>
-              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{slides[activeSlide].title}</h2>
-              {slides[activeSlide].subtitle ? (
-                <p className="text-base text-muted-foreground sm:text-lg">{slides[activeSlide].subtitle}</p>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{slides[currentSlide].title}</h2>
+              {slides[currentSlide].subtitle ? (
+                <p className="text-base text-muted-foreground sm:text-lg">{slides[currentSlide].subtitle}</p>
               ) : null}
             </div>
-            <div className="min-h-0 flex-1">{slides[activeSlide].render()}</div>
+            <div className="min-h-0 flex-1">{slides[currentSlide].render()}</div>
           </div>
 
           <div className="mx-auto mt-4 flex items-center gap-4">
             <button
               type="button"
-              onClick={() => setActiveSlide((i) => clampSlide(i - 1))}
+              onClick={() => setActiveSlide((i) => clampSlide(clampSlide(i) - 1))}
               disabled={activeSlide === 0}
               className="flex size-10 items-center justify-center rounded-full border bg-card text-foreground disabled:opacity-30"
               aria-label="Slide sebelumnya"
@@ -1686,12 +2041,12 @@ export function DisturbancePresentationView({
               <ChevronLeft className="size-5" />
             </button>
             <span className="min-w-16 text-center text-sm tabular-nums text-muted-foreground">
-              {activeSlide + 1} / {slides.length}
+              {currentSlide + 1} / {slides.length}
             </span>
             <button
               type="button"
-              onClick={() => setActiveSlide((i) => clampSlide(i + 1))}
-              disabled={activeSlide === slides.length - 1}
+              onClick={() => setActiveSlide((i) => clampSlide(clampSlide(i) + 1))}
+              disabled={currentSlide === slides.length - 1}
               className="flex size-10 items-center justify-center rounded-full border bg-card text-foreground disabled:opacity-30"
               aria-label="Slide berikutnya"
             >
