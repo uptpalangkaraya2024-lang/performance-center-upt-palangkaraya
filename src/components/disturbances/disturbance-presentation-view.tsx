@@ -21,6 +21,7 @@ import {
 } from "recharts";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -742,48 +743,27 @@ function ResumeCard({ event, index, large = false }: { event: DisturbanceResumeE
   );
 }
 
-// Grid shape per screen: columns follow the grid's own breakpoints (3 from
-// xl, 2 from md), rows = how many cards fit vertically at full text size (2
-// on a 1080p-class screen, 1 on a 768px laptop). The rows then split the
-// slide's full height evenly so the cards fill the whole screen; more
-// events continue on the next slide instead of shrinking anything.
-interface ResumeLayout {
-  perSlide: number;
-  cols: number;
-  /** One row of cards on a tall-enough screen: each card is ~800px tall,
-   *  so it uses the large text size instead of looking half empty. */
-  roomy: boolean;
-  /** null on phones: one column that simply scrolls. */
-  rows: number | null;
+// Rows per list slide = as many as fit the screen height below the slide
+// title, the PPT bar and the table header (~64px per two-line row) — so a list slide
+// never scrolls in presentation mode; extra rows continue on the next
+// slide. On phones the list simply scrolls (one long page).
+const RESUME_ROW_PX = 64;
+const RESUME_ROWS_DEFAULT = 12;
+
+function resumeRowsFor(width: number, height: number): number {
+  if (width < 768) return 1000;
+  return Math.max(4, Math.floor((height - 400) / RESUME_ROW_PX));
 }
 
-const RESUME_LAYOUT_DEFAULT: ResumeLayout = { perSlide: 6, cols: 3, rows: 2, roomy: false };
-
-function resumeLayoutFor(width: number, height: number): ResumeLayout {
-  if (width < 768) return { perSlide: 3, cols: 1, rows: null, roomy: false };
-  // 3 columns only from 1536px wide: on a 1366px laptop a third of the
-  // width is too narrow for a long "temuan" to stay readable.
-  const cols = width >= 1536 ? 3 : 2;
-  // 2 rows only on tall screens (e.g. 1920x1200): at 1080px a half-height
-  // card is too short to show a long "temuan" in full at a readable size.
-  const rows = height >= 1150 ? 2 : 1;
-  return { perSlide: cols * rows, cols, rows, roomy: rows === 1 && height >= 1000 };
-}
-
-function useResumeLayout(): ResumeLayout {
-  const [layout, setLayout] = useState<ResumeLayout>(RESUME_LAYOUT_DEFAULT);
+function useResumeRowsPerSlide(): number {
+  const [rows, setRows] = useState(RESUME_ROWS_DEFAULT);
   useEffect(() => {
-    const update = () => {
-      const next = resumeLayoutFor(window.innerWidth, window.innerHeight);
-      setLayout((prev) => (prev.perSlide === next.perSlide && prev.cols === next.cols && prev.rows === next.rows && prev.roomy === next.roomy
-          ? prev
-          : next));
-    };
+    const update = () => setRows(resumeRowsFor(window.innerWidth, window.innerHeight));
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
-  return layout;
+  return rows;
 }
 
 // Group pill color follows the same kind palette as everywhere else
@@ -825,48 +805,164 @@ function PptCompletenessBar({ events, groupLabel }: { events: DisturbanceResumeE
   );
 }
 
-function ResumeSlide({
+/** Kontribusi Ruas as a list: one row per disturbance, so the PPT status of
+ *  every event reads at a glance; clicking a row opens the full resume
+ *  (indikasi, Vaisala/SMDE/TWS, temuan) in a popup. */
+function ResumeListSlide({
   all,
   page,
-  layout,
+  rowsPerSlide,
   groupLabel,
+  onOpen,
 }: {
   all: DisturbanceResumeEvent[];
   page: number;
-  layout: ResumeLayout;
+  rowsPerSlide: number;
   groupLabel: string;
+  onOpen: (list: DisturbanceResumeEvent[], index: number) => void;
 }) {
   if (all.length === 0) {
     return <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>;
   }
-  const start = page * layout.perSlide;
-  const shown = all.slice(start, start + layout.perSlide);
-  // A group that fits on one slide (e.g. a single Trip) spreads its few
-  // cards over the whole slide instead of sitting in one small corner
-  // cell; multi-slide groups keep the standard grid so every card in the
-  // run has the same size.
-  let gridStyle: CSSProperties | undefined;
-  const large = layout.roomy || (Boolean(layout.rows) && all.length <= layout.perSlide && shown.length <= 2);
-  if (layout.rows) {
-    const cols = all.length <= layout.perSlide ? Math.min(layout.cols, shown.length) : layout.cols;
-    const rows = all.length <= layout.perSlide ? Math.ceil(shown.length / cols) : layout.rows;
-    gridStyle = {
-      gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-      gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-    };
-  }
+  const start = page * rowsPerSlide;
+  const shown = all.slice(start, start + rowsPerSlide);
+  const th = "px-3 py-2 text-left font-bold whitespace-nowrap";
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <PptCompletenessBar events={all} groupLabel={groupLabel} />
-      <div
-        className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
-        style={gridStyle}
-      >
-        {shown.map((e, i) => (
-          <ResumeCard key={`${e.bay}-${e.dateISO}-${e.tripTime}-${i}`} event={e} index={start + i + 1} large={large} />
-        ))}
+      <div className="min-h-0 overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm md:text-base">
+          <thead>
+            <tr className="border-b bg-muted/70 text-xs text-muted-foreground uppercase md:text-sm">
+              <th className={cn(th, "w-12 text-center")}>No</th>
+              <th className={th}>Tanggal · Jam</th>
+              <th className={th}>Ruas</th>
+              <th className={th}>Kategori</th>
+              <th className={th}>Penyebab</th>
+              <th className={th}>Indikasi</th>
+              <th className={th}>Laporan PPT</th>
+              <th className="w-10" aria-label="Detail" />
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((e, i) => {
+              const index = start + i;
+              const categoryColor = CATEGORY_COLOR[e.category] ?? "var(--muted-foreground)";
+              return (
+                <tr
+                  key={`${e.bay}-${e.dateISO}-${e.tripTime}-${index}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpen(all, index)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Enter") {
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      onOpen(all, index);
+                    }
+                  }}
+                  title="Klik untuk melihat detail gangguan"
+                  className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
+                >
+                  <td className="px-3 py-2 text-center font-semibold tabular-nums text-muted-foreground">{index + 1}</td>
+                  <td className="px-3 py-2 whitespace-nowrap tabular-nums text-foreground">
+                    {e.date}
+                    <span className="text-muted-foreground"> · {e.tripTime ?? "—"}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <p className="font-semibold text-foreground">
+                      {e.bay}
+                      {e.occurrencesInMonth > 1 ? (
+                        <span className="ml-2 rounded border border-warning/50 px-1.5 py-0.5 text-[11px] font-medium text-warning">
+                          ke-{e.occurrence}/{e.occurrencesInMonth}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{e.ultg}</p>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: categoryColor }}>
+                      <span className="size-2 rounded-full" style={{ backgroundColor: categoryColor }} />
+                      {e.category}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-foreground">{e.cause}</td>
+                  <td className="max-w-[34ch] px-3 py-2 text-muted-foreground">
+                    <p className="truncate" title={e.indikasi ?? undefined}>
+                      {e.indikasi ?? <span className="italic opacity-70">Belum diisi</span>}
+                    </p>
+                  </td>
+                  {/* The PPT link opens the file directly — it must not also
+                      open the detail popup. */}
+                  <td className="px-3 py-2" onClick={(ev) => ev.stopPropagation()}>
+                    <PptStatusPill event={e} />
+                  </td>
+                  <td className="pr-3 text-muted-foreground">
+                    <ChevronRight className="size-4" aria-hidden />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
+      <p className="shrink-0 text-xs text-muted-foreground md:text-sm">
+        Klik salah satu baris untuk melihat detail lengkap (indikasi, Vaisala, SMDE/DE, TWS, temuan lapangan).
+      </p>
     </div>
+  );
+}
+
+/** Full resume of one disturbance, opened from a list row. Prev/next walk
+ *  the same group (e.g. all Reclose events) without closing the popup. */
+function ResumeDetailDialog({
+  detail,
+  onChange,
+}: {
+  detail: { list: DisturbanceResumeEvent[]; index: number } | null;
+  onChange: (next: { list: DisturbanceResumeEvent[]; index: number } | null) => void;
+}) {
+  const event = detail ? detail.list[detail.index] : null;
+  const count = detail?.list.length ?? 0;
+  const index = detail?.index ?? 0;
+  return (
+    <Dialog open={event !== null} onOpenChange={(open) => (open ? null : onChange(null))}>
+      <DialogContent className="max-h-[92vh] w-full gap-0 overflow-y-auto p-0 sm:max-w-5xl">
+        <DialogTitle className="sr-only">{event ? `Detail gangguan ${event.bay} ${event.date}` : "Detail gangguan"}</DialogTitle>
+        {event ? (
+          <>
+            <ResumeCard event={event} index={index + 1} large />
+            {count > 1 ? (
+              <div className="flex items-center justify-between gap-3 border-t px-6 py-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  disabled={index === 0}
+                  onClick={() => detail && onChange({ ...detail, index: index - 1 })}
+                >
+                  <ChevronLeft className="size-4" />
+                  Sebelumnya
+                </Button>
+                <span className="text-sm tabular-nums text-muted-foreground">
+                  {index + 1} / {count}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  disabled={index === count - 1}
+                  onClick={() => detail && onChange({ ...detail, index: index + 1 })}
+                >
+                  Berikutnya
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1049,7 +1145,12 @@ export function DisturbancePresentationView({
       ),
     [categories, monthLabel, year],
   );
-  const resumeLayout = useResumeLayout();
+  const resumeRowsPerSlide = useResumeRowsPerSlide();
+  const [resumeDetail, setResumeDetail] = useState<{ list: DisturbanceResumeEvent[]; index: number } | null>(null);
+  const openResumeDetail = useCallback(
+    (list: DisturbanceResumeEvent[], index: number) => setResumeDetail({ list, index }),
+    [],
+  );
   // Reclose and Trip are reviewed separately — reclose first, Trip grouped
   // on its own slide(s) at the end. Any other KODE GGN (Tidak Trip, or a
   // new value) gets its own group in between rather than being dropped.
@@ -1553,29 +1654,38 @@ export function DisturbancePresentationView({
           );
         },
       },
-      // Kontribusi Ruas as one resume card per disturbance (time, indikasi,
-      // Vaisala/SMDE/TWS, temuan lapangan, PPT status) — moved off the chart
-      // slide above onto its own slide(s), resumeLayout.perSlide cards each, so
-      // nothing has to shrink or overlap however many events the month had.
-      // One run of slides per group (Reclose, then Trip last).
+      // Kontribusi Ruas as a list (one row per disturbance, PPT status in
+      // its own column; a click opens the full resume in a popup). One run
+      // of slides per group — Reclose first, Trip last — each paged to as
+      // many rows as fit the screen.
       ...(resumeGroups.length === 0
         ? [
             {
               id: "ruas-resume-kosong",
               title: "Kontribusi Ruas — Resume Gangguan",
               subtitle: `${monthLabel} ${year}`,
-              render: () => <ResumeSlide all={[]} page={0} layout={resumeLayout} groupLabel="" />,
+              render: () => (
+                <ResumeListSlide all={[]} page={0} rowsPerSlide={resumeRowsPerSlide} groupLabel="" onOpen={openResumeDetail} />
+              ),
             },
           ]
         : resumeGroups.flatMap((g) => {
-            const pageCount = Math.ceil(g.events.length / resumeLayout.perSlide);
+            const pageCount = Math.ceil(g.events.length / resumeRowsPerSlide);
             return Array.from({ length: pageCount }, (_, page) => ({
               id: `ruas-resume-${g.key}-${page + 1}`,
               title: `Kontribusi Ruas — Resume Gangguan ${g.label}`,
               subtitle: `${monthLabel} ${year} · ${g.events.length} kejadian ${g.label.toLowerCase()} dari ${resumeEvents.length} total${
                 pageCount > 1 ? ` · Halaman ${page + 1}/${pageCount}` : ""
               }`,
-              render: () => <ResumeSlide all={g.events} page={page} layout={resumeLayout} groupLabel={g.label} />,
+              render: () => (
+                <ResumeListSlide
+                  all={g.events}
+                  page={page}
+                  rowsPerSlide={resumeRowsPerSlide}
+                  groupLabel={g.label}
+                  onOpen={openResumeDetail}
+                />
+              ),
             }));
           })),
       {
@@ -1866,7 +1976,8 @@ export function DisturbancePresentationView({
       combinedBay,
       resumeEvents,
       resumeGroups,
-      resumeLayout,
+      resumeRowsPerSlide,
+      openResumeDetail,
       combinedUltgByCause,
       combinedUltgByKind,
       topCausesThisMonth,
@@ -1923,7 +2034,7 @@ export function DisturbancePresentationView({
   }, []);
 
   useEffect(() => {
-    if (mode !== "present") return;
+    if (mode !== "present" || resumeDetail) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "ArrowRight" || e.key === " ") setActiveSlide((i) => clampSlide(clampSlide(i) + 1));
       else if (e.key === "ArrowLeft") setActiveSlide((i) => clampSlide(clampSlide(i) - 1));
@@ -1931,7 +2042,7 @@ export function DisturbancePresentationView({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mode, clampSlide, exitPresentation]);
+  }, [mode, clampSlide, exitPresentation, resumeDetail]);
 
   return (
     <div className="flex flex-col gap-5" data-print-slides>
@@ -2055,6 +2166,8 @@ export function DisturbancePresentationView({
           </div>
         </div>
       ) : null}
+
+      <ResumeDetailDialog detail={resumeDetail} onChange={setResumeDetail} />
     </div>
   );
 }
