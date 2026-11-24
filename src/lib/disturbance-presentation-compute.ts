@@ -276,6 +276,9 @@ export interface BayEventDetail {
   date: string;
   cause: string;
   kind: string;
+  /** Kelengkapan laporan PPT for this one event (sheet column LINK PPT). */
+  pptName: string | null;
+  pptUrl: string | null;
 }
 
 export interface CombinedBayEntry {
@@ -305,7 +308,7 @@ export function buildBayEventDetailsForMonth(
     if (e.month !== monthLabel || e.year !== year) continue;
     const shortDate = e.date.replace(new RegExp(`\\s+${year}$`), "");
     const list = map.get(e.bay) ?? [];
-    list.push({ date: shortDate, cause: e.cause, kind: e.kind });
+    list.push({ date: shortDate, cause: e.cause, kind: e.kind, pptName: e.pptName, pptUrl: e.pptUrl });
     map.set(e.bay, list);
   }
   return map;

@@ -153,6 +153,13 @@ export interface DisturbanceBayEventRecord {
   cause: string;
   /** Mapped label (e.g. "Trip", "AR Sukses", "Tidak Trip"), same mapping as kindBreakdown. */
   kind: string;
+  /** LINK PPT — the attached report file's name (a Drive file chip, read as
+   *  its display text), null when the cell is still empty = laporan PPT
+   *  belum diunggah. */
+  pptName: string | null;
+  /** PPT LINK CLICKABLE — the file's Drive URL; null when the sheet shows
+   *  "BELUM ADA" (or anything that isn't an http(s) URL). */
+  pptUrl: string | null;
 }
 
 /** Everything needed to render one category's (Transmisi or Trafo) section

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronLeft, ChevronRight, Maximize2, Minus, Printer, RotateCcw, TrendingDown, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Maximize2, Minus, Printer, RotateCcw, TrendingDown, TrendingUp, X } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -43,6 +43,7 @@ import {
   comparisonYears,
   summarizeCombinedCalendar,
   sumMonthlyByYear,
+  type BayEventDetail,
   type CauseShareYear,
   type CombinedBayEntry,
   type CombinedCalendarDay,
@@ -474,6 +475,61 @@ function CombinedCalendarGrid({
   );
 }
 
+function PptStatusPill({ event, showDate }: { event: BayEventDetail; showDate: boolean }) {
+  const done = Boolean(event.pptName || event.pptUrl);
+  const label = `${done ? "Sudah" : "Belum"}${showDate ? ` (${event.date})` : ""}`;
+  const className = cn(
+    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap",
+    done ? "bg-success/15 text-success" : "bg-critical/15 text-critical",
+  );
+  const icon = done ? <Check className="size-3" aria-hidden /> : <X className="size-3" aria-hidden />;
+  if (done && event.pptUrl) {
+    return (
+      <a
+        href={event.pptUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={event.pptName ?? "Buka laporan PPT"}
+        className={cn(className, "hover:underline")}
+      >
+        {icon}
+        {label}
+      </a>
+    );
+  }
+  return (
+    <span className={className} title={done ? (event.pptName ?? undefined) : "Laporan PPT belum diunggah di kolom LINK PPT"}>
+      {icon}
+      {label}
+    </span>
+  );
+}
+
+function PptCompletenessSummary({ entries }: { entries: CombinedBayEntry[] }) {
+  const events = entries.flatMap((e) => e.events.map((ev) => ({ ...ev, bay: e.bay })));
+  if (events.length === 0) return null;
+  const done = events.filter((ev) => Boolean(ev.pptName || ev.pptUrl)).length;
+  const missing = events.filter((ev) => !ev.pptName && !ev.pptUrl);
+  const pct = Math.round((done / events.length) * 100);
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      <span className="font-semibold text-foreground">
+        Kelengkapan Laporan PPT:{" "}
+        <span className={cn("tabular-nums", missing.length === 0 ? "text-success" : "text-critical")}>
+          {done}/{events.length} kejadian ({pct}%)
+        </span>
+      </span>
+      {missing.length > 0 ? (
+        <span className="text-muted-foreground">
+          Belum ada PPT: {missing.map((m) => `${m.bay} (${m.date})`).join(", ")}
+        </span>
+      ) : (
+        <span className="text-success">Semua gangguan bulan ini sudah dilengkapi PPT.</span>
+      )}
+    </div>
+  );
+}
+
 function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?: number }) {
   if (entries.length === 0) {
     return <p className="text-sm text-muted-foreground">Tidak ada gangguan pada periode ini.</p>;
@@ -481,6 +537,7 @@ function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?
   const shown = entries.slice(0, limit);
   return (
     <div className="flex flex-col gap-2">
+      <PptCompletenessSummary entries={entries} />
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-base">
           <thead>
@@ -491,6 +548,7 @@ function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?
               <th className="px-4 py-2.5 font-bold">Tanggal Gangguan</th>
               <th className="px-4 py-2.5 font-bold">Penyebab</th>
               <th className="px-4 py-2.5 font-bold">Keterangan</th>
+              <th className="px-4 py-2.5 font-bold">Laporan PPT</th>
               <th className="px-4 py-2.5 font-bold text-right">Jumlah</th>
             </tr>
           </thead>
@@ -515,6 +573,20 @@ function BayTable({ entries, limit = 12 }: { entries: CombinedBayEntry[]; limit?
                 </td>
                 <td className="px-4 py-2.5 text-muted-foreground">
                   {e.events.length > 0 ? e.events.map((ev) => ev.kind).join(", ") : "—"}
+                </td>
+                {/* One pill per event, same order as the date column, so a
+                    bay with 2 events this month shows which one still
+                    lacks its PPT report. */}
+                <td className="px-4 py-2.5">
+                  {e.events.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {e.events.map((ev, j) => (
+                        <PptStatusPill key={j} event={ev} showDate={e.events.length > 1} />
+                      ))}
+                    </div>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-foreground">{e.count}</td>
               </tr>

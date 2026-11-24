@@ -125,6 +125,8 @@ interface DisturbanceRow {
   durationMinutes: number | null; // DURASI GGN (MENIT)
   followUp: "OPEN" | "CLOSED" | "UNKNOWN";
   ensKwh: number | null; // ENS (KWH) — Energi Tidak Tersalur, blank on many rows
+  pptName: string | null; // LINK PPT — file chip display text, blank = laporan PPT belum ada
+  pptUrl: string | null; // PPT LINK CLICKABLE — Drive URL, or "BELUM ADA"
 }
 
 // "KODE BAY" values confirmed against live data: "T/L Bay" (Transmisi/Line),
@@ -168,8 +170,14 @@ function normalizeRow(row: Record<string, string>): DisturbanceRow | null {
   const durationMinutes = parseDurationMinutes(row["DURASI GGN (MENIT)"]);
   const followUp = normalizeFollowUpStatus(requireText(row["STATUS TINDAK LANJUT GGN"]));
   const ensKwh = parseEnsKwh(row["ENS (KWH)"]);
+  // LINK PPT is a Drive file smart chip: getValues() returns the file name,
+  // or "" while the chip is still the empty "File" placeholder. The URL
+  // lives in the helper column PPT LINK CLICKABLE ("BELUM ADA" when empty).
+  const rawPptUrl = requireText(row["PPT LINK CLICKABLE"]);
+  const pptUrl = rawPptUrl && /^https?:\/\//i.test(rawPptUrl) ? rawPptUrl : null;
+  const pptName = requireText(row["LINK PPT"]) ?? (pptUrl ? "Laporan PPT" : null);
 
-  return { year, month, tgl, namaBay, category, kind, cause, gi, ultg, durationMinutes, followUp, ensKwh };
+  return { year, month, tgl, namaBay, category, kind, cause, gi, ultg, durationMinutes, followUp, ensKwh, pptName, pptUrl };
 }
 
 function emptyCategory(): DisturbanceCategoryResult {
@@ -389,6 +397,8 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     gi: r.gi,
     cause: CAUSE_LABELS[r.cause] ?? titleCase(r.cause),
     kind: KIND_LABELS[r.kind] ?? titleCase(r.kind),
+    pptName: r.pptName,
+    pptUrl: r.pptUrl,
   }));
 
   // One count per calendar day this category had at least one row — a day
