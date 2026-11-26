@@ -1025,7 +1025,7 @@ function ResumeDetailDialog({
         <DialogTitle className="sr-only">{event ? `Detail gangguan ${event.bay} ${event.date}` : "Detail gangguan"}</DialogTitle>
         {event ? (
           <>
-            <ResumeCard event={event} index={index + 1} large showFollowUp />
+            <ResumeCard event={event} index={index + 1} large />
             {count > 1 ? (
               <div className="flex items-center justify-between gap-3 border-t px-6 py-3">
                 <Button
