@@ -41,6 +41,7 @@ import {
   buildCombinedUltgByKind,
   buildCumulativeByYear,
   buildDisturbanceResumeEvents,
+  rankFaultLocators,
   buildMonthlyBreakdown,
   comparisonYears,
   summarizeCombinedCalendar,
@@ -640,14 +641,26 @@ function ResumeField({
 /** `large` is used when a slide holds only one or two cards (e.g. a month
  *  with a single Trip): the card then fills most of the screen, so its text
  *  scales up to match instead of leaving small text in a huge empty box. */
-function ResumeCard({ event, index, large = false }: { event: DisturbanceResumeEvent; index: number; large?: boolean }) {
+function formatTowerGap(d: number): string {
+  if (d === 0) return "Tepat di temuan";
+  const n = Number.isInteger(d) ? String(d) : d.toFixed(1).replace(".", ",");
+  return `Selisih ${n} tower`;
+}
+
+function ResumeCard({
+  event,
+  index,
+  large = false,
+  showFollowUp = false,
+}: {
+  event: DisturbanceResumeEvent;
+  index: number;
+  large?: boolean;
+  showFollowUp?: boolean;
+}) {
   const kindColor = KIND_COLOR[event.kind] ?? "var(--muted-foreground)";
   const categoryColor = CATEGORY_COLOR[event.category] ?? "var(--muted-foreground)";
-  const locators: { label: string; value: string | null }[] = [
-    { label: "Vaisala", value: event.vaisala },
-    { label: "SMDE/DE", value: event.smde },
-    { label: "TWS", value: event.tws },
-  ];
+  const locators = rankFaultLocators(event);
   return (
     // h-full + overflow-hidden: the card stretches to its grid cell (the
     // slide's rows split the full screen height evenly) and never spills
@@ -716,8 +729,23 @@ function ResumeCard({ event, index, large = false }: { event: DisturbanceResumeE
 
         <div className={cn("grid shrink-0 grid-cols-3 rounded-lg bg-muted/50", large ? "gap-6 p-5" : "gap-3 p-2.5 md:p-3")}>
           {locators.map((l) => (
-            <div key={l.label} className="min-w-0">
-              <p className={resumeLabelClass(large)}>{l.label}</p>
+            <div
+              key={l.label}
+              className={cn(
+                "min-w-0 rounded-md",
+                large ? "-m-2 p-2" : "-m-1 p-1",
+                l.closest && "bg-success/15 ring-1 ring-success/50",
+              )}
+            >
+              <p className={cn(resumeLabelClass(large), "flex flex-wrap items-center gap-x-2", l.closest && "text-success")}>
+                {l.label}
+                {l.closest ? (
+                  <span className="inline-flex items-center gap-0.5 normal-case">
+                    <Check className="size-3.5" aria-hidden />
+                    Paling dekat
+                  </span>
+                ) : null}
+              </p>
               <p
                 className={cn(
                   "leading-snug font-medium",
@@ -728,6 +756,11 @@ function ResumeCard({ event, index, large = false }: { event: DisturbanceResumeE
               >
                 {l.value ? shortLocation(l.value) : "—"}
               </p>
+              {l.distance !== null ? (
+                <p className={cn("mt-0.5 text-xs font-semibold md:text-sm", l.closest ? "text-success" : "text-muted-foreground")}>
+                  {formatTowerGap(l.distance)}
+                </p>
+              ) : null}
             </div>
           ))}
         </div>
@@ -738,6 +771,8 @@ function ResumeCard({ event, index, large = false }: { event: DisturbanceResumeE
           detail={event.temuanDetail}
           large={large}
         />
+
+        {showFollowUp ? <FollowUpSection items={event.followUpItems} large={large} /> : null}
       </div>
     </article>
   );
@@ -913,6 +948,65 @@ function ResumeListSlide({
   );
 }
 
+/** Tindak lanjut: one line per action with a done/pending mark, plus an
+ *  overall progress bar and status derived from those marks. */
+function FollowUpSection({ items, large }: { items: DisturbanceResumeEvent["followUpItems"]; large: boolean }) {
+  const done = items.filter((i) => i.done).length;
+  const pct = items.length > 0 ? Math.round((done / items.length) * 100) : 0;
+  const status =
+    items.length === 0
+      ? { label: "Belum ada tindak lanjut", className: "bg-muted text-muted-foreground" }
+      : done === items.length
+        ? { label: "Selesai", className: "bg-success/15 text-success" }
+        : { label: "On Progress", className: "bg-warning/15 text-warning" };
+  const showSide = items.some((i) => i.side === "Sekunder");
+  return (
+    <div className="shrink-0 border-t pt-4">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <p className={resumeLabelClass(large)}>Tindak Lanjut</p>
+        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold md:text-sm", status.className)}>{status.label}</span>
+        {items.length > 0 ? (
+          <span className="inline-flex items-center gap-2 text-xs text-muted-foreground md:text-sm">
+            <span className="h-2 w-28 overflow-hidden rounded-full bg-secondary">
+              <span
+                className={cn("block h-full rounded-full", done === items.length ? "bg-success" : "bg-warning")}
+                style={{ width: `${pct}%` }}
+              />
+            </span>
+            <span className="font-semibold tabular-nums text-foreground">
+              {done}/{items.length} selesai ({pct}%)
+            </span>
+          </span>
+        ) : null}
+      </div>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic">Belum diisi di sheet.</p>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {items.map((item, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm leading-snug md:text-base">
+              {item.done ? (
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-success text-white">
+                  <Check className="size-3.5" aria-hidden />
+                </span>
+              ) : (
+                <span className="mt-0.5 size-5 shrink-0 rounded-full border-2 border-warning" aria-hidden />
+              )}
+              <span className="text-foreground">
+                {showSide ? <span className="mr-1.5 text-xs font-semibold text-muted-foreground">[{item.side}]</span> : null}
+                {item.text}
+                <span className={cn("ml-2 text-xs font-semibold", item.done ? "text-success" : "text-warning")}>
+                  {item.done ? "Selesai" : "Belum"}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Full resume of one disturbance, opened from a list row. Prev/next walk
  *  the same group (e.g. all Reclose events) without closing the popup. */
 function ResumeDetailDialog({
@@ -931,7 +1025,7 @@ function ResumeDetailDialog({
         <DialogTitle className="sr-only">{event ? `Detail gangguan ${event.bay} ${event.date}` : "Detail gangguan"}</DialogTitle>
         {event ? (
           <>
-            <ResumeCard event={event} index={index + 1} large />
+            <ResumeCard event={event} index={index + 1} large showFollowUp />
             {count > 1 ? (
               <div className="flex items-center justify-between gap-3 border-t px-6 py-3">
                 <Button

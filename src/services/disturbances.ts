@@ -13,6 +13,7 @@ import type {
   DisturbanceCause,
   DisturbanceCauseMonthlyYear,
   DisturbanceDurationRecord,
+  DisturbanceFollowUpItem,
   DisturbanceFollowUpSummary,
   DisturbanceGiCount,
   DisturbanceKindMonthlyYear,
@@ -134,6 +135,24 @@ interface DisturbanceRow {
   tws: string | null;
   temuanLapangan: string | null;
   temuanDetail: string | null; // TEMUAN TINDAK LANJUT PRIMARY
+  followUpItems: DisturbanceFollowUpItem[];
+}
+
+// Up to 5 primary + 5 secondary follow-up actions per row, each with its own
+// checkbox column. The sheet's own PROGRESS / STATUS TINDAK LANJUT columns
+// show "#DIV/0!" when no action is filled in, so progress is derived from
+// these items instead.
+function parseFollowUpItems(row: Record<string, string>): DisturbanceFollowUpItem[] {
+  const items: DisturbanceFollowUpItem[] = [];
+  for (let n = 1; n <= 5; n++) {
+    const text = requireText(row[`TINDAK LANJUT ${n} PRMRY`]);
+    if (text) items.push({ side: "Primer", text, done: row[`STATUS TINDAK LANJUT ${n} PRMRY`]?.trim().toLowerCase() === "true" });
+  }
+  for (let n = 1; n <= 5; n++) {
+    const text = requireText(row[`TINDAK LANJUT ${n} SCDRY`]);
+    if (text) items.push({ side: "Sekunder", text, done: row[`STATUS TNDKLNJT ${n} SCDRY`]?.trim().toLowerCase() === "true" });
+  }
+  return items;
 }
 
 // WAKTU TRIP is a sheet TIME value, read back as "1899-12-30 23:49:00"
@@ -201,6 +220,7 @@ function normalizeRow(row: Record<string, string>): DisturbanceRow | null {
     tws: requireText(row["TWS"]),
     temuanLapangan: requireText(row["TEMUAN LAPANGAN"]),
     temuanDetail: requireText(row["TEMUAN TINDAK LANJUT PRIMARY"]),
+    followUpItems: parseFollowUpItems(row),
   };
 }
 
@@ -430,6 +450,7 @@ function buildCategoryAggregates(rows: DisturbanceRow[]): DisturbanceCategoryRes
     tws: r.tws,
     temuanLapangan: r.temuanLapangan,
     temuanDetail: r.temuanDetail,
+    followUpItems: r.followUpItems,
   }));
 
   // One count per calendar day this category had at least one row — a day

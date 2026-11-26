@@ -347,6 +347,67 @@ export function buildDisturbanceResumeEvents(
   });
 }
 
+/** A sheet location ("TOWER SUTT 150 KV KSNGN-PLSKS #167", "SPAN SUTT 150
+ *  KV MRTWH - PURCA #061-#062", comma-separated lists of either) as
+ *  (section, tower position) pairs — a span counts as its midpoint, so a
+ *  span vs. the tower next to it is 0.5 apart. Entries without a "#nnn"
+ *  are skipped. */
+function parseTowerPositions(raw: string | null): { section: string; pos: number }[] {
+  if (!raw) return [];
+  const out: { section: string; pos: number }[] = [];
+  for (const part of raw.split(",")) {
+    const nums = [...part.matchAll(/#0*(\d+)/g)].map((m) => Number(m[1]));
+    if (nums.length === 0) continue;
+    const section = part
+      .replace(/^\s*(TOWER|SPAN)\s+SUTT\s*\d+\s*KV\s*/i, "")
+      .replace(/#.*$/, "")
+      .replace(/\s+/g, "")
+      .toUpperCase();
+    out.push({ section, pos: nums.reduce((a, b) => a + b, 0) / nums.length });
+  }
+  return out;
+}
+
+export interface LocatorMatch {
+  label: string;
+  value: string | null;
+  /** Towers between this method's estimate and the nearest field finding
+   *  on the same section; null when either side has no tower number or they
+   *  are on different sections. */
+  distance: number | null;
+  /** Smallest distance among the methods (ties all get it). */
+  closest: boolean;
+}
+
+/** Which fault locator (Vaisala / SMDE-DE / TWS) landed closest to where the
+ *  fault was actually found (TEMUAN LAPANGAN). */
+export function rankFaultLocators(e: {
+  vaisala: string | null;
+  smde: string | null;
+  tws: string | null;
+  temuanLapangan: string | null;
+}): LocatorMatch[] {
+  const targets = parseTowerPositions(e.temuanLapangan);
+  const rows = [
+    { label: "Vaisala", value: e.vaisala },
+    { label: "SMDE/DE", value: e.smde },
+    { label: "TWS", value: e.tws },
+  ].map((l) => {
+    let distance: number | null = null;
+    for (const loc of parseTowerPositions(l.value)) {
+      for (const t of targets) {
+        if (t.section !== loc.section) continue;
+        const d = Math.abs(loc.pos - t.pos);
+        if (distance === null || d < distance) distance = d;
+      }
+    }
+    return { ...l, distance };
+  });
+  const known = rows.map((r) => r.distance).filter((d): d is number => d !== null);
+  const best = known.length > 0 ? Math.min(...known) : null;
+  return rows.map((r) => ({ ...r, closest: best !== null && r.distance === best }));
+}
+
 /** One row per (bay, category) pair that had at least one event this
  *  month — a bay only ever belongs to one category in practice (KODE BAY
  *  determines both), so this is a flat union rather than a per-bay matrix,

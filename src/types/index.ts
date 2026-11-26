@@ -172,6 +172,15 @@ export interface DisturbanceBayEventRecord {
   temuanLapangan: string | null;
   /** TEMUAN TINDAK LANJUT PRIMARY — what was found there, free text. */
   temuanDetail: string | null;
+  /** TINDAK LANJUT 1-5 PRMRY / SCDRY with their own done checkbox
+   *  (STATUS TINDAK LANJUT n PRMRY / STTS TNDKLNJT n SCDRY), blanks dropped. */
+  followUpItems: DisturbanceFollowUpItem[];
+}
+
+export interface DisturbanceFollowUpItem {
+  side: "Primer" | "Sekunder";
+  text: string;
+  done: boolean;
 }
 
 /** Everything needed to render one category's (Transmisi or Trafo) section
