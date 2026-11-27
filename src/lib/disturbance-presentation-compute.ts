@@ -359,7 +359,7 @@ function parseTowerPositions(raw: string | null): { section: string; pos: number
     const nums = [...part.matchAll(/#0*(\d+)/g)].map((m) => Number(m[1]));
     if (nums.length === 0) continue;
     const section = part
-      .replace(/^\s*(TOWER|SPAN)\s+SUTT\s*\d+\s*KV\s*/i, "")
+      .replace(/^\s*(TOWER|SPAN)\s+(SUTT\s*\d+\s*KV\s*)?/i, "")
       .replace(/#.*$/, "")
       .replace(/\s+/g, "")
       .toUpperCase();
@@ -419,8 +419,10 @@ export function rankFaultLocators(e: {
   // Section names are typed by hand and drift ("SKS-KUALA KURUN" vs
   // "PLSKS-KUALA KURUN"); if nothing lines up even loosely, all entries of
   // one disturbance are on the same line anyway, so compare tower numbers.
-  let rows = measure(true);
-  if (rows.every((r) => r.distance === null)) rows = measure(false);
+  // Per method: same section first, else plain tower numbers.
+  const strict = measure(true);
+  const loose = measure(false);
+  const rows = strict.map((r, i) => (r.distance !== null ? r : loose[i]));
   const known = rows.map((r) => r.distance).filter((d): d is number => d !== null);
   const best = known.length > 0 ? Math.min(...known) : null;
   return rows.map((r) => ({ ...r, closest: best !== null && r.distance === best }));

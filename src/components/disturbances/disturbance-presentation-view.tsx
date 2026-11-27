@@ -538,8 +538,8 @@ function shortLocation(raw: string): string {
     .split(/\s*,\s*/)
     .map((part) =>
       part
-        .replace(/^TOWER\s+SUTT\s*\d+\s*KV\s*/i, "Tower ")
-        .replace(/^SPAN\s+SUTT\s*\d+\s*KV\s*/i, "Span ")
+        .replace(/^TOWER\s+(SUTT\s*\d+\s*KV\s*)?/i, "Tower ")
+        .replace(/^SPAN\s+(SUTT\s*\d+\s*KV\s*)?/i, "Span ")
         .replace(/\s+-\s+/g, "-"),
     )
     .join(", ");
@@ -759,7 +759,7 @@ function ResumeCard({
               {l.value ? (
                 <ul
                   className={cn(
-                    "flex flex-col gap-0.5 overflow-y-auto pr-1 leading-snug font-medium text-foreground",
+                    "flex flex-col gap-0.5 overflow-y-auto pr-1 [scrollbar-color:color-mix(in_oklab,var(--muted-foreground)_50%,transparent)_transparent] [scrollbar-width:thin] leading-snug font-medium text-foreground",
                     large ? "max-h-32 text-base md:text-lg" : "max-h-20 text-xs md:text-sm",
                   )}
                   title={l.value}
