@@ -368,6 +368,17 @@ function parseTowerPositions(raw: string | null): { section: string; pos: number
   return out;
 }
 
+/** Loose section equality: same two ends in either order, where an end
+ *  matches if one name ends with the other (SKS ~ PLSKS, KSNGN ~ KSNGN). */
+function sameSection(a: string, b: string): boolean {
+  if (a === b) return true;
+  const ea = a.split("-").filter(Boolean);
+  const eb = b.split("-").filter(Boolean);
+  if (ea.length !== 2 || eb.length !== 2) return false;
+  const end = (x: string, y: string) => x.endsWith(y) || y.endsWith(x);
+  return (end(ea[0], eb[0]) && end(ea[1], eb[1])) || (end(ea[0], eb[1]) && end(ea[1], eb[0]));
+}
+
 export interface LocatorMatch {
   label: string;
   value: string | null;
@@ -388,21 +399,28 @@ export function rankFaultLocators(e: {
   temuanLapangan: string | null;
 }): LocatorMatch[] {
   const targets = parseTowerPositions(e.temuanLapangan);
-  const rows = [
+  const methods = [
     { label: "Vaisala", value: e.vaisala },
     { label: "SMDE/DE", value: e.smde },
     { label: "TWS", value: e.tws },
-  ].map((l) => {
-    let distance: number | null = null;
-    for (const loc of parseTowerPositions(l.value)) {
-      for (const t of targets) {
-        if (t.section !== loc.section) continue;
-        const d = Math.abs(loc.pos - t.pos);
-        if (distance === null || d < distance) distance = d;
+  ];
+  const measure = (strict: boolean) =>
+    methods.map((l) => {
+      let distance: number | null = null;
+      for (const loc of parseTowerPositions(l.value)) {
+        for (const t of targets) {
+          if (strict && !sameSection(t.section, loc.section)) continue;
+          const d = Math.abs(loc.pos - t.pos);
+          if (distance === null || d < distance) distance = d;
+        }
       }
-    }
-    return { ...l, distance };
-  });
+      return { ...l, distance };
+    });
+  // Section names are typed by hand and drift ("SKS-KUALA KURUN" vs
+  // "PLSKS-KUALA KURUN"); if nothing lines up even loosely, all entries of
+  // one disturbance are on the same line anyway, so compare tower numbers.
+  let rows = measure(true);
+  if (rows.every((r) => r.distance === null)) rows = measure(false);
   const known = rows.map((r) => r.distance).filter((d): d is number => d !== null);
   const best = known.length > 0 ? Math.min(...known) : null;
   return rows.map((r) => ({ ...r, closest: best !== null && r.distance === best }));

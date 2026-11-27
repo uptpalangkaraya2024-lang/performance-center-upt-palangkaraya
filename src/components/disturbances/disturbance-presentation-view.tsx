@@ -746,21 +746,35 @@ function ResumeCard({
                   </span>
                 ) : null}
               </p>
-              <p
-                className={cn(
-                  "leading-snug font-medium",
-                  large ? "line-clamp-4 text-base md:text-lg" : "line-clamp-3 text-xs md:text-sm",
-                  l.value ? "text-foreground" : "text-muted-foreground/70",
-                )}
-                title={l.value ?? undefined}
-              >
-                {l.value ? shortLocation(l.value) : "—"}
-              </p>
               {l.distance !== null ? (
-                <p className={cn("mt-0.5 text-xs font-semibold md:text-sm", l.closest ? "text-success" : "text-muted-foreground")}>
+                <p
+                  className={cn(
+                    "mb-1 inline-block rounded px-1.5 py-0.5 text-xs font-semibold md:text-sm",
+                    l.closest ? "bg-success/20 text-success" : "bg-secondary text-muted-foreground",
+                  )}
+                >
                   {formatTowerGap(l.distance)}
                 </p>
               ) : null}
+              {l.value ? (
+                <ul
+                  className={cn(
+                    "flex flex-col gap-0.5 overflow-y-auto pr-1 leading-snug font-medium text-foreground",
+                    large ? "max-h-32 text-base md:text-lg" : "max-h-20 text-xs md:text-sm",
+                  )}
+                  title={l.value}
+                >
+                  {shortLocation(l.value)
+                    .split(/s*,s*/)
+                    .map((part, i) => (
+                      <li key={i} className="break-words">
+                        {part}
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <p className={cn("font-medium text-muted-foreground/70", large ? "text-base md:text-lg" : "text-xs md:text-sm")}>—</p>
+              )}
             </div>
           ))}
         </div>
